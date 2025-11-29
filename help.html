@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VarViz Help</title>
+<meta name="color-scheme" content="light">
+<style>
+  :root{
+    --c1:#003f5c; /* primary */
+    --c2:#58508d; /* secondary */
+    --c3:#bc5090; /* accent */
+    --c4:#ff6361; /* action */
+    --c5:#ffa600; /* highlight */
+    --bg:#f9fafb; --ink:#0f172a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  a{color:var(--c3);text-decoration:none} a:hover{color:#d96aa8;text-decoration:underline}
+  .container{max-width:1100px;margin:0 auto;padding:24px}
+  .hero{background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;border-bottom:6px solid var(--c5)}
+  .hero .container{padding:34px 24px}
+  .hero h1{margin:0 0 6px;font-size:40px;letter-spacing:.2px}
+  .hero p{margin:0;font-size:18px;opacity:.95}
+  .cta{display:inline-block;margin-top:16px;padding:10px 16px;background:var(--c5);color:#1a1a1a;border-radius:10px;font-weight:700}
+  .cta:hover{background:#ffb733}
+  /* section + cards */
+  h2{color:var(--c1);font-size:26px;margin:0 0 10px}
+  h3{color:#0f172a;font-size:20px;margin:14px 0 6px}
+  .bar{height:6px;width:72px;border-radius:6px;background:var(--c4);margin:6px 0 18px}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px;margin:14px 0}
+  .grid{display:grid;gap:20px}
+  @media(min-width:900px){.grid.cols-2{grid-template-columns:1fr 1fr}}
+  .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700;color:#fff}
+  .b-sources{background:var(--c2)} .b-outputs{background:var(--c3)} .b-use{background:var(--c4)} .b-quick{background:var(--c2)}
+  code, pre{background:#11182710;border:1px solid #e5e7eb;border-radius:8px}
+  pre{padding:12px;overflow:auto}
+  /* toc */
+  .toc{position:sticky;top:16px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
+  .toc h3{margin-top:0;color:var(--c1)}
+  .toc a{display:block;padding:6px 8px;border-radius:8px;color:var(--c1)}
+  .toc a:hover{background:#003f5c10}
+  /* people */
+  .people{display:grid;gap:24px;margin-top:10px}
+  @media(min-width:900px){.people{grid-template-columns:repeat(3,1fr)}}
+  .person{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:18px;text-align:center}
+  .person img{width:210px;height:210px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 12px;border:6px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+  .person h4{margin:.3rem 0 0;font-size:18px}
+  .person p{margin:.3rem 0 0;color:#334155;font-size:14px}
+  .footer{margin-top:32px;padding:16px;border-top:1px solid #e5e7eb;color:#334155;font-size:14px}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <h1>VarViz Help</h1>
+    <p>Protein-centric variant visualization. This page explains every section, data input, and export.</p>
+    
+  </div>
+</header>
+
+<main class="container">
+  <div class="grid cols-2">
+    <div class="card">
+      <div class="bar"></div>
+      <h2 id="overview">Overview</h2>
+      <p>VarViz aligns variants on a single protein residue axis. You read domains, structure confidence, conservation, frequencies, and clinical evidence at once, then export a clean figure.</p>
+      <h3 id="quickstart">Quick Start</h3>
+      <ol>
+        <li>Open <strong>Protein View</strong>.</li>
+        <li>Select a <strong>gene</strong>.</li>
+        <li>Paste variants like <code>p.R175H</code>, or upload a file.</li>
+        <li>Choose tracks in <strong>Output Plot</strong>.</li>
+        <li>Click <strong>Go</strong>.</li>
+        <li>Export PNG or PDF in the <strong>Plot</strong> tab.</li>
+      </ol>
+    </div>
+
+    <aside class="toc">
+      <h3>On this page</h3>
+      <a href="#inputs">Inputs</a>
+      <a href="#tracks">Tracks</a>
+      <a href="#controls">Controls</a>
+      <a href="#sources">Data Sources</a>
+      <a href="#workflow">Typical Workflow</a>
+      <a href="#exports">File Exports</a>
+      <a href="#tips">Tips</a>
+      <a href="#troubleshooting">Troubleshooting</a>
+      <a href="#people">People</a>
+      <a href="#ack">Acknowledgements</a>
+    </aside>
+  </div>
+
+  <section id="inputs" class="card">
+    <h2>Inputs</h2>
+    <h3>Gene</h3>
+    <ul>
+      <li>Use the <strong>Choose a gene</strong> box.</li>
+      <li>Local gene table provides coordinates and UniProt IDs.</li>
+    </ul>
+    <h3>Variants</h3>
+    <ul>
+      <li>Paste p-notation, comma separated. Example: <code>p.R175H, p.R248Q</code>.</li>
+      <li>Positions are extracted and highlighted.</li>
+    </ul>
+    <h3>ConSurf file</h3>
+    <ul>
+      <li>Tab-separated text with a <code>POS</code> column and a score column.</li>
+      <li>Scores are normalized to 0–1 for display.</li>
+    </ul>
+    <h3>Optional protein locations</h3>
+    <ul>
+      <li>Single positions or ranges, used as extra vertical markers on Density.</li>
+    </ul>
+  </section>
+
+  <section id="tracks" class="card">
+    <h2>Tracks</h2>
+    <p>All tracks share the same residue axis.</p>
+    <ul>
+      <li><strong>AlphaFold pLDDT</strong>, line and points, 0–1, confidence colors.</li>
+      <li><strong>Density</strong>, histogram of gnomAD variants by residue.</li>
+      <li><strong>gnomAD Frequency</strong>, scatter of AF by residue. A dashed line shows the maximum credible AF.</li>
+      <li><strong>Pathogenicity trend</strong>, mean per residue from dbNSFP sources such as REVEL.</li>
+      <li><strong>Domains</strong>, blocks from UniProt or Pfam, optional labels.</li>
+      <li><strong>ClinVar</strong>, searchable table in GeneInfo.</li>
+    </ul>
+  </section>
+
+  <section id="controls" class="card">
+    <h2>Controls</h2>
+    <h3>Output Plot</h3>
+    <ul>
+      <li>ClinVar, Density, gnomAD Freq, Depth.</li>
+      <li>Depth is for coverage if available.</li>
+    </ul>
+    <h3>Labels and filters</h3>
+    <ul>
+      <li><strong>Variant Label</strong> toggles text labels for your variants.</li>
+      <li><strong>ClinVar filter</strong> selects review status (Any, ≥1 star, ≥2 stars).</li>
+    </ul>
+    <h3>Population and AF limits</h3>
+    <ul>
+      <li>Set inheritance, prevalence, heterogeneity, penetrance.</li>
+      <li>App prints maximum credible AF and tolerated AC.</li>
+      <li>Frequency track shows the AF cutoff as a dashed line.</li>
+    </ul>
+  </section>
+
+  <section id="sources" class="card">
+    <h2>Data Sources <span class="badge b-sources">Sources</span></h2>
+    <ul>
+      <li>UniProt and Pfam for domains and regions.</li>
+      <li>AlphaFold pLDDT JSON for structure confidence.</li>
+      <li>gnomAD (region API) for frequency and density.</li>
+      <li>dbNSFP via MyVariant.info for scores like REVEL.</li>
+      <li>ClinVar, local summary or E-utilities for recent records.</li>
+    </ul>
+  </section>
+
+  <section id="workflow" class="card">
+    <h2>Typical Workflow</h2>
+    <ol>
+      <li>Pick a gene, for example <strong>TP53</strong>.</li>
+      <li>Paste <code>p.R175H, p.R248Q, p.R273H</code>.</li>
+      <li>Keep Density and gnomAD Freq on.</li>
+      <li>Upload ConSurf if available.</li>
+      <li>Click Go, scan pLDDT, Density, Frequency, Pathogenicity, Domains.</li>
+      <li>Export the figure and caption.</li>
+    </ol>
+  </section>
+
+  <section id="exports" class="card">
+    <h2>File Exports <span class="badge b-outputs">Outputs</span></h2>
+    <ul>
+      <li>PNG, JPEG, or PDF for the Plot tab.</li>
+      <li>Optional pLDDT JSON download when available.</li>
+      <li>Consistent caption and legend styling.</li>
+    </ul>
+  </section>
+
+  <section id="tips" class="card">
+    <h2>Tips</h2>
+    <ul>
+      <li>No AlphaFold JSON for some IDs, so pLDDT may be empty.</li>
+      <li>Axis prefers protein length. If missing, it falls back to the longest available track.</li>
+      <li>Keep variant lists short for fast review.</li>
+    </ul>
+  </section>
+
+  <section id="troubleshooting" class="card">
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li><strong>Tabs don’t switch in RStudio Server</strong>, Home buttons also trigger a JS fallback that clicks the Protein View tab.</li>
+      <li><strong>Frequency looks sparse</strong>, ensure many gnomAD rows include <code>hgvsp</code> so residue numbers can be parsed.</li>
+      <li><strong>Multiple legend warnings</strong>, harmless. The final figure consolidates legends before export.</li>
+    </ul>
+  </section>
+
+  <section id="people" class="card">
+    <h2>People</h2>
+    <div class="people">
+      <div class="person">
+        <img src="Agasthya.jpg" alt="Agasthya Metpally">
+        <h4>Agasthya Metpally</h4>
+        <p>Agasthya Metpally is the Freshman at Raleigh Charter High School (RCHS).</p>
+        <p><a href="mailto:ametpally@raleighcharterhs.org">ametpally@raleighcharterhs.org</a></p>
+        <p>United States</p>
+      </div>
+      <div class="person">
+        <img src="Sarath.jpg" alt="Sarath Babu Krishna Murthy">
+        <h4>Sarath Babu Krishna Murthy, MS</h4>
+        <p>Sarath Babu Krishna Murthy is the Director of Genomic Health & Informatics at the Center for Precision Medicine & Genomics at Columbia University Medical Center.</p>
+        <p><a href="mailto:sarath.k@columbia.edu">sarath.k@columbia.edu</a></p>
+        <p>United States</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="ack" class="card">
+    <h2>Acknowledgements</h2>
+    <p>Thanks to the teams behind UniProt, Pfam, AlphaFold, gnomAD, dbNSFP, ClinVar, and MyVariant.info. Thanks to colleagues and mentors for feedback on early prototypes and figures.</p>
+  </section>
+</main>
+
+<footer class="footer container">
+  © 2025 VarViz. All rights reserved.
+</footer>
+
+</body>
+</html>
+
