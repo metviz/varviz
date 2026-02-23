@@ -107,7 +107,7 @@
     <h3>ConSurf file</h3>
     <ul>
       <li>Tab-separated text with a <code>POS</code> column and a score column.</li>
-      <li>Scores are normalized to 0–1 for display.</li>
+      <li>Scores are normalized to 0â€“1 for display.</li>
     </ul>
     <h3>Optional protein locations</h3>
     <ul>
@@ -119,7 +119,7 @@
     <h2>Tracks</h2>
     <p>All tracks share the same residue axis.</p>
     <ul>
-      <li><strong>AlphaFold pLDDT</strong>, line and points, 0–1, confidence colors.</li>
+      <li><strong>AlphaFold pLDDT</strong>, line and points, 0â€“1, confidence colors.</li>
       <li><strong>Density</strong>, histogram of gnomAD variants by residue.</li>
       <li><strong>gnomAD Frequency</strong>, scatter of AF by residue. A dashed line shows the maximum credible AF.</li>
       <li><strong>Pathogenicity trend</strong>, mean per residue from dbNSFP sources such as REVEL.</li>
@@ -138,7 +138,7 @@
     <h3>Labels and filters</h3>
     <ul>
       <li><strong>Variant Label</strong> toggles text labels for your variants.</li>
-      <li><strong>ClinVar filter</strong> selects review status (Any, ≥1 star, ≥2 stars).</li>
+      <li><strong>ClinVar filter</strong> selects review status (Any, â‰¥1 star, â‰¥2 stars).</li>
     </ul>
     <h3>Population and AF limits</h3>
     <ul>
@@ -192,7 +192,7 @@
   <section id="troubleshooting" class="card">
     <h2>Troubleshooting</h2>
     <ul>
-      <li><strong>Tabs don’t switch in RStudio Server</strong>, Home buttons also trigger a JS fallback that clicks the Protein View tab.</li>
+      <li><strong>Tabs donâ€™t switch in RStudio Server</strong>, Home buttons also trigger a JS fallback that clicks the Protein View tab.</li>
       <li><strong>Frequency looks sparse</strong>, ensure many gnomAD rows include <code>hgvsp</code> so residue numbers can be parsed.</li>
       <li><strong>Multiple legend warnings</strong>, harmless. The final figure consolidates legends before export.</li>
     </ul>
@@ -225,9 +225,8 @@
 </main>
 
 <footer class="footer container">
-  © 2025 VarViz. All rights reserved.
+  Â© 2025 VarViz. All rights reserved.
 </footer>
 
 </body>
 </html>
-
