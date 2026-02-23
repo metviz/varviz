@@ -181,7 +181,7 @@ Maintainers will evaluate:
 
 - **Questions about using VarViz:** [open a discussion](https://github.com/metviz/varviz/discussions) or email the corresponding author
 - **Bug reports:** [open an issue](https://github.com/metviz/varviz/issues/new)
-- **General inquiries:** contact Sarathbabu Krishnamurthy (corresponding author)
+- **General inquiries:** contact Agasthya Metpally OR Sarathbabu Krishnamurthy (corresponding author)
 
 ---
 
