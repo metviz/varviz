@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VarViz Help</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  :root {
+    --c1:#003f5c; --c2:#58508d; --c3:#bc5090; --c4:#ff6361; --c5:#ffa600;
+    --path-strong:#b91c1c; --path-mod:#dc2626; --path-sup:#f97316;
+    --ben-strong:#047857; --ben-sup:#10b981;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+         color:#1e293b; background:#f0f4f8; line-height:1.75; padding:28px 20px 72px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  .page-header { background:linear-gradient(135deg,#003f5c 0%,#58508d 60%,#bc5090 100%);
+    border-radius:18px; padding:32px 36px 28px; margin-bottom:30px; color:#fff; }
+  .page-header h1 { font-size:30px; font-weight:700; letter-spacing:.2px; margin-bottom:4px; }
+  .page-header small { font-size:14px; opacity:.78; display:block; margin-top:3px; }
+  .nav { display:flex; flex-wrap:wrap; gap:7px; margin:0 0 30px; }
+  .nav a { background:#fff; color:var(--c1); border:1.5px solid #cbd5e1; padding:5px 14px;
+           border-radius:999px; text-decoration:none; font-size:12.5px; font-weight:600; transition:all .15s; }
+  .nav a:hover { background:var(--c1); color:#fff; border-color:var(--c1); }
+  h2 { color:var(--c1); font-size:21px; font-weight:700; margin:40px 0 12px;
+       padding-bottom:8px; border-bottom:3px solid var(--c5); display:inline-block; }
+  h3 { color:var(--c2); font-size:16px; font-weight:700; margin:20px 0 7px; }
+  p  { font-size:14.5px; color:#334155; margin-bottom:10px; }
+  ul, ol { padding-left:20px; margin:8px 0 14px; }
+  li { font-size:14.5px; color:#334155; margin-bottom:6px; }
+  code { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:5px;
+         padding:2px 7px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--c2); }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:20px 24px; margin:14px 0; }
+  .card-path { border-left:4px solid #b91c1c; }
+  .card-ben  { border-left:4px solid #047857; }
+  .card-accent { border-left:4px solid var(--c5); }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px; }
+  th { background:var(--c1); color:#fff; padding:10px 14px; text-align:left; font-weight:600; }
+  td { padding:9px 14px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+  tr:nth-child(even) td { background:#f8fafc; }
+  th:first-child, td:first-child { white-space:nowrap; }
+  .tag { display:inline-block; padding:3px 9px; border-radius:6px; font-size:11.5px;
+         font-weight:700; color:#fff; margin:2px 3px 2px 0; font-family:'IBM Plex Mono',monospace; }
+  .tag.pvs { background:#7c3aed; }
+  .tag.ps  { background:#b91c1c; }
+  .tag.pm  { background:#dc2626; }
+  .tag.pp  { background:#f97316; }
+  .tag.ba  { background:#1e293b; }
+  .tag.bs  { background:#047857; }
+  .tag.bp  { background:#10b981; }
+  .thresh-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin:14px 0; }
+  .thresh-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; }
+  .thresh-card h4 { font-size:13px; font-weight:700; color:var(--c1); margin-bottom:8px; }
+  .thresh-row { display:flex; justify-content:space-between; align-items:center;
+                font-size:12.5px; padding:3px 0; border-bottom:1px dashed #e2e8f0; }
+  .thresh-row:last-child { border-bottom:none; }
+  .thresh-val { font-family:'IBM Plex Mono',monospace; font-weight:600; }
+  .tv-path { color:#b91c1c; } .tv-amb { color:#d97706; } .tv-ben { color:#047857; }
+  .tip  { background:#eff6ff; border-left:4px solid var(--c2); padding:12px 16px;
+          border-radius:0 10px 10px 0; margin:12px 0; font-size:14px; }
+  .tip strong { color:var(--c2); }
+  .warn { background:#fef3c7; border-left:4px solid var(--c5); padding:12px 16px;
+          border-radius:0 10px 10px 0; margin:12px 0; font-size:14px; }
+  .warn strong { color:#92400e; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px;
+           font-weight:700; color:#fff; margin-right:5px; vertical-align:middle; }
+  .badge.api   { background:var(--c2); }
+  .badge.local { background:#64748b; }
+  .badge.user  { background:var(--c3); }
+  .badge.viz   { background:var(--c2); }
+  .badge.table { background:var(--c3); }
+  .group-box { border:1.5px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin:12px 0; }
+  .group-box-title { font-size:13px; font-weight:700; text-transform:uppercase;
+                     letter-spacing:.7px; color:#64748b; margin-bottom:10px; }
+  .level-bar { display:flex; align-items:stretch; border-radius:8px; overflow:hidden; margin:10px 0 16px; font-size:12px; font-weight:700; }
+  .level-seg { padding:8px 10px; color:#fff; text-align:center; flex:1; }
+  footer { margin-top:48px; padding:16px 0; border-top:1px solid #e2e8f0;
+           text-align:center; color:#94a3b8; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="page-header">
+  <h1>VarViz - Tutorial &amp; Reference</h1>
+  <small>Protein-centric gene variant visualization - v2026</small>
+</div>
+
+<div class="nav">
+  <a href="#overview">Overview</a>
+  <a href="#quickstart">Quick Start</a>
+  <a href="#tracks">Plot Tracks</a>
+  <a href="#variant-table">Variant Table</a>
+  <a href="#acmg">ACMG Overview</a>
+  <a href="#acmg-scoring">Scoring Engine</a>
+  <a href="#acmg-criteria">Criteria Details</a>
+  <a href="#clinvar-logic">ClinVar Logic</a>
+  <a href="#geneinfo">GeneInfo Tab</a>
+  <a href="#controls">Controls</a>
+  <a href="#datasources">Data Sources</a>
+  <a href="#scores">Score Reference</a>
+  <a href="#caching">Caching</a>
+  <a href="#export">Export</a>
+  <a href="#references">References</a>
+  <a href="#faq">FAQ</a>
+</div>
+
+<!-- OVERVIEW -->
+<h2 id="overview">Overview</h2>
+<p>VarViz displays multiple layers of protein-level annotation on a shared amino-acid axis so you can evaluate variant significance at a glance. All data is fetched live from public APIs - no pre-downloaded databases required beyond a gene-coordinate file and CCRS regions. VarViz integrates 20+ computational pathogenicity predictors via dbNSFP/MyVariant.info and auto-computes ACMG/AMP evidence tags per Richards et al. (2015), Tavtigian et al. (2020), and Pejaver et al. (2022).</p>
+
+<div class="card">
+  <h3>Core Features</h3>
+  <ul>
+    <li><span class="badge viz">VIZ</span> <strong>9 interactive tracks</strong>: gnomAD frequency, mutation density, AlphaFold pLDDT, AF Mean Pathogenicity, ClinVar/PTM/CCRS, Multi Conservation (UCSC), ConSurf, UniProt domains, transmembrane topology</li>
+    <li><span class="badge viz">VIZ</span> <strong>Multi Conservation (UCSC) track</strong>: per-residue PhyloP 100V, PhyloP 470M (mammalian), and PhastCons 100V fetched live from the UCSC REST API, mapped to amino acid positions via Ensembl exon structure</li>
+    <li><span class="badge viz">VIZ</span> <strong>Amino acid color-coding</strong>: lollipop stick = reference AA physicochemical group; dot = variant AA group; different colors = physicochemical property shift</li>
+    <li><span class="badge table">TABLE</span> <strong>Variant Annotation Summary</strong>: 40+ columns in 6 color-coded sections per variant</li>
+    <li><span class="badge table">TABLE</span> <strong>Hybrid ACMG classifier</strong>: Richards 2015 rule-based + Tavtigian 2020 Bayesian points + Pejaver 2022 PP3/BP4 calibration</li>
+    <li><span class="badge table">TABLE</span> <strong>AlphaMissense exact scores</strong>: per-variant pathogenicity from AlphaFold substitution CSV with MyVariant.info fallback</li>
+    <li><span class="badge table">TABLE</span> <strong>Layout</strong>: Variant Summary &rarr; Download TSV &rarr; External Links (15 databases)</li>
+  </ul>
+</div>
+
+<!-- QUICK START -->
+<h2 id="quickstart">Quick Start</h2>
+<ol>
+  <li><strong>Select gene</strong>: type an HGNC symbol (e.g. <code>TP53</code>, <code>BRCA1</code>, <code>DDR2</code>). VarViz maps it to UniProt, GRCh38 coordinates, and protein length.</li>
+  <li><strong>Enter variants</strong>: paste comma-separated HGVS protein notation: <code>p.R175H, p.G245S, p.V272M</code>. Both 3-letter and 1-letter forms accepted.</li>
+  <li><strong>Choose tracks</strong>: tick desired Output Tracks. Multi Conservation (UCSC) and Conservation (ConSurf) are independent toggles.</li>
+  <li><strong>Upload optional files</strong>: ConSurf grades file (before Go), custom pathogenic variant positions.</li>
+  <li><strong>Click Go</strong>: VarViz fetches from 8+ live APIs with progress updates. Cached genes reload instantly.</li>
+  <li><strong>Explore</strong>: hover plots, scroll the Variant Summary, click Download TSV, switch to GeneInfo tab, use External Links.</li>
+</ol>
+<div class="tip">
+  <strong>Tip:</strong> All API responses are cached in-session. Returning to a previously loaded gene costs zero network calls.
+</div>
+
+<!-- TRACKS -->
+<h2 id="tracks">Plot Tracks</h2>
+
+<div class="card">
+  <h3>1 - Protein Domain Bar (always on)</h3>
+  <p>UniProt features at amino acid coordinates: functional domains, regions, transmembrane helices (orange), topological domains (extracellular/cytoplasmic/lumenal), active sites, binding sites, disulfide bonds, PTMs, signal peptides. User variants shown as color-coded lollipops at 65&deg; with 6-level staggered labels.</p>
+</div>
+
+<div class="card">
+  <h3>2 - gnomAD Frequency</h3>
+  <p>Rainfall plot of gnomAD v4 (GRCh38) population variants. Rare/absent = red, common = blue. Dashed red line marks the allele frequency cutoff. Auto-retries and falls back to gnomAD v2.1.1 (GRCh37) on failure.</p>
+</div>
+
+<div class="card">
+  <h3>3 - Mutation Density</h3>
+  <p>Smoothed density curves of variant counts per position window. Blue = gnomAD, red = ClinVar pathogenic, green = user-uploaded pathogenic positions (optional).</p>
+</div>
+
+<div class="card">
+  <h3>4 - AF Mean Pathogenicity</h3>
+  <p>Per-residue mean AlphaMissense pathogenicity averaged across all 19 possible amino acid substitutions at each position, from the AlphaFold substitution matrix CSV. Reflects intrinsic mutational tolerance independent of which specific variant is queried.</p>
+</div>
+
+<div class="card">
+  <h3>5 - ClinVar / PTM / CCRS</h3>
+  <p>Three annotation layers: ClinVar pathogenic/LP variant positions (colored by significance), UniProt PTMs (phosphorylation, ubiquitination, etc.), and CCRS constrained coding region boundaries. CCRS &ge;90th percentile zones are used by the PM1 ACMG rule.</p>
+</div>
+
+<div class="card">
+  <h3>6 - Multi Conservation (UCSC) <span style="background:#0891b2;color:#fff;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700;margin-left:6px;">NEW</span></h3>
+  <p>Three conservation score lines from the UCSC Genome Browser REST API (hg38), mapped to amino acid positions via Ensembl canonical transcript exon structure:</p>
+  <ul>
+    <li><strong>PhyloP 100V</strong>: 100-vertebrate alignment. Positive = conserved, negative = evolving faster than neutral</li>
+    <li><strong>PhyloP 470M</strong>: 470-mammalian alignment, finer mammalian resolution</li>
+    <li><strong>PhastCons 100V</strong>: probability of falling in a conserved element (0&ndash;1)</li>
+  </ul>
+  <p>These scores feed directly into the PP3/BP4 ACMG conservation gate (see Criteria Details).</p>
+</div>
+
+<div class="card">
+  <h3>7 - Conservation (ConSurf)</h3>
+  <p>Per-residue evolutionary conservation grade (1&ndash;9) and normalized score from a user-uploaded ConSurf grades file. Grade 1 = most variable; grade 9 = most conserved. Burial status (B/E) shown when available. The track appears automatically when a file is uploaded. There is no checkbox. Upload <code>consurf.grades</code> before clicking Go.</p>
+</div>
+
+<div class="card">
+  <h3>8 - AlphaFold pLDDT</h3>
+  <p>Per-residue structural confidence (0&ndash;100). Color-coded: Very High 90&ndash;100 (dark blue), High 70&ndash;90 (light blue), Low 50&ndash;70 (yellow), Very Low &lt;50 (orange). Shown in Variant Info as the pLDDT column with category label.</p>
+</div>
+
+<!-- VARIANT TABLE -->
+<h2 id="variant-table">Variant Annotation Summary</h2>
+<p>A per-variant card rendered below the plot. Each card has six color-coded sections plus an interactive cosegregation selector:</p>
+<table>
+  <tr><th>Section</th><th>Color</th><th>Key Columns</th></tr>
+  <tr><td><strong>Variant Info</strong></td><td>Dark teal</td><td>Name, position, rsID, pLDDT, AF Path, density, domain, CCRS, ScoreCons, PTM, ClinVar sig + ⭐ review stars</td></tr>
+  <tr><td><strong>Pathogenicity</strong></td><td>Red</td><td>SIFT, PolyPhen2 HDIV, PolyPhen2 HVAR, LRT, FATHMM, PROVEAN, MutationTaster</td></tr>
+  <tr><td><strong>Ensemble</strong></td><td>Purple</td><td>REVEL, MetaSVM, MetaLR, MetaRNN, CADD, DANN, AlphaMissense, DBSCSNV ADA/RF</td></tr>
+  <tr><td><strong>Conservation</strong></td><td>Green</td><td>PhyloP 100V, PhyloP 470M, PhastCons, GERP++, ScoreCons</td></tr>
+  <tr><td><strong>Population</strong></td><td>Blue</td><td>gnomAD total AF/AC/NHomAlt, AFR, NFE, EAS, SAS, FIN, 1000G, ExAC</td></tr>
+  <tr><td><strong>ACMG Classification</strong></td><td>Orange</td><td>criterion grid (see below), cosegregation selector, classification badge, clinical comment</td></tr>
+</table>
+
+<div class="card card-accent" style="margin-top:16px;">
+  <h3>ACMG Criterion Grid</h3>
+  <p>ACMG criteria that fired are shown as cards, grouped into <strong style="color:#dc2626;">▲ Pathogenic</strong> and <strong style="color:#16a34a;">▼ Benign</strong> sections. Each card shows the tag name, evidence strength, and point contribution:</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+    <div style="background:#fee2e2;border:2px solid #dc2626;border-radius:10px;padding:6px 12px;text-align:center;min-width:62px;">
+      <div style="font-weight:800;color:#7f1d1d;">PM1</div>
+      <div style="font-size:10px;color:#7f1d1d;">Moderate</div>
+      <div style="background:#dc2626;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-top:3px;">+2pts</div>
+    </div>
+    <div style="background:#fff7ed;border:2px solid #ea580c;border-radius:10px;padding:6px 12px;text-align:center;min-width:62px;">
+      <div style="font-weight:800;color:#7c2d12;">PP3</div>
+      <div style="font-size:10px;color:#7c2d12;">Supporting</div>
+      <div style="background:#ea580c;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-top:3px;">+1pts</div>
+    </div>
+    <div style="background:#dcfce7;border:2px solid #16a34a;border-radius:10px;padding:6px 12px;text-align:center;min-width:62px;">
+      <div style="font-weight:800;color:#14532d;">BP4</div>
+      <div style="font-size:10px;color:#14532d;">Supporting</div>
+      <div style="background:#16a34a;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-top:3px;">-1pts</div>
+    </div>
+  </div>
+</div>
+
+<div class="card card-accent" style="margin-top:16px;">
+  <h3>ClinVar Review Stars</h3>
+  <p>ClinVar assertions are annotated with ★ stars reflecting review status:</p>
+  <ul>
+    <li><strong>★★★★</strong> Practice guideline (highest evidence)</li>
+    <li><strong>★★★☆</strong> Reviewed by expert panel</li>
+    <li><strong>★★☆☆</strong> Multiple submitters, no conflicts</li>
+    <li><strong>★☆☆☆</strong> Single submitter</li>
+    <li><strong>☆☆☆☆</strong> No assertion criteria provided</li>
+  </ul>
+</div>
+
+<div class="card card-accent" style="margin-top:16px;">
+  <h3>Per-Variant Cosegregation</h3>
+  <p>Each variant card has its own <strong>Cosegregation</strong> dropdown. Select the number of affected family members with the variant to apply PP1:</p>
+  <ul>
+    <li><strong>Not assessed</strong>: PP1 not applied (default)</li>
+    <li><strong>1-2 affected relatives</strong>: PP1 Supporting (+1 pt)</li>
+    <li><strong>3-4 relatives</strong>: PP1 Moderate (+2 pts)</li>
+    <li><strong>5+ relatives</strong>: PP1 Strong (+4 pts)</li>
+  </ul>
+  <p>The classification updates when you change the selection. Cosegregation choices are saved in the TSV download as <code>Cosegregation</code>, <code>PP1_Applied</code>, <code>Final_ACMG_Tags</code>, <code>Final_Classification</code>, and <code>Final_Points</code> columns.</p>
+  <div class="tip"><strong>Note:</strong> Different variants in the same gene can segregate in different families. Setting cosegregation per card avoids applying the same PP1 level to all variants at once.</div>
+</div>
+
+<div class="card">
+  <h3>Score Color Coding</h3>
+  <ul>
+    <li><span style="color:#dc2626;font-weight:700;">Red / dam</span>: damaging prediction</li>
+    <li><span style="color:#d97706;font-weight:700;">Amber / amb</span>: ambiguous / uncertain</li>
+    <li><span style="color:#2563eb;font-weight:700;">Blue / ben</span>: benign / tolerated</li>
+    <li><span style="color:#64748b;font-weight:700;">Grey / -</span>: no data</li>
+  </ul>
+</div>
+
+<!-- ACMG OVERVIEW -->
+<h2 id="acmg">ACMG Classification - Overview</h2>
+<p>VarViz implements a hybrid two-tier ACMG/AMP classification engine:</p>
+<ol>
+  <li><strong>Rule-based classifier</strong> (Richards et al. 2015): fires when evidence tag combinations match a defined rule (e.g. &ldquo;1 PS + 1 PM = Likely Pathogenic&rdquo;)</li>
+  <li><strong>Bayesian point fallback</strong> (Tavtigian et al. 2020): applies when no rule-based combination fires; each tag carries a defined point value; point thresholds determine classification</li>
+</ol>
+<p>PP3/BP4 computational evidence uses Pejaver et al. (2022) calibrated tool-specific thresholds, not simple vote-counting.</p>
+
+<div class="level-bar">
+  <div class="level-seg" style="background:#7c3aed;">Pathogenic</div>
+  <div class="level-seg" style="background:#b91c1c;">Likely Pathogenic</div>
+  <div class="level-seg" style="background:#d97706; color:#1e293b;">VUS</div>
+  <div class="level-seg" style="background:#047857;">Likely Benign</div>
+  <div class="level-seg" style="background:#064e3b;">Benign</div>
+</div>
+
+<!-- ACMG SCORING ENGINE -->
+<h2 id="acmg-scoring">ACMG Scoring Engine</h2>
+
+<div class="card card-accent">
+  <h3>Tavtigian 2020 Point Weights</h3>
+  <table>
+    <tr><th>Tag(s)</th><th>Category</th><th>Points</th></tr>
+    <tr><td><span class="tag pvs">PVS1</span></td><td>Very Strong Pathogenic</td><td style="color:#7c3aed;font-weight:700;">+8</td></tr>
+    <tr><td><span class="tag ps">PS1&ndash;4</span> &nbsp;<span class="tag pm">PM1_strong</span> &nbsp;<span class="tag pp">PP3_strong</span></td><td>Strong Pathogenic (or PS-equivalent)</td><td style="color:#b91c1c;font-weight:700;">+4 each</td></tr>
+    <tr><td><span class="tag pm">PM1&ndash;6</span> &nbsp;<span class="tag pp">PP3_moderate</span></td><td>Moderate Pathogenic (or PM-equivalent)</td><td style="color:#dc2626;font-weight:700;">+2 each</td></tr>
+    <tr><td><span class="tag pp">PP1&ndash;5</span></td><td>Supporting Pathogenic</td><td style="color:#f97316;font-weight:700;">+1 each</td></tr>
+    <tr><td><span class="tag ba">BA1</span></td><td>Stand-alone Benign</td><td style="color:#1e293b;font-weight:700;">&minus;8</td></tr>
+    <tr><td><span class="tag bs">BS1&ndash;4</span> &nbsp;<span class="tag bp">BP6</span></td><td>Strong Benign (or BS-equivalent)</td><td style="color:#047857;font-weight:700;">&minus;4 each</td></tr>
+    <tr><td><span class="tag bp">BP1&ndash;5</span> &nbsp;<span class="tag bp">BP7</span></td><td>Supporting Benign</td><td style="color:#10b981;font-weight:700;">&minus;1 each</td></tr>
+  </table>
+  <p style="margin-top:10px; font-size:13.5px;"><strong>PM1_strong</strong> = PM1 upgraded to PS-equivalent when in a structural domain + strong conservation hit. <strong>PP3_strong</strong> = REVEL &ge; 0.932 only.</p>
+</div>
+
+<div class="card">
+  <h3>Classification Thresholds</h3>
+  <table>
+    <tr><th>Method</th><th>Condition</th><th>Result</th></tr>
+    <tr><td rowspan="8"><strong>Rule-based<br>(Richards 2015)</strong></td><td>PVS1 + &ge;1 PS-equivalent</td><td>Pathogenic</td></tr>
+    <tr><td>2 PS-equivalent</td><td>Pathogenic</td></tr>
+    <tr><td>1 PS-eq + 3 PM</td><td>Pathogenic</td></tr>
+    <tr><td>1 PS-eq + 1&ndash;2 PM</td><td>Likely Pathogenic</td></tr>
+    <tr><td>1 PS-eq + &ge;2 PP</td><td>Likely Pathogenic</td></tr>
+    <tr><td>&ge;3 PM &nbsp;/&nbsp; 2 PM + &ge;2 PP &nbsp;/&nbsp; 1 PM + &ge;4 PP</td><td>Likely Pathogenic</td></tr>
+    <tr><td>BA1 alone &nbsp;/&nbsp; &ge;2 BS &nbsp;/&nbsp; 1 BS + &ge;2 BP</td><td>Benign</td></tr>
+    <tr><td>1 BS + 1 BP &nbsp;/&nbsp; &ge;2 BP</td><td>Likely Benign</td></tr>
+    <tr><td rowspan="5"><strong>Bayesian fallback<br>(Tavtigian 2020)</strong></td><td>&ge; 10 pts</td><td>Pathogenic</td></tr>
+    <tr><td>6&ndash;9 pts</td><td>Likely Pathogenic</td></tr>
+    <tr><td>&minus;3 to +5 pts</td><td>VUS</td></tr>
+    <tr><td>&minus;4 to &minus;6 pts</td><td>Likely Benign</td></tr>
+    <tr><td>&le; &minus;7 pts or BA1</td><td>Benign</td></tr>
+  </table>
+</div>
+
+<!-- ACMG CRITERIA DETAILS -->
+<h2 id="acmg-criteria">ACMG Criteria - Full Details</h2>
+<p>Each criterion implemented in VarViz with exact trigger conditions, data sources, and mutual-exclusion rules.</p>
+
+<div class="card card-path">
+  <h3 style="color:#b91c1c;">&#9670; Pathogenic Evidence Tags</h3>
+
+  <div class="group-box" style="margin-top:14px;">
+    <div class="group-box-title">PS1 - Strong Pathogenic &nbsp;<span class="tag ps">PS1</span>&nbsp; +4 pts</div>
+    <p><strong>Trigger:</strong> ClinVar contains the <em>exact same amino acid change</em>, classified as <em>Pathogenic</em> (not merely LP).</p>
+    <p><strong>Requires:</strong> <code>clinvar_match_type == "exact"</code> AND ClinVar significance is Pathogenic (not just Likely Pathogenic).</p>
+    <p><strong>Data source:</strong> NCBI ClinVar via E-utilities with two-tier protein-change matching.</p>
+    <p><strong>Exclusions:</strong> Mutually exclusive with PM5 and BP6. If ClinVar is only LP, PS1 is downgraded to PM5 (+2 pts).</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PM1 / PM1_strong - Moderate / Strong Pathogenic &nbsp;<span class="tag pm">PM1</span>&nbsp;<span class="tag ps">PM1_strong</span>&nbsp; +2 / +4 pts</div>
+    <p><strong>Trigger:</strong> Variant is in a CCRS-constrained region (&ge;90th percentile) <em>or</em> in a structurally/functionally critical UniProt domain.</p>
+    <p><strong>Upgrade to PM1_strong (PS-equivalent, +4 pts):</strong> Position is in a structural domain <em>and</em> at least one strong conservation signal is present:</p>
+    <ul>
+      <li>ConSurf grade &ge; 8 &nbsp;|&nbsp; PhyloP 100V &gt; 4.0 &nbsp;|&nbsp; PhastCons 100V &gt; 0.9</li>
+      <li>GERP++ &gt; 4.4 &nbsp;|&nbsp; ScoreCons &gt; 0.8</li>
+    </ul>
+    <p><strong>Not applied when:</strong> gnomAD AF &gt; 1% (BS1/BA1 range).</p>
+    <p><strong>Data sources:</strong> CCRS local file, UniProt features API, ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons).</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PM2 - Moderate Pathogenic &nbsp;<span class="tag pm">PM2</span>&nbsp; +2 pts</div>
+    <p><strong>Trigger:</strong> gnomAD AF &lt; 0.0001 (0.01%) or absent from gnomAD.</p>
+    <p><strong>Data source:</strong> gnomAD GraphQL API (v4; v2 fallback).</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PM4 - Moderate Pathogenic &nbsp;<span class="tag pm">PM4</span>&nbsp; +2 pts</div>
+    <p><strong>Trigger:</strong> Protein length change detected in variant name: contains <code>del</code>, <code>ins</code>, <code>dup</code>, <code>fs</code>, or <code>frameshift</code>.</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PM5 - Moderate Pathogenic &nbsp;<span class="tag pm">PM5</span>&nbsp; +2 pts</div>
+    <p><strong>Trigger:</strong> A <em>different</em> pathogenic amino acid change exists at the <em>same codon</em> in ClinVar (<code>clinvar_match_type == "position"</code>), or the exact change exists but ClinVar classifies it only as Likely Pathogenic (PS1 downgraded).</p>
+    <p><strong>Exclusions:</strong> Mutually exclusive with PS1.</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PP2 - Supporting Pathogenic &nbsp;<span class="tag pp">PP2</span>&nbsp; +1 pt</div>
+    <p><strong>Trigger:</strong> Missense variants are a well-established disease mechanism for this gene (pre-computed gene-level prior).</p>
+    <p><strong>Gated off when:</strong> gnomAD AF &gt; 1%.</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PP3 / PP3_moderate / PP3_strong - Supporting to Strong Pathogenic &nbsp;<span class="tag pp">PP3</span>&nbsp;<span class="tag pm">PP3_mod</span>&nbsp;<span class="tag ps">PP3_str</span>&nbsp; +1 / +2 / +4 pts</div>
+    <p>Multi-tier computational pathogenicity evidence following Pejaver 2022 calibrated thresholds. Hierarchy (highest tier wins; each tool can only upgrade, never downgrade):</p>
+
+    <div class="thresh-grid">
+      <div class="thresh-card">
+        <h4>1. REVEL (primary, best calibrated)</h4>
+        <div class="thresh-row"><span>PP3_strong (+4)</span><span class="thresh-val tv-path">&ge; 0.932</span></div>
+        <div class="thresh-row"><span>PP3_moderate (+2)</span><span class="thresh-val tv-path">&ge; 0.773</span></div>
+        <div class="thresh-row"><span>PP3 supporting (+1)</span><span class="thresh-val tv-amb">&ge; 0.644</span></div>
+        <div class="thresh-row"><span>BP4 vote (benign)</span><span class="thresh-val tv-ben">&le; 0.290</span></div>
+      </div>
+      <div class="thresh-card">
+        <h4>2. MetaSVM / MetaLR / MetaRNN</h4>
+        <div class="thresh-row"><span>PP3_moderate (+2)</span><span class="thresh-val tv-path">&ge;2 D + calibrated*</span></div>
+        <div class="thresh-row"><span>PP3 supporting (+1)</span><span class="thresh-val tv-amb">&ge;1 Damaging</span></div>
+        <div class="thresh-row"><span>BP4 vote</span><span class="thresh-val tv-ben">Tolerated</span></div>
+        <div class="thresh-row" style="font-size:11px;color:#64748b;padding-top:4px;"><em>*calibrated = REVEL &ge;0.644 or CADD &ge;28.1</em></div>
+      </div>
+      <div class="thresh-card">
+        <h4>3. CADD</h4>
+        <div class="thresh-row"><span>PP3_moderate (+2)</span><span class="thresh-val tv-path">&ge; 35</span></div>
+        <div class="thresh-row"><span>PP3 supporting (+1)</span><span class="thresh-val tv-amb">&ge; 28.1</span></div>
+        <div class="thresh-row"><span>BP4 vote</span><span class="thresh-val tv-ben">&lt; 15</span></div>
+      </div>
+      <div class="thresh-card">
+        <h4>4. DANN</h4>
+        <div class="thresh-row"><span>PP3 supporting (+1)</span><span class="thresh-val tv-amb">&ge; 0.96</span></div>
+        <div class="thresh-row"><span>BP4 vote</span><span class="thresh-val tv-ben">&lt; 0.50</span></div>
+      </div>
+      <div class="thresh-card">
+        <h4>5. AlphaMissense</h4>
+        <div class="thresh-row"><span>PP3 supporting (+1)</span><span class="thresh-val tv-amb">&ge; 0.564</span></div>
+        <div class="thresh-row"><span>BP4 vote</span><span class="thresh-val tv-ben">&le; 0.340</span></div>
+      </div>
+      <div class="thresh-card">
+        <h4>6. Conservation Gate (add-on)</h4>
+        <div class="thresh-row"><span>PP3_moderate upgrade</span><span class="thresh-val tv-path">&ge;2 hits + calibrated seq</span></div>
+        <div class="thresh-row"><span>PP3 supporting add</span><span class="thresh-val tv-amb">&ge;1 hit, no BP4 conflict</span></div>
+        <div class="thresh-row" style="font-size:11px;padding-top:4px;color:#475569;">Hits: ConSurf &ge;8, PhyloP &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, ScoreCons &gt;0.8</div>
+      </div>
+    </div>
+
+    <div class="warn" style="margin-top:12px;">
+      <strong>PP3 &harr; BP4 mutual exclusion:</strong> These tags can never co-exist. If any PP3 tier fires, BP4 is suppressed. If PP3 has not fired, BP4 fires only when &ge;2 benign predictor votes are tallied. Net-zero PP3+BP4 combinations are impossible.
+    </div>
+    <div class="warn">
+      <strong>Conservation conflict override:</strong> If &ge;1 conservation hit suggests pathogenic but &ge;2 benign predictor votes also fire, the signals conflict and cancel - neither PP3 nor BP4 fires from conservation in that case.
+    </div>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PP5 - Supporting Pathogenic &nbsp;<span class="tag pp">PP5</span>&nbsp; +1 pt</div>
+    <p><strong>Trigger:</strong> ClinVar exact match is Pathogenic or Likely Pathogenic (complementary supporting evidence alongside PS1/PM5).</p>
+    <p><strong>Requires:</strong> Exact protein change match. Gated off when BA1 or BS1 fires.</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PP1 - Cosegregation &nbsp;<span class="tag pp">PP1</span>&nbsp; +1 pt &nbsp;|&nbsp; <span class="tag pp">PP1&uarr;</span>&nbsp; +2 pts &nbsp;|&nbsp; <span class="tag pp">PP1&uArr;</span>&nbsp; +4 pts</div>
+    <p>Set using the Cosegregation dropdown in each variant card.</p>
+    <ul>
+      <li><strong>PP1 Supporting (+1 pt)</strong>: 1&ndash;2 affected relatives with variant</li>
+      <li><strong>PP1 Moderate (+2 pts)</strong>: 3&ndash;4 affected relatives (or LOD &ge; 1.5)</li>
+      <li><strong>PP1 Strong (+4 pts)</strong>: &ge;5 affected relatives (or LOD &ge; 3.5)</li>
+    </ul>
+    <p><strong>Gated off when:</strong> BA1 or BS1 fires (variant too common to be disease-causing).</p>
+    <p><strong>Reference:</strong> Jarvik &amp; Browning (2016) — threshold guidance for cosegregation LOD scores in Mendelian disease.</p>
+  </div>
+</div>
+
+<div class="card card-ben">
+  <h3 style="color:#047857;">&#9670; Benign Evidence Tags</h3>
+
+  <div class="group-box" style="margin-top:14px;">
+    <div class="group-box-title">BA1 - Stand-alone Benign &nbsp;<span class="tag ba">BA1</span>&nbsp; &minus;8 pts</div>
+    <p><strong>Trigger:</strong> gnomAD AF &gt; 5%.</p>
+    <p><strong>Effect:</strong> Immediately classifies as <strong>Benign</strong>. Removes all pathogenic tags (PM1, PM2, PM4, PM5, PP2, PP3, PS1, PP5). Overrides all other evidence.</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">BS1 - Strong Benign &nbsp;<span class="tag bs">BS1</span>&nbsp; &minus;4 pts</div>
+    <p><strong>Trigger:</strong> gnomAD AF &gt; 1% (up to 5%; beyond that is BA1).</p>
+    <p><strong>Effect:</strong> Removes pathogenic moderate/supporting tags (PM1, PP2, PP3, PM5, PS1, PP5).</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">BS2 - Strong Benign &nbsp;<span class="tag bs">BS2</span>&nbsp; &minus;4 pts</div>
+    <p><strong>Trigger:</strong> Variant observed in homozygous state in gnomAD (<code>nhomalt &gt; 0</code>), or gnomAD AF &gt; 5% as proxy when homozygote count unavailable.</p>
+    <p>Independent of BS1/BA1 - evaluates healthy carrier observation separately.</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">BP3 - Supporting Benign &nbsp;<span class="tag bp">BP3</span>&nbsp; &minus;1 pt</div>
+    <p><strong>Trigger:</strong> In-frame indel (<code>del</code>/<code>ins</code>/<code>dup</code> in variant name, no <code>fs</code>) falls within a UniProt-annotated repeat region.</p>
+    <p><strong>Data source:</strong> UniProt features API (type == &ldquo;repeat&rdquo; checked against position).</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">BP4 - Supporting Benign &nbsp;<span class="tag bp">BP4</span>&nbsp; &minus;1 pt</div>
+    <p><strong>Trigger:</strong> &ge;2 benign predictor votes AND PP3 has <em>not</em> fired. See per-tool thresholds in PP3 section above.</p>
+    <p><strong>Suppressed when:</strong> Any PP3 tier is active (mutual exclusion).</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">BP6 - Supporting Benign (BS-equivalent in Tavtigian) &nbsp;<span class="tag bp">BP6</span>&nbsp; &minus;4 pts</div>
+    <p><strong>Trigger:</strong> ClinVar exact match is Benign (not conflicting, not just Likely Benign).</p>
+    <p><strong>Requires:</strong> Exact protein change match. <strong>Mutually exclusive with PS1</strong> - if PS1 has fired, BP6 is blocked.</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">BP7 - Supporting Benign &nbsp;<span class="tag bp">BP7</span>&nbsp; &minus;1 pt</div>
+    <p><strong>Trigger:</strong> Synonymous variant (reference and alternate amino acids identical, e.g. <code>p.Pro72Pro</code>).</p>
+    <p><strong>Data source:</strong> Variant name parsing.</p>
+  </div>
+</div>
+
+<!-- CLINVAR LOGIC -->
+<h2 id="clinvar-logic">ClinVar Matching Logic</h2>
+
+<div class="card">
+  <p>VarViz uses a two-tier matching strategy for each input variant:</p>
+  <table>
+    <tr><th>Match Type</th><th>Logic</th><th>Display</th><th>ACMG Tags Eligible</th></tr>
+    <tr>
+      <td><strong>Exact</strong></td>
+      <td>User&rsquo;s protein change (3-letter and 1-letter) found verbatim in ClinVar variant name</td>
+      <td>&ldquo;Pathogenic&rdquo; (clean)</td>
+      <td>PS1, PP5, BP6</td>
+    </tr>
+    <tr>
+      <td><strong>Position</strong></td>
+      <td>Different variant at same amino acid position in ClinVar (e.g. query p.Cys29Trp, ClinVar has p.Cys29Ter)</td>
+      <td>&ldquo;Pathogenic&rdquo; + <em>&#9888; diff variant at pos</em></td>
+      <td>PM5 only</td>
+    </tr>
+    <tr>
+      <td><strong>None</strong></td>
+      <td>No ClinVar entry at this position</td>
+      <td>&ldquo;Not in ClinVar&rdquo;</td>
+      <td>None</td>
+    </tr>
+  </table>
+  <div class="tip">
+    <strong>Why this matters:</strong> A stop-gain (p.Cys29Ter) and a missense (p.Cys29Trp) have different molecular consequences. PS1 requires the <em>identical</em> amino acid change. VarViz correctly assigns PM5 for position matches and PS1 only for exact amino acid change matches - preventing inflated pathogenicity calls.
+  </div>
+</div>
+
+<!-- GENEINFO TAB -->
+<h2 id="geneinfo">GeneInfo Tab</h2>
+<p>Switch to the <strong>GeneInfo</strong> tab after clicking Go:</p>
+<ul>
+  <li><strong>Gene Summary Card</strong>: gene name, UniProt ID, synonyms, protein name, length in amino acids</li>
+  <li><strong>Word Cloud</strong>: key terms from UniProt function + NCBI gene summary, sized by frequency</li>
+  <li><strong>Function</strong>: full UniProt function annotation with source link</li>
+  <li><strong>Involvement in Disease</strong>: UniProt disease associations table with MIM numbers and disease notes</li>
+  <li><strong>Variant Summary</strong>: same 6-section cards as in the Plot tab</li>
+  <li><strong>Download TSV</strong>: immediately below the Variant Summary</li>
+  <li><strong>External Links</strong>: 15 curated database buttons: DECIPHER, AlphaFold, OMIM, Ensembl, HGNC, UniProt, PanelApp, GenCC, ClinGen, Medline, TRAP-Score, Gene2Phenotype, GTEx, ConSurf-DB, AF Calculator</li>
+</ul>
+
+<!-- CONTROLS -->
+<h2 id="controls">Controls &amp; Filters</h2>
+
+<h3>Variant Input</h3>
+<p>Comma-separated HGVS protein notation: <code>p.R175H, p.G245S, p.V272M</code>. Both 1-letter and 3-letter forms accepted. Variants appear as dashed lines on all tracks and color-coded lollipops on the domain bar.</p>
+
+<h3>Output Tracks</h3>
+<ul>
+  <li><strong>gnomAD Frequency</strong>, <strong>Mutation Density</strong>, <strong>AF Mean Pathogenicity</strong>, <strong>ClinVar / PTM / CCRS</strong>: core tracks, always available</li>
+  <li><strong>Multi Conservation (UCSC)</strong>: PhyloP 100V, PhyloP 470M, PhastCons; fetched live from UCSC REST API</li>
+  <li><strong>Conservation (ConSurf)</strong>: shown automatically when a ConSurf grades file is uploaded</li>
+</ul>
+
+<h3>ClinVar Variants Filter</h3>
+<ul>
+  <li><strong>Any Star</strong>: all assertions</li>
+  <li><strong>1 Star or more</strong>: criteria provided, single submitter</li>
+  <li><strong>2 Stars or more</strong>: multiple submitters, no conflicts</li>
+</ul>
+
+<h3>Frequency Cutoff Method</h3>
+<ul>
+  <li><strong>Calculate AF (by prevalence)</strong>: maximum credible AF from disease prevalence, heterogeneity, penetrance (Whiffin et al. 2017). Adjust via <em>Edit parameters</em>. Default: prevalence 1&nbsp;in&nbsp;2,000; allelic heterogeneity 0.2; penetrance 0.5.</li>
+  <li><strong>AC Filter (by max AF)</strong>: set maximum allele frequency directly</li>
+</ul>
+
+<div class="warn">
+  <strong>Note:</strong> Max AF / Max AC updates live but the plot only re-renders on Go. Click Go again if numbers appear inconsistent with the plot.
+</div>
+
+<h3>Optional File Uploads</h3>
+<ul>
+  <li><strong>ConSurf grades file</strong>: <code>consurf.grades</code> from <a href="https://consurf.tau.ac.il/" target="_blank">ConSurf-DB</a>. Upload <em>before</em> clicking Go.</li>
+  <li><strong>Custom pathogenic variants</strong>: protein positions for the green density overlay.</li>
+</ul>
+
+<!-- DATA SOURCES -->
+<h2 id="datasources">Data Sources</h2>
+<table>
+  <tr><th>Source</th><th>Type</th><th>Data Provided</th></tr>
+  <tr><td>UniProt REST API</td><td><span class="badge api">API</span></td><td>Domains, features, PTMs, disulfide bonds, signal peptides, active sites, binding sites, mutagenesis, function, diseases, transmembrane helices, topological domains</td></tr>
+  <tr><td>AlphaFold EBI</td><td><span class="badge api">API</span></td><td>Per-residue pLDDT; full amino-acid substitution pathogenicity matrix (AlphaMissense)</td></tr>
+  <tr><td>gnomAD GraphQL</td><td><span class="badge api">API</span></td><td>Variant allele frequencies, allele counts, homozygotes (v4 GRCh38; v2.1.1 GRCh37 fallback)</td></tr>
+  <tr><td>NCBI E-utilities</td><td><span class="badge api">API</span></td><td>ClinVar pathogenic/LP variants with review stars; gene summaries</td></tr>
+  <tr><td>MyVariant.info</td><td><span class="badge api">API</span></td><td>dbNSFP scores (SIFT, PolyPhen2, LRT, FATHMM, PROVEAN, MutationTaster, REVEL, MetaSVM, MetaLR, MetaRNN, CADD, DANN, AlphaMissense), conservation (GERP++, PhyloP, PhastCons), population frequencies (gnomAD by ancestry, 1000G, ExAC)</td></tr>
+  <tr><td>UCSC REST API</td><td><span class="badge api">API</span></td><td>PhyloP 100-way vertebrate, PhyloP 470-way mammalian, PhastCons 100-way (hg38) for Multi Conservation track</td></tr>
+  <tr><td>Ensembl REST API</td><td><span class="badge api">API</span></td><td>Canonical transcript exon structure for mapping UCSC genomic scores to amino acid coordinates</td></tr>
+  <tr><td>ClinGen LDH / eRepo</td><td><span class="badge api">API</span></td><td>Gene–disease validity classifications (Definitive / Strong / Moderate / Limited / Disputed / Refuted) from ClinGen curated expert panels</td></tr>
+  <tr><td>GenCC API</td><td><span class="badge api">API</span></td><td>Gene–disease classifications from GenCC consortium submitters (thegencc.org). Queried when ClinGen LDH and eRepo return no results.</td></tr>
+  <tr><td>GENCODE v49</td><td><span class="badge local">LOCAL</span></td><td>Gene &rarr; UniProt ID mapping &amp; GRCh38 coordinates (VarViz.RData, ~0.2 MB)</td></tr>
+  <tr><td>CCRS / CCRStoAAC</td><td><span class="badge local">LOCAL</span></td><td>Constrained coding regions (tabix-indexed BED, ~200 MB) + ScoreCons protein-coordinate conservation</td></tr>
+  <tr><td>ConSurf</td><td><span class="badge user">USER</span></td><td>Conservation grades (1&ndash;9), normalized scores, burial status (uploaded tab-separated grades file)</td></tr>
+  <tr><td>Custom variants</td><td><span class="badge user">USER</span></td><td>Pathogenic variant positions for density overlay (uploaded file)</td></tr>
+</table>
+
+<!-- SCORE REFERENCE -->
+<h2 id="scores">Pathogenicity Score Reference</h2>
+
+<div class="card">
+  <h3>Pathogenicity Section (individual tools)</h3>
+  <table>
+    <tr><th>Score</th><th>Damaging threshold</th><th>Description</th></tr>
+    <tr><td><strong>SIFT</strong></td><td>&lt; 0.05 = damaging</td><td>Sequence homology-based conservation. Lower score = more damaging</td></tr>
+    <tr><td><strong>PolyPhen2 HDIV</strong></td><td>&ge; 0.957 = probably dam.; &ge;0.447 = possibly dam.</td><td>Structure + conservation trained on HumDiv disease variants</td></tr>
+    <tr><td><strong>PolyPhen2 HVAR</strong></td><td>&ge; 0.909 = probably dam.; &ge;0.447 = possibly dam.</td><td>Trained on HumVar common variants; higher specificity for common SNPs</td></tr>
+    <tr><td><strong>LRT</strong></td><td>D prediction</td><td>Likelihood ratio test across 32 vertebrate species</td></tr>
+    <tr><td><strong>FATHMM</strong></td><td>&le; &minus;1.5</td><td>Hidden Markov Model with functional domain weighting. More negative = damaging</td></tr>
+    <tr><td><strong>PROVEAN</strong></td><td>&le; &minus;2.5</td><td>Protein variation effect analyzer. More negative = damaging</td></tr>
+    <tr><td><strong>MutationTaster</strong></td><td>D or A prediction; score &gt; 0.5</td><td>Disease impact classifier. Prob. 1 = damaging</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Ensemble Section (calibrated predictors)</h3>
+  <table>
+    <tr><th>Score</th><th>Pathogenic</th><th>Ambiguous</th><th>Benign</th><th>Notes / ACMG use</th></tr>
+    <tr><td><strong>REVEL</strong></td><td>&ge; 0.644</td><td>0.290&ndash;0.644</td><td>&le; 0.290</td><td>Best single predictor (Pejaver 2022). &ge;0.932 = PP3_strong, &ge;0.773 = PP3_moderate</td></tr>
+    <tr><td><strong>MetaSVM</strong></td><td>D (Damaging)</td><td>-</td><td>T (Tolerated)</td><td>SVM ensemble over multiple tools</td></tr>
+    <tr><td><strong>MetaLR</strong></td><td>D</td><td>-</td><td>T</td><td>Logistic regression ensemble</td></tr>
+    <tr><td><strong>MetaRNN</strong></td><td>D</td><td>-</td><td>T</td><td>Recurrent neural network ensemble</td></tr>
+    <tr><td><strong>CADD</strong></td><td>&ge; 28.1</td><td>15&ndash;28.1</td><td>&lt; 15</td><td>PHRED-scaled C-score. &ge;35 = PP3_moderate, &ge;28.1 = PP3 supporting</td></tr>
+    <tr><td><strong>DANN</strong></td><td>&ge; 0.96</td><td>-</td><td>&lt; 0.50</td><td>Deep neural net trained similarly to CADD</td></tr>
+    <tr><td><strong>AlphaMissense</strong></td><td>&ge; 0.564</td><td>0.340&ndash;0.564</td><td>&le; 0.340</td><td>Per-variant exact score from AlphaFold substitution CSV. Contributes to PP3/BP4</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Conservation Section</h3>
+  <table>
+    <tr><th>Score</th><th>PP3 contribution threshold</th><th>Description &amp; source</th></tr>
+    <tr><td><strong>PhyloP 100V</strong></td><td>&gt; 4.0 = conserved hit</td><td>Positive = constrained; negative = accelerated. 100-vertebrate MSA via MyVariant.info &amp; UCSC</td></tr>
+    <tr><td><strong>PhyloP 470M</strong></td><td>&gt; 4.0 = conserved hit</td><td>470-mammalian alignment. UCSC Multi Conservation track only</td></tr>
+    <tr><td><strong>PhastCons</strong></td><td>&gt; 0.9 = conserved hit</td><td>Probability of conserved element (0&ndash;1). 100-vertebrate. Via MyVariant.info &amp; UCSC</td></tr>
+    <tr><td><strong>GERP++</strong></td><td>&gt; 4.4 = conserved hit</td><td>Rejected substitution score; higher = more constrained. Via MyVariant.info / dbNSFP</td></tr>
+    <tr><td><strong>ScoreCons</strong></td><td>&gt; 0.8 = conserved hit</td><td>Protein-coordinate conservation from CCRStoAAC (inter-species)</td></tr>
+    <tr><td><strong>ConSurf grade</strong></td><td>&ge; 8 = conserved hit</td><td>Evolutionary rate grade 1&ndash;9. Grade 9 = most conserved. Upload required</td></tr>
+  </table>
+  <p>Conservation hits are counted for two purposes: (1) PP3 conservation gate (add supporting/moderate PP3), and (2) PM1_strong upgrade (must include structural domain context).</p>
+</div>
+
+<!-- CACHING -->
+<h2 id="caching">Caching</h2>
+<p>All API responses and local lookups are cached in memory for the session. Returning to a previously loaded gene is instant. Cached sources: UniProt gene info, UniProt features, AlphaFold pLDDT, AlphaFold pathogenicity, gnomAD API, gnomAD parsed data, ClinVar, CCRS regions, dbNSFP (MyVariant.info), NCBI gene summaries, UCSC conservation (per transcript), Ensembl exon structure.</p>
+<p>Failed results are <em>not</em> cached. Click Go again to retry.</p>
+<div class="tip">
+  <strong>Console:</strong> <code>[Cache hit]</code> messages appear when cached data is reused. Step-by-step API fetch messages appear on first load.
+</div>
+
+<!-- EXPORT -->
+<h2 id="export">Export</h2>
+
+<h3>Plot Download</h3>
+<p>Click <strong>Download the plot</strong> above the visualization. Formats: <strong>PDF</strong> (vector, publication-ready), <strong>PNG</strong> (300 DPI), <strong>JPEG</strong> (300 DPI). Output is 12&Prime; wide; height scales with track count. Variant labels rendered via ggplot at 65&deg; with 6-level staggering.</p>
+
+<h3>Variant Table Download</h3>
+<p>Click <strong>Download TSV</strong> immediately below the Variant Summary. Exports all 40+ columns: dbNSFP scores, conservation metrics, population frequencies, and ACMG tags. Filename: <code>VarViz_GENE_variant_summary_YYYYMMDD.tsv</code>.</p>
+<p>Five columns are added for the cosegregation selections in each card:</p>
+<ul>
+  <li><code>Cosegregation</code>: human-readable description (e.g. &ldquo;3&ndash;4 affected relatives (PP1 Moderate)&rdquo;)</li>
+  <li><code>PP1_Applied</code>: machine-readable tag applied (e.g. <code>PP1_moderate</code>)</li>
+  <li><code>Final_ACMG_Tags</code>: all tags including PP1 if applied</li>
+  <li><code>Final_Classification</code>: classification after cosegregation (may differ from pre-cosegregation)</li>
+  <li><code>Final_Points</code>: total Tavtigian point score after cosegregation</li>
+</ul>
+<p>The original <code>ACMG_Tags</code> column is kept so both pre- and post-cosegregation states are in the file.</p>
+
+<!-- REFERENCES -->
+<h2 id="references">References</h2>
+<p>Please cite these publications if VarViz contributes to your research.</p>
+
+<div class="card" style="font-size:13.5px; line-height:1.9;">
+<ol style="padding-left:18px;">
+  <li style="margin-bottom:12px;">The UniProt Consortium. (2025) UniProt: the Universal Protein Knowledgebase in 2025. <em>Nucleic Acids Res.</em>, <strong>53</strong>, D609&ndash;D617. doi: <a href="https://doi.org/10.1093/nar/gkae1010" target="_blank">10.1093/nar/gkae1010</a></li>
+  <li style="margin-bottom:12px;">Jumper,J., Evans,R., Pritzel,A. <em>et al.</em> (2021) Highly accurate protein structure prediction with AlphaFold. <em>Nature</em>, <strong>596</strong>, 583&ndash;589. doi: <a href="https://doi.org/10.1038/s41586-021-03819-2" target="_blank">10.1038/s41586-021-03819-2</a></li>
+  <li style="margin-bottom:12px;">Cheng,J., Novati,G., Pan,J. <em>et al.</em> (2023) Accurate proteome-wide missense variant effect prediction with AlphaMissense. <em>Science</em>, <strong>381</strong>, eadg7492. doi: <a href="https://doi.org/10.1126/science.adg7492" target="_blank">10.1126/science.adg7492</a></li>
+  <li style="margin-bottom:12px;">Karczewski,K.J., Francioli,L.C., Tiao,G. <em>et al.</em> (2020) The mutational constraint spectrum quantified from variation in 141,456 humans. <em>Nature</em>, <strong>581</strong>, 434&ndash;443. doi: <a href="https://doi.org/10.1038/s41586-020-2308-7" target="_blank">10.1038/s41586-020-2308-7</a></li>
+  <li style="margin-bottom:12px;">Sayers,E. (2009; updated 2022) A General Introduction to the E-utilities. In: <em>Entrez&reg; Programming Utilities Help</em>. NCBI. <a href="https://www.ncbi.nlm.nih.gov/books/NBK25497/" target="_blank">ncbi.nlm.nih.gov/books/NBK25497/</a></li>
+  <li style="margin-bottom:12px;">Mudge,J.M. <em>et al.</em> (2025) GENCODE 2025: reference gene annotation for human and mouse. <em>Nucleic Acids Res.</em>, <strong>53</strong>, D966&ndash;D975. doi: <a href="https://doi.org/10.1093/nar/gkae1078" target="_blank">10.1093/nar/gkae1078</a></li>
+  <li style="margin-bottom:12px;">Havrilla,J.M., Pedersen,B.S., Layer,R.M. and Quinlan,A.R. (2019) A map of constrained coding regions in the human genome. <em>Nat. Genet.</em>, <strong>51</strong>, 88&ndash;95. doi: <a href="https://doi.org/10.1038/s41588-018-0294-6" target="_blank">10.1038/s41588-018-0294-6</a></li>
+  <li style="margin-bottom:12px;">Ben Chorin,A. <em>et al.</em> (2020) ConSurf-DB: An accessible repository for the evolutionary conservation patterns of the majority of PDB proteins. <em>Protein Sci.</em>, <strong>29</strong>, 258&ndash;267. doi: <a href="https://doi.org/10.1002/pro.3779" target="_blank">10.1002/pro.3779</a></li>
+  <li style="margin-bottom:12px;">Liu,X., Li,C., Mou,C., Dong,Y. and Tu,Y. (2020) dbNSFP v4: a comprehensive database of transcript-specific functional predictions and annotations for human nonsynonymous and splice-site SNVs. <em>Genome Med.</em>, <strong>12</strong>, 103. doi: <a href="https://doi.org/10.1186/s13073-020-00803-9" target="_blank">10.1186/s13073-020-00803-9</a></li>
+  <li style="margin-bottom:12px;">Xin,J. <em>et al.</em> (2016) High-performance web services for querying gene and variant annotation. <em>Genome Biol.</em>, <strong>17</strong>, 91. doi: <a href="https://doi.org/10.1186/s13059-016-0953-9" target="_blank">10.1186/s13059-016-0953-9</a> (MyVariant.info)</li>
+  <li style="margin-bottom:12px;">Richards,S. <em>et al.</em> (2015) Standards and guidelines for the interpretation of sequence variants: a joint consensus recommendation of the ACMG and AMP. <em>Genet. Med.</em>, <strong>17</strong>, 405&ndash;424. doi: <a href="https://doi.org/10.1038/gim.2015.30" target="_blank">10.1038/gim.2015.30</a></li>
+  <li style="margin-bottom:12px;">Tavtigian,S.V. <em>et al.</em> (2020) Modeling the ACMG/AMP variant classification guidelines as a Bayesian classification framework. <em>Genet. Med.</em>, <strong>22</strong>, 1054&ndash;1060. doi: <a href="https://doi.org/10.1038/s41436-020-0777-z" target="_blank">10.1038/s41436-020-0777-z</a></li>
+  <li style="margin-bottom:12px;">Pejaver,V. <em>et al.</em> (2022) Calibration of computational tools for missense variant pathogenicity classification and ClinGen recommendations for PP3/BP4 criteria. <em>Am. J. Hum. Genet.</em>, <strong>109</strong>, 2163&ndash;2177. doi: <a href="https://doi.org/10.1016/j.ajhg.2022.10.013" target="_blank">10.1016/j.ajhg.2022.10.013</a></li>
+  <li style="margin-bottom:12px;">Whiffin,N. <em>et al.</em> (2017) Using high-resolution variant frequencies to empower clinical genome interpretation. <em>Genet. Med.</em>, <strong>19</strong>, 1151&ndash;1158. doi: <a href="https://doi.org/10.1038/gim.2017.26" target="_blank">10.1038/gim.2017.26</a></li>
+  <li style="margin-bottom:12px;">Jarvik,G.P. and Browning,B.L. (2016) Consideration of cosegregation in the pathogenicity classification of genomic variants. <em>Am. J. Hum. Genet.</em>, <strong>98</strong>, 1077&ndash;1081. doi: <a href="https://doi.org/10.1016/j.ajhg.2016.04.003" target="_blank">10.1016/j.ajhg.2016.04.003</a></li>
+  <li style="margin-bottom:12px;">Thaxton,C. <em>et al.</em> (2022) Utilizing ClinGen gene-disease validity and dosage sensitivity curations to inform variant classification. <em>Hum. Mutat.</em>, <strong>43</strong>, 1031&ndash;1040. doi: <a href="https://doi.org/10.1002/humu.24291" target="_blank">10.1002/humu.24291</a> (ClinGen / GenCC)</li>
+</ol>
+</div>
+
+<!-- FAQ -->
+<h2 id="faq">FAQ</h2>
+
+<div class="card">
+  <h3>Why &ldquo;No gnomAD data&rdquo;?</h3>
+  <p>The gnomAD API may be temporarily overloaded. VarViz retries up to 3 times and falls back from v4 to v2.1.1. Click Go again - failed results are never cached.</p>
+</div>
+
+<div class="card">
+  <h3>Multi Conservation track is empty or slow?</h3>
+  <p>UCSC and Ensembl REST APIs are queried live. First load fetches exon structure from Ensembl then PhyloP/PhastCons for each exon from UCSC - can take 5&ndash;15 s for large genes. Results are cached for the session. Unusual canonical transcripts or UCSC API unavailability may cause empty results - click Go to retry.</p>
+</div>
+
+<div class="card">
+  <h3>ClinVar track is empty?</h3>
+  <p>The gene may lack pathogenic/LP assertions in ClinVar, or may only have LoF variants. Try the &ldquo;Any Star&rdquo; filter.</p>
+</div>
+
+<div class="card">
+  <h3>My gene isn&rsquo;t in the dropdown?</h3>
+  <p>VarViz includes 19,044 protein-coding genes from GENCODE v49 with reviewed UniProt entries. Non-coding genes, pseudogenes, and unreviewed entries are excluded. Check if the gene was recently renamed by HGNC.</p>
+</div>
+
+<div class="card">
+  <h3>How are ACMG tags computed?</h3>
+  <p>VarViz uses a hybrid engine: Richards 2015 rule-based classification fires first; if no rule matches, the Tavtigian 2020 Bayesian point system applies. PP3/BP4 use Pejaver 2022 calibrated predictor thresholds. PS1/BP6 require exact ClinVar protein change matches; PM5 fires for position-only matches. See <a href="#acmg">ACMG Overview</a> and <a href="#acmg-criteria">Criteria Details</a>. Always review tags with clinical context.</p>
+</div>
+
+<div class="card">
+  <h3>What does PP3_strong / PP3_moderate mean?</h3>
+  <p>PP3 has three tiers with different point values. PP3_strong (+4 pts, PS-equivalent) = REVEL &ge; 0.932 only. PP3_moderate (+2 pts, PM-equivalent) = REVEL &ge; 0.773, or CADD &ge; 35, or &ge;2 meta-predictors + calibrated corroboration, or &ge;2 strong conservation hits + calibrated predictor. PP3 supporting (+1 pt) = standard supporting level. Displayed in the table as PP3 (supporting), PP3&uarr; (moderate), PP3&uArr; (strong).</p>
+</div>
+
+<div class="card">
+  <h3>What does PM1_strong mean?</h3>
+  <p>PM1_strong is a PS-equivalent upgrade (+4 pts instead of +2). It fires when the variant is in a structurally critical UniProt domain <em>and</em> at least one strong conservation signal is present (ConSurf &ge;8, PhyloP &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8). Domain location + evolutionary conservation together provide near-PS-level evidence.</p>
+</div>
+
+<div class="card">
+  <h3>ClinVar says &ldquo;&#9888; diff variant at pos&rdquo; - what does that mean?</h3>
+  <p>ClinVar has a pathogenic variant at the same amino acid position but a <em>different</em> protein change than your query. PS1 requires identical amino acid changes. VarViz correctly assigns PM5 for position matches and PS1 only for exact amino acid change matches.</p>
+</div>
+
+<div class="card">
+  <h3>Why are dbNSFP scores showing &ldquo;-&rdquo;?</h3>
+  <p>dbNSFP covers most coding missense variants but may lack data for rare or novel positions. VarViz queries MyVariant.info with both 3-letter and 1-letter protein notation. Synonymous, nonsense, and indel variants are not covered by most dbNSFP tools. ACMG PP3/BP4 will still compute from whatever scores are available.</p>
+</div>
+
+<div class="card">
+  <h3>How do I upload ConSurf scores?</h3>
+  <p>Visit <a href="https://consurf.tau.ac.il/" target="_blank">ConSurf-DB</a>, search your protein, download <code>consurf.grades</code>, and upload using the file input on the left panel <em>before</em> clicking Go. The Conservation track appears <strong>automatically</strong> when a file is uploaded - no checkbox selection needed.</p>
+</div>
+
+<div class="card">
+  <h3>How does cosegregation affect ACMG classification?</h3>
+  <p>Each variant card has a <strong>Cosegregation</strong> dropdown in the ACMG row. Choose the number of affected family members carrying the variant. PP1 is applied at Supporting (+1 pt) for 1-2 relatives, Moderate (+2 pts) for 3-4, and Strong (+4 pts) for 5 or more. The classification updates when you change the selection. Results are included in the TSV download. PP1 is not applied when BA1 or BS1 is present.</p>
+</div>
+
+<div class="card">
+  <h3>How do I reset the zoom?</h3>
+  <p>(1) Double-click anywhere on the plot. (2) Click the house icon (Reset axes) in the plotly toolbar. (3) Click Autoscale.</p>
+</div>
+
+<div class="card">
+  <h3>Required R packages</h3>
+  <p><code>shiny shinyjs shinycssloaders DT plotly ggplot2 dplyr stringr purrr data.table jsonlite curl httr httr2 readr cowplot grid stringi bedr wordcloud tm</code></p>
+</div>
+
+<footer>VarViz - Protein-centric gene variant visualization - 2026</footer>
+</div>
+</body>
+</html>
