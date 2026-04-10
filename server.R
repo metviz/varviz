@@ -48,6 +48,14 @@ current_directory <- getwd()
 load("data/VarViz.RData")
 gene_list <- sort(gene_data$gene_name)  # safety sort; run presort_gene_data.R once to pre-sort in RData
 
+# GeVIR percentiles — merged into gene_data by add_gevir_to_rdata.R
+# GeVIR_pct: low = missense intolerant (supports PP2), high = missense tolerant (supports BP1)
+# Falls back to NA gracefully if column absent (old RData without GeVIR merge)
+if (!"GeVIR_pct" %in% colnames(gene_data)) {
+  gene_data$GeVIR_pct <- NA_real_
+  message("[GeVIR] Column not found in gene_data — run add_gevir_to_rdata.R to enable BP1/PP2 GeVIR support")
+}
+
 # ---- API Response Cache ----
 # Caches API responses in memory so re-querying the same gene is instant.
 # Each cache is a named list keyed by gene_name or uniprotID.
@@ -3519,7 +3527,8 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
                                    phylop_val, phastcons_val, gerp_val, consurf_grade,
                                    variant_pos,
                                    clingen_class = "", clingen_disease = "", clingen_moi = "",
-                                   ps3_proxy = FALSE, bs3_proxy = FALSE) {
+                                   ps3_proxy = FALSE, bs3_proxy = FALSE,
+                                   gevir_gene_pct = NA_real_) {
 
   safe1 <- function(x, default = "") {
     if (is.null(x) || length(x) == 0) return(default)
@@ -3640,15 +3649,21 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
 
   # Missense mechanism
   if ("PP2" %in% tags) {
+    gevir_pp2_str <- if (!is.na(gevir_gene_pct) && gevir_gene_pct < 25)
+      paste0(" GeVIR percentile = ", round(gevir_gene_pct, 1),
+             " indicates the gene is highly intolerant to missense variation in gnomAD.")
+      else ""
     if (nchar(clingen_class) > 0 && clingen_class %in% c("Definitive", "Strong", "Moderate")) {
       dis_txt <- if (nchar(clingen_disease) > 0) paste0(" for ", clingen_disease) else ""
       moi_txt <- if (nchar(clingen_moi) > 0 && !grepl("^HP:", clingen_moi))
                    paste0(" (", clingen_moi, ")") else ""
       s(paste0("Missense variants are a common disease-causing mechanism for ", gene,
                dis_txt, moi_txt,
-               ", supported by ClinGen Gene-Disease Validity classification: ", clingen_class, " (PP2)."))
+               ", supported by ClinGen Gene-Disease Validity classification: ", clingen_class,
+               " (PP2).", gevir_pp2_str))
     } else {
-      s("Missense changes are a common disease-causing mechanism for this gene (PP2).")
+      s(paste0("Missense changes are a common disease-causing mechanism for this gene (PP2).",
+               gevir_pp2_str))
     }
   }
 
@@ -3716,6 +3731,16 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   # PM4
   if ("PM4" %in% tags)
     s("The variant causes a protein length change (in-frame indel or stop-loss), which may disrupt protein function (PM4).")
+
+  # BP1
+  if ("BP1" %in% tags) {
+    gevir_bp1_str <- if (!is.na(gevir_gene_pct))
+      paste0(" GeVIR percentile = ", round(gevir_gene_pct, 1),
+             " (>75th percentile), indicating the gene accumulates missense variants freely in the gnomAD population.")
+      else ""
+    s(paste0("This is a missense variant in a gene where the primary disease mechanism is not missense variation, reducing the prior probability of pathogenicity (BP1).",
+             gevir_bp1_str))
+  }
 
   # BP3
   if ("BP3" %in% tags)
@@ -3801,6 +3826,10 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     NA_real_
   }
   
+  # Gene name for API calls — derived once at gene level from highlight_df
+  gene_name_for_api <- if ("gene" %in% colnames(highlight_df) && nrow(highlight_df) > 0)
+                         as.character(highlight_df$gene[1]) else ""
+
   # PP2: Gene-level flag — missense is a common disease mechanism if ≥3 P/LP in ClinVar
   # Computed once per gene, applied to all variants
   pp2_applies <- FALSE
@@ -3828,6 +3857,31 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     pp2_applies <- TRUE
     message("[PP2] ClinGen validity (", clingen_class, ") -> PP2 enabled for ", gene_name_for_api)
   }
+
+  # GeVIR gene-level percentiles — looked up once per gene from pre-merged gene_data
+  # Low GeVIR_pct = missense intolerant (strengthens PP2)
+  # High GeVIR_pct = missense tolerant  (supports BP1 for missense variants)
+  gevir_row <- gene_data[gene_data$gene_name == gene_name_for_api, , drop = FALSE]
+  gevir_pct <- if (nrow(gevir_row) > 0 && !is.na(gevir_row$GeVIR_pct[1])) gevir_row$GeVIR_pct[1] else NA_real_
+  message("[GeVIR] ", gene_name_for_api, " — GeVIR_pct=", if (!is.na(gevir_pct)) round(gevir_pct,1) else "NA")
+
+  # GeVIR_pct < 25 — gene is highly intolerant to missense variation in gnomAD
+  # This is population-genetics evidence independent of ClinVar, so enables PP2
+  # even when ClinVar has fewer than 3 P/LP entries
+  if (!is.na(gevir_pct) && gevir_pct < 25 && !pp2_applies) {
+    pp2_applies <- TRUE
+    message("[PP2] GeVIR_pct=", round(gevir_pct, 1), " < 25 -> PP2 enabled for ", gene_name_for_api)
+  }
+
+  # BP1 gene-level flag — fires for missense variants in genes tolerant to missense
+  # GeVIR_pct > 75 means the gene accumulates missense variants freely in gnomAD,
+  # consistent with missense not being the primary disease mechanism
+  # Suppressed if ClinGen validity is Definitive/Strong (contradicts BP1 for missense genes)
+  bp1_gene_applies <- !is.na(gevir_pct) &&
+                      gevir_pct > 75 &&
+                      !clingen_class %in% c("Definitive", "Strong")
+  message("[BP1] GeVIR_pct=", if (!is.na(gevir_pct)) round(gevir_pct, 1) else "NA",
+          " -> BP1 gene flag: ", bp1_gene_applies)
 
   rows <- lapply(seq_len(nrow(highlight_df)), function(i) {
     mut <- as.character(highlight_df$Mutation[i])
@@ -4742,7 +4796,23 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       alt_aa_bp7 <- toupper(substr(syn_match[4], 1, 1))
       if (ref_aa_bp7 == alt_aa_bp7) acmg_tags <- c(acmg_tags, "BP7")
     }
-    
+
+    # BP1: Missense variant in gene where missense is NOT a common disease mechanism
+    # Triggered by GeVIR_pct > 75 — gene accumulates missense variants freely in gnomAD
+    # population, indicating missense variation is generally tolerated.
+    # Suppressed when:
+    #   - BA1/BS1 already fire (frequency evidence supersedes mechanism evidence)
+    #   - PS1 fired (ClinVar confirms pathogenic at this exact position)
+    #   - PP5 fired (ClinVar reports pathogenic — contradicts BP1)
+    #   - ClinGen validity is Definitive/Strong (missense IS established mechanism)
+    if (bp1_gene_applies &&
+        !ba1_fires && !bs1_fires &&
+        !"PS1" %in% acmg_tags &&
+        !"PP5" %in% acmg_tags) {
+      acmg_tags <- c(acmg_tags, "BP1")
+      message("[BP1] Fired for ", mut, " — GeVIR_pct=", round(gevir_pct, 1))
+    }
+
     acmg_tags <- unique(acmg_tags)
     acmg_str <- if (length(acmg_tags) > 0) paste(acmg_tags, collapse = ", ") else ""
     
@@ -4781,12 +4851,14 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       clingen_disease  = if (!is.null(clingen_validity$disease))  clingen_validity$disease  else "",
       clingen_moi      = if (!is.null(clingen_validity$moi))      clingen_validity$moi      else "",
       ps3_proxy        = ps3_proxy_fired,
-      bs3_proxy        = bs3_proxy_fired
+      bs3_proxy        = bs3_proxy_fired,
+      gevir_gene_pct   = gevir_pct
     )
 
     data.frame(
       Variant = mut,
       Position = pos,
+      GeVIR_Gene_Pct = if (!is.na(gevir_pct)) round(gevir_pct, 1) else "",
       pLDDT = ifelse(is.na(plddt_val), "", round(plddt_val, 1)),
       pLDDT_Category = plddt_cat,
       AF_Mean_Pathogenicity = ifelse(is.na(af_mean_path), "", af_mean_path),
@@ -5637,7 +5709,7 @@ shinyServer(function(input, output, session) {
         return(list(bg="#f1f5f9",border="#64748b",text="#1e293b",badge_bg="#64748b"))
       }
 
-      make_criterion_card <- function(tag) {
+      make_criterion_card <- function(tag, gevir_pct_val = NA) {
         tag  <- trimws(tag)
         pts  <- if (tag %in% names(tag_pts_map)) tag_pts_map[[tag]] else 0
         is_p <- pts > 0
@@ -5645,11 +5717,39 @@ shinyServer(function(input, output, session) {
         disp <- tag_display(tag)
         col  <- tag_color(tag, is_p)
         pts_str <- if (pts > 0) paste0("+", pts, "pts") else paste0(pts, "pts")
+        # Tooltip: generic criterion description, with GeVIR detail for BP1/PP2
+        tip <- switch(tag,
+          BP1 = if (!is.na(gevir_pct_val))
+                  paste0("Missense variant in gene tolerant to missense variation. ",
+                         "GeVIR percentile = ", round(gevir_pct_val, 1),
+                         " (>75 = tolerant → BP1)")
+                else "Missense variant in gene where only truncating variants cause disease",
+          PP2 = if (!is.na(gevir_pct_val))
+                  paste0("Missense variant in gene intolerant to missense variation. ",
+                         "GeVIR percentile = ", round(gevir_pct_val, 1),
+                         " (<25 = intolerant → PP2)")
+                else "Missense variant in gene with high rate of pathogenic missense variants",
+          PS1 = "Same amino acid change as established pathogenic variant (ClinVar)",
+          PM1 = "Variant in functional domain (UniProt); conservation evidence may upgrade strength",
+          PM2 = "Absent or rare in gnomAD at disease-prevalence-adjusted threshold",
+          PM5 = "Novel missense at codon with different established pathogenic change (ClinVar)",
+          PP3 = "Computational evidence of deleteriousness (Pejaver 2022 calibrated thresholds)",
+          PP5 = "Reported as pathogenic in ClinVar with at least 1-star review",
+          BA1 = "Allele frequency >5% in gnomAD — standalone Benign",
+          BS1 = "Allele frequency above disease-prevalence-adjusted threshold",
+          BS2 = "Observed homozygous in gnomAD in healthy individuals",
+          BP3 = "In-frame indel in repetitive region without known function",
+          BP4 = "Multiple computational tools predict benign effect",
+          BP6 = "Reported as benign in ClinVar",
+          BP7 = "Synonymous variant with no predicted splice impact",
+          tag  # fallback: show tag name
+        )
         paste0(
-          '<div style="display:inline-flex;flex-direction:column;align-items:center;',
+          '<div title="', gsub('"', "&quot;", tip), '" ',
+          'style="display:inline-flex;flex-direction:column;align-items:center;',
           'background:', col$bg, ';border:2px solid ', col$border, ';',
           'border-radius:10px;padding:5px 10px;margin:3px;min-width:62px;',
-          'box-shadow:0 1px 3px rgba(0,0,0,0.08);vertical-align:top;">',
+          'box-shadow:0 1px 3px rgba(0,0,0,0.08);vertical-align:top;cursor:help;">',
           # Tag name
           '<div style="font-weight:800;font-size:13px;color:', col$text, ';',
           'letter-spacing:0.3px;margin-bottom:2px;">', disp, '</div>',
@@ -5947,6 +6047,17 @@ shinyServer(function(input, output, session) {
         row5 <- paste0(
           sec_hdr("&#127758; Population", "#1d4ed8"),
           '<tr>',
+          {
+            gv <- suppressWarnings(as.numeric(r$GeVIR_Gene_Pct))
+            gv_col  <- if (!is.na(gv) && gv < 25)  "#ef4444" else
+                       if (!is.na(gv) && gv > 75)  "#3b82f6" else "#64748b"
+            gv_note <- if (!is.na(gv) && gv < 25)  "intolerant → PP2" else
+                       if (!is.na(gv) && gv > 75)  "tolerant → BP1"  else ""
+            gv_disp <- if (!is.na(gv)) paste0('<span style="color:',gv_col,
+                         ';font-weight:600;">',round(gv,1),'th pct</span>') else
+                         '<span style="color:#cbd5e1;">—</span>'
+            sum_cell("GeVIR", gv_disp, note=gv_note)
+          },
           sum_cell("gnomAD AF",  paste0('<span style="color:',gaf_col,';font-weight:600;">',gaf_disp,'</span>'),
                                  note=if (!is.na(gaf_v) && gaf_v>0.05)"BA1 (common)" else if (!is.na(gaf_v) && gaf_v>card_bs1_thresh)"BS1" else ""),
           sum_cell("gnomAD AC",  if (nchar(as.character(r$gnomAD_AC))>0) esc(as.character(r$gnomAD_AC)) else '<span style="color:#cbd5e1;">—</span>'),
@@ -5971,14 +6082,14 @@ shinyServer(function(input, output, session) {
           paste0('<div style="margin-bottom:4px;">',
                  '<div style="font-size:9px;font-weight:700;color:#dc2626;text-transform:uppercase;',
                  'letter-spacing:0.5px;margin-bottom:3px;">&#9650; Pathogenic</div>',
-                 paste(sapply(path_tags,  make_criterion_card), collapse=""),
+                 paste(sapply(path_tags,  function(t) make_criterion_card(t, gevir_pct_val=r$GeVIR_Gene_Pct)), collapse=""),
                  '</div>') else ""
 
         benign_grid <- if (length(benign_tags) > 0)
           paste0('<div>',
                  '<div style="font-size:9px;font-weight:700;color:#16a34a;text-transform:uppercase;',
                  'letter-spacing:0.5px;margin-bottom:3px;">&#9660; Benign</div>',
-                 paste(sapply(benign_tags, make_criterion_card), collapse=""),
+                 paste(sapply(benign_tags, function(t) make_criterion_card(t, gevir_pct_val=r$GeVIR_Gene_Pct)), collapse=""),
                  '</div>') else ""
 
         badges_html <- if (nchar(path_grid) > 0 || nchar(benign_grid) > 0)
@@ -6370,6 +6481,30 @@ shinyServer(function(input, output, session) {
           '<tr><td style="padding:4px 16px 4px 0; font-weight:700; color:#58508d; white-space:nowrap;">ClinGen:</td>',
           '<td style="padding:4px 0;">', clingen_badge_html, '</td></tr>'
           ) else "",
+          {
+            gr <- gene_data[gene_data$gene_name == gi$gene_name, , drop=FALSE]
+            gv <- if (nrow(gr)>0 && !is.na(gr$GeVIR_pct[1])) gr$GeVIR_pct[1] else NA_real_
+            if (!is.na(gv)) {
+              gv_col  <- if (gv < 25) "#ef4444" else if (gv > 75) "#3b82f6" else "#64748b"
+              gv_bg   <- if (gv < 25) "#fee2e2" else if (gv > 75) "#dbeafe" else "#f1f5f9"
+              gv_lbl  <- if (gv < 25) paste0(round(gv,1), "th pct • missense intolerant")
+                         else if (gv > 75) paste0(round(gv,1), "th pct • missense tolerant")
+                         else paste0(round(gv,1), "th pct")
+              gv_tip  <- paste0("GeVIR gene percentile for missense variation intolerance. ",
+                                "Low = intolerant (supports PP2). High = tolerant (supports BP1). ",
+                                "Source: gevirank.org")
+              paste0(
+                '<tr><td style="padding:4px 16px 4px 0; font-weight:700; color:#58508d; white-space:nowrap;">GeVIR:</td>',
+                '<td style="padding:4px 0;">',
+                '<span title="', gv_tip, '" style="background:', gv_bg, ';color:', gv_col, ';',
+                'padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;cursor:help;">',
+                gv_lbl, '</span>',
+                ' <a href="https://www.gevirank.org/gevir/" target="_blank" ',
+                'style="font-size:10px;color:#0369a1;text-decoration:none;">GeVIR &#8599;</a>',
+                '</td></tr>'
+              )
+            } else ""
+          },
         '</table>',
       '</div>'
     )

@@ -357,8 +357,14 @@
 
   <div class="group-box">
     <div class="group-box-title">PP2 - Supporting Pathogenic &nbsp;<span class="tag pp">PP2</span>&nbsp; +1 pt</div>
-    <p><strong>Trigger:</strong> Missense variants are a well-established disease mechanism for this gene (pre-computed gene-level prior).</p>
-    <p><strong>Gated off when:</strong> gnomAD AF &gt; 1%.</p>
+    <p><strong>Trigger (any one of three):</strong></p>
+    <ol>
+      <li>ClinVar contains &ge;3 Pathogenic/Likely Pathogenic missense variants for this gene.</li>
+      <li>ClinGen Gene-Disease Validity is <strong>Definitive</strong> or <strong>Strong</strong>.</li>
+      <li><strong>GeVIR percentile &lt;25</strong> &mdash; the gene is highly intolerant to missense variation across 141,456 gnomAD individuals (Abramovs et al. 2020), indicating missense changes are a common disease mechanism independent of ClinVar ascertainment.</li>
+    </ol>
+    <p><strong>Gated off when:</strong> gnomAD AF &gt; BS1 threshold (BS1 firing suppresses PP2).</p>
+    <p><strong>Data source:</strong> ClinVar API, ClinGen LDH/eRepo, GeVIR gene ranking table (gevirank.org).</p>
   </div>
 
   <div class="group-box">
@@ -453,6 +459,15 @@
   </div>
 
   <div class="group-box">
+    <div class="group-box-title">BP1 - Supporting Benign &nbsp;<span class="tag bp">BP1</span>&nbsp; &minus;1 pt</div>
+    <p><strong>Trigger:</strong> Missense variant in a gene where population genetics evidence indicates missense variation is <em>tolerated</em> &mdash; <strong>GeVIR percentile &gt;75</strong> (gene accumulates missense variants freely in gnomAD).</p>
+    <p>This operationalizes the ACMG/AMP definition of BP1 ("missense variant in a gene for which primarily truncating variants are known to cause disease") using gene-level missense constraint data rather than a curated list, avoiding circular use of ClinVar evidence.</p>
+    <p><strong>Suppressed when:</strong> BA1 or BS1 fires (frequency evidence supersedes mechanism evidence); PS1 or PP5 fires (ClinVar pathogenic at this exact position contradicts BP1); ClinGen Gene-Disease Validity is Definitive or Strong for this gene.</p>
+    <p><strong>Data source:</strong> GeVIR gene ranking table &mdash; Abramovs et al. (2020) <em>Nat. Genet.</em> 52:35&ndash;59. Available at <a href="https://www.gevirank.org" target="_blank">gevirank.org</a>.</p>
+    <p><strong>Hover tooltip:</strong> All ACMG criterion cards show the GeVIR percentile on mouse hover, including the exact score used for PP2 and BP1 decisions.</p>
+  </div>
+
+  <div class="group-box">
     <div class="group-box-title">BP3 - Supporting Benign &nbsp;<span class="tag bp">BP3</span>&nbsp; &minus;1 pt</div>
     <p><strong>Trigger:</strong> In-frame indel (<code>del</code>/<code>ins</code>/<code>dup</code> in variant name, no <code>fs</code>) falls within a UniProt-annotated repeat region.</p>
     <p><strong>Data source:</strong> UniProt features API (type == &ldquo;repeat&rdquo; checked against position).</p>
@@ -475,6 +490,20 @@
     <p><strong>Trigger:</strong> Synonymous variant (reference and alternate amino acids identical, e.g. <code>p.Pro72Pro</code>).</p>
     <p><strong>Data source:</strong> Variant name parsing.</p>
   </div>
+</div>
+
+<!-- GEVIR GENE SUMMARY -->
+<div class="section-box" id="gevir-card">
+  <h2>&#127803; GeVIR Gene Constraint Score</h2>
+  <p>The gene summary card displays a <strong>GeVIR percentile</strong> pill showing the gene-level missense variation intolerance score (Abramovs et al. 2020).</p>
+  <table class="data-table" style="max-width:500px;">
+    <tr><th>Percentile range</th><th>Interpretation</th><th>ACMG effect</th></tr>
+    <tr><td>&lt;25th</td><td style="color:#ef4444;font-weight:700;">Missense intolerant</td><td>Enables PP2</td></tr>
+    <tr><td>25th&ndash;75th</td><td style="color:#64748b;">Intermediate</td><td>No direct effect</td></tr>
+    <tr><td>&gt;75th</td><td style="color:#3b82f6;font-weight:700;">Missense tolerant</td><td>Enables BP1</td></tr>
+  </table>
+  <p>GeVIR is complementary to gnomAD constraint (pLI, LOEUF): gnomAD constraint measures gene-wide variant depletion, whereas GeVIR detects long variant-intolerant <em>regions</em> within a gene, making it more sensitive for short genes. Hover over any ACMG criterion card to see the GeVIR percentile used for that variant's PP2/BP1 decision.</p>
+  <p><strong>Reference:</strong> Abramovs N, Brass A, Tassabehji M (2020). GeVIR is a continuous gene-level metric that uses variant distribution patterns to prioritize disease candidate genes. <em>Nat. Genet.</em> 52:35&ndash;59. doi:<a href="https://doi.org/10.1038/s41588-019-0560-2" target="_blank">10.1038/s41588-019-0560-2</a></p>
 </div>
 
 <!-- CLINVAR LOGIC -->
