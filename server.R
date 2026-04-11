@@ -2859,8 +2859,8 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   begin = end = NULL
   p <- ggplot2::ggplot()
   p <- p + ggplot2::ylim(0, 2.1) 
-  p <- p + scale_x_continuous(limits = c(-pfam_data$sequence$length * 0.01, pfam_data$sequence$length + pfam_data$sequence$length * 0.01), expand = c(0,0))
-  p <- p + ggplot2::labs(y = "Clinvar/PTMs/CCRs") 
+  p <- p + scale_x_continuous(limits = c(-pfam_data$sequence$length * 0.04, pfam_data$sequence$length + pfam_data$sequence$length * 0.01), expand = c(0,0))
+  p <- p + ggplot2::labs(y = "ClinVar/PTMs/CCRs") 
   p <- p + ggplot2::theme(
     axis.title.y = element_text(size = vv_axis_size, face = "bold"),
     axis.text.y = element_blank(),
@@ -2870,16 +2870,16 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank(),
     axis.line.x  = element_blank(),
-    plot.margin = unit(c(0.15, 0.3, 0.15, 0.3), "cm"),
+    plot.margin = unit(c(0.15, 0.3, 0.15, 1.2), "cm"),
     legend.position="none")
   p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=pfam_data$sequence$length, ymin=1.7, ymax=1.85, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "Clinvar Mis", x = 0, y = 2, size = 3, colour = "red")
+  p <- p + ggplot2::annotate(geom = "text", label = "var Mis", x = -pfam_data$sequence$length * 0.008, y = 1.775, size = 2.6, colour = "red", hjust = 1, vjust = 0.5)
   p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=pfam_data$sequence$length, ymin=1.2, ymax=1.35, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "Clinvar LOF", x = 0, y = 1.5, size = 3, colour = "red")
+  p <- p + ggplot2::annotate(geom = "text", label = "var LOF", x = -pfam_data$sequence$length * 0.008, y = 1.275, size = 2.6, colour = "red", hjust = 1, vjust = 0.5)
   p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=pfam_data$sequence$length, ymin=0.7, ymax=0.85, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "PTM", x = 0, y = 1, size = 3, colour = "red")
+  p <- p + ggplot2::annotate(geom = "text", label = "PTM", x = -pfam_data$sequence$length * 0.008, y = 0.775, size = 2.6, colour = "red", hjust = 1, vjust = 0.5)
   p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=pfam_data$sequence$length, ymin=0.1, ymax=0.25, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "CCRS", x = 0, y = 0.5, size = 3, colour = "red")
+  p <- p + ggplot2::annotate(geom = "text", label = "CCRS", x = -pfam_data$sequence$length * 0.008, y = 0.175, size = 2.6, colour = "red", hjust = 1, vjust = 0.5)
   # Color scale: ClinVar gold stars + PTM types
   ptm_colors <- c(
     "Phosphorylation"              = "#E69F00",
@@ -3384,9 +3384,9 @@ classify_acmg <- function(tags_vec) {
   # ── Point weights (Tavtigian 2020) ──────────────────────────────────────
   tag_pts_map <- c(
     PVS1=8,
-    PS1=4, PS2=4, PS3=4, PS4=4,
+    PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
     PM1_strong=4, PP3_strong=4, PP1_strong=4,
-    PM1=2, PM2=2, PM3=2, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
+    PM1=2, PM2=2, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
     PP1=1, PP2=1, PP3=1, PP4=1, PP5=1,
     BA1=-8,
     BS1=-4, BS2=-4, BS3=-4, BS4=-4, BP6=-4,
@@ -3731,6 +3731,18 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   # PM4
   if ("PM4" %in% tags)
     s("The variant causes a protein length change (in-frame indel or stop-loss), which may disrupt protein function (PM4).")
+
+  # PS2: confirmed de novo
+  if ("PS2" %in% tags)
+    s("The variant has been confirmed as de novo (maternity and paternity both verified) in an affected individual with no relevant family history (PS2).")
+
+  # PM6: assumed de novo
+  if ("PM6" %in% tags)
+    s("The variant is assumed to be de novo in an affected individual; parental testing has not been performed to confirm absence in both parents (PM6).")
+
+  # PS3_supporting: variant disrupts annotated PTM site
+  if ("PS3_supporting" %in% tags)
+    s("The variant position coincides with a UniProt-annotated post-translational modification site (phosphorylation, ubiquitination, disulfide bond, or equivalent). Disruption of such sites provides supporting functional evidence for pathogenicity (PS3_supporting).")
 
   # BP1
   if ("BP1" %in% tags) {
@@ -4126,13 +4138,15 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     scorecons_val <- if (!is.na(ccrs_info$conservation)) round(ccrs_info$conservation, 3) else ""
     
     # --- PTM at position ---
-    ptm_info <- ""
+    ptm_info     <- ""
+    ptm_acmg     <- ""
+    ptm_strength <- ""
     if (!is.null(uniprot_data) && is.data.frame(uniprot_data) && nrow(uniprot_data) > 0 &&
         "type" %in% colnames(uniprot_data) && "start" %in% colnames(uniprot_data)) {
       ptm_types <- c("mod_res", "lipid", "carbohyd", "crosslnk", "disulfid")
-      ptm_rows <- uniprot_data[uniprot_data$type %in% ptm_types & 
-                                 !is.na(uniprot_data$start) &
-                                 uniprot_data$start == pos, , drop = FALSE]
+      ptm_rows <- uniprot_data[uniprot_data$type %in% ptm_types &
+                                !is.na(uniprot_data$start) &
+                                uniprot_data$start == pos, , drop = FALSE]
       if (nrow(ptm_rows) > 0) {
         if ("description" %in% colnames(ptm_rows)) {
           ptm_info <- paste(unique(na.omit(ptm_rows$description)), collapse = "; ")
@@ -4140,6 +4154,24 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         if (nchar(ptm_info) == 0) {
           ptm_info <- paste(unique(ptm_rows$type), collapse = "; ")
         }
+        # Classify PTM functional impact strength
+        # Strong: phosphorylation, ubiquitination, acetylation, disulfide bond, cross-link
+        # Moderate: lipidation, glycosylation, methylation, sumoylation
+        desc_lc <- tolower(ptm_info)
+        types_present <- unique(ptm_rows$type)
+        is_strong_ptm <- any(types_present == "disulfid") ||
+                         any(types_present == "crosslnk") ||
+                         grepl("phospho|ubiquit|acetyl|sumoyl", desc_lc)
+        is_mod_ptm    <- any(types_present %in% c("lipid","carbohyd","mod_res")) &&
+                         grepl("methyl|glycosyl|lipid|palmitoyl|myristoyl|GPI", desc_lc)
+        if (is_strong_ptm) {
+          ptm_acmg     <- "PS3_supporting"
+          ptm_strength <- "Strong functional site"
+        } else if (nrow(ptm_rows) > 0) {
+          ptm_acmg     <- "PP_PTM"
+          ptm_strength <- "Moderate functional site"
+        }
+        message("[PTM] Position ", pos, ": ", ptm_info, " | ACMG proxy: ", ptm_acmg)
       }
     }
     
@@ -4430,10 +4462,12 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       ccrs_pct    <- if (!is.null(ccrs_info$percentile) && !is.na(ccrs_info$percentile) &&
                          ccrs_info$percentile > 0) ccrs_info$percentile else 0
 
+      cons_used_for_pm1 <- FALSE  # tracks whether conservation already spent on PM1_strong
       if (ccrs_pct >= 90) {
         # Path 1: high confidence CCRS — PM1 unconditionally, PM1_strong with conservation
         if (cons_strong) {
           acmg_tags <- c(acmg_tags, "PM1_strong")
+          cons_used_for_pm1 <- TRUE
         } else {
           acmg_tags <- c(acmg_tags, "PM1")
         }
@@ -4442,7 +4476,9 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         acmg_tags <- c(acmg_tags, "PM1")
       } else if (has_domain && cons_strong) {
         # Path 3a: specific domain, conserved — PM1_strong
+        # Flag: conservation was used here; suppress duplicate PP3 conservation tier
         acmg_tags <- c(acmg_tags, "PM1_strong")
+        cons_used_for_pm1 <- TRUE
       } else if (has_domain) {
         # Path 3b: specific domain, not strongly conserved — PM1 supporting
         acmg_tags <- c(acmg_tags, "PM1")
@@ -4451,6 +4487,36 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
 
     # PM2: Absent or extremely low frequency in population databases
     # Threshold: monoallelic < 0.0001, biallelic < 0.01 (Roberts 2024 / Ware 2018)
+    # PM1 15aa neighborhood: independent of PM2 frequency gate.
+    # A variant can be in a ClinVar hotspot regardless of population frequency.
+    if (!bs1_fires && !is.null(clinvar_data) && nrow(clinvar_data) > 0 &&
+        "prot_pos" %in% colnames(clinvar_data) && !is.na(pos)) {
+      win_idx <- which(abs(clinvar_data$prot_pos - pos) <= 15)
+      if (length(win_idx) > 0) {
+        win_sig <- clinvar_data$ClinicalSignificance[win_idx]
+        n_path_win <- sum(grepl("pathogenic", win_sig, ignore.case=TRUE) &
+                         !grepl("conflicting|uncertain|benign", win_sig, ignore.case=TRUE), na.rm=TRUE)
+        n_benign_win <- sum(grepl("benign", win_sig, ignore.case=TRUE) &
+                           !grepl("pathogenic|conflicting", win_sig, ignore.case=TRUE), na.rm=TRUE)
+        ratio_ok <- n_benign_win == 0 || (n_path_win / (n_path_win + n_benign_win)) >= 0.75
+        if (n_path_win >= 3 && ratio_ok) {
+          if ("PM1_strong" %in% acmg_tags) {
+            # already strong from CCRS/domain+cons — neighborhood corroborates, no change
+          } else if ("PM1" %in% acmg_tags) {
+            # domain + neighborhood = upgrade to PM1_strong
+            acmg_tags <- acmg_tags[acmg_tags != "PM1"]
+            acmg_tags <- c(acmg_tags, "PM1_strong")
+            message("[PM1] Neighborhood \u00b115aa upgrade to PM1_strong: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
+          } else {
+            # no domain/CCRS hit but neighborhood is strong — fire PM1
+            acmg_tags <- c(acmg_tags, "PM1")
+            message("[PM1] Neighborhood \u00b115aa fires PM1: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
+          }
+        }
+      }
+    }
+
+    # PM2: Absent or extremely low frequency
     if (is.na(gnomad_af) || gnomad_af < pm2_thresh) {
       acmg_tags <- c(acmg_tags, "PM2")
     }
@@ -4521,8 +4587,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
 
       if (clinvar_match_type == "exact") {
         if (is_path_only) {
-          # Same AA change, established Pathogenic → PS1
-          acmg_tags <- c(acmg_tags, "PS1")
+          # Same AA change, established Pathogenic → PS1 star-weighted
+          stars_n <- suppressWarnings(as.integer(clinvar_stars))
+          ps1_tag <- if (!is.na(stars_n) && stars_n >= 2) "PS1" else
+                     if (!is.na(stars_n) && stars_n == 1) "PS1_moderate" else "PS1_supporting"
+          acmg_tags <- c(acmg_tags, ps1_tag)
           ps1_fired <- TRUE
         } else if (is_lp) {
           # Same AA change but only Likely Pathogenic in ClinVar → downgrade to PM5
@@ -4541,7 +4610,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     }
 
     # PP5: Reputable source (ClinVar) reports pathogenic — exact match
-    if (!bs1_fires &&
+    # Suppressed when PS1 fires: both use the same ClinVar assertion (double-dipping).
+    # PP5 fires only when PS1 has NOT fired — i.e. when ClinVar has a pathogenic
+    # assertion but it is not the exact same AA change (PS1 requires exact match).
+    # In practice PP5 fires alongside PM5 (position match) or for multi-star LP variants.
+    if (!bs1_fires && !ps1_fired &&
         clinvar_match_type == "exact" &&
         nchar(clinvar_sig) > 0 && grepl("pathogenic", clinvar_sig, ignore.case = TRUE) &&
         !grepl("conflicting|uncertain|benign", clinvar_sig, ignore.case = TRUE)) {
@@ -4703,13 +4776,15 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     ))
 
     calibrated_seq_fired <- calibrated_sc
-    if (n_cons_hits >= 2 && calibrated_seq_fired && pp3_level(acmg_tags) < 2L) {
+    if (n_cons_hits >= 2 && calibrated_seq_fired && pp3_level(acmg_tags) < 2L &&
+        !cons_used_for_pm1) {
       # ≥2 conservation + calibrated predictor → upgrade to moderate
-      # (benign_predictors_active doesn't block the moderate upgrade — the calibrated
-      #  predictor evidence outweighs the benign vote count at this threshold)
+      # Suppressed if conservation already spent on PM1_strong (double-dipping)
       add_pp3("2")
-    } else if (n_cons_hits >= 1 && !benign_predictors_active && pp3_level(acmg_tags) < 1L) {
+    } else if (n_cons_hits >= 1 && !benign_predictors_active && pp3_level(acmg_tags) < 1L &&
+               !cons_used_for_pm1) {
       # ≥1 conservation, benign predictors silent → add supporting PP3
+      # Suppressed if same conservation signal already contributed to PM1_strong
       add_pp3("1")
     }
     # If n_cons_hits >= 1 BUT benign_predictors_active: conflicting computational
@@ -4757,7 +4832,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       acmg_tags <- c(acmg_tags, "BA1")
       acmg_tags <- acmg_tags[!acmg_tags %in% c(
         "PM1", "PM1_strong", "PM2", "PM4", "PM5",
-        "PP2", "PP3", "PP3_moderate", "PP3_strong", "PS1", "PP5"
+        "PP2", "PP3", "PP3_moderate", "PP3_strong", "PS1", "PS1_moderate", "PS1_supporting", "PP5"
       )]
     }
 
@@ -4766,7 +4841,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # Also remove pathogenic moderate/supporting tags — a common variant cannot be PM/PP.
     if (bs1_fires && !ba1_fires) {
       acmg_tags <- c(acmg_tags, "BS1")
-      acmg_tags <- acmg_tags[!acmg_tags %in% c("PM1", "PM1_strong", "PP2", "PP3", "PP3_moderate", "PP3_strong", "PM5", "PS1", "PP5")]
+      acmg_tags <- acmg_tags[!acmg_tags %in% c("PM1", "PM1_strong", "PP2", "PP3", "PP3_moderate", "PP3_strong", "PM5", "PS1", "PS1_moderate", "PS1_supporting", "PP5")]
     }
 
     # BS2: Observed in unaffected adults (gnomAD homozygotes > 0, or AF > 5% as proxy)
@@ -4807,7 +4882,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     #   - ClinGen validity is Definitive/Strong (missense IS established mechanism)
     if (bp1_gene_applies &&
         !ba1_fires && !bs1_fires &&
-        !"PS1" %in% acmg_tags &&
+        !any(c("PS1","PS1_moderate","PS1_supporting") %in% acmg_tags) &&
         !"PP5" %in% acmg_tags) {
       acmg_tags <- c(acmg_tags, "BP1")
       message("[BP1] Fired for ", mut, " — GeVIR_pct=", round(gevir_pct, 1))
@@ -4882,6 +4957,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       CCRS = in_ccrs,
       ScoreCons = scorecons_val,
       PTM = ptm_info,
+      PTM_ACMG = ptm_acmg,
+      PTM_Strength = ptm_strength,
       ConSurf_Score = consurf_score_val,
       ConSurf_Grade = consurf_grade,
       ConSurf_Burial = consurf_burial,
@@ -4944,9 +5021,8 @@ shinyServer(function(input, output, session) {
     # which makes every session cold-start slow regardless of what the user wants.
     # The user picks a gene, then presses Go — nothing heavy runs before that.
     updateSelectizeInput(session, "gene_name", choices = gene_list,
-                         selected = NULL, server = TRUE,
-                         options = list(placeholder = "Type or select a gene...",
-                                        onInitialize = I("function() { this.setValue(''); }")))
+                         selected = "CASR", server = TRUE,
+                         options = list(placeholder = "Type or select a gene..."))
   }, once = TRUE)
   
   observeEvent(input$launchApp,  { updateTabsetPanel(session, "nav", selected = "Protein View") })
@@ -4970,7 +5046,7 @@ shinyServer(function(input, output, session) {
     split_data   <- split_data[sapply(split_data, length) >= 4]
     extracted <- lapply(split_data, function(row) {
       c(row[1], row[2], row[3], row[4],
-        if (length(row) >= 7) row[7] else NA_character_)
+        if (length(row) >= 8) row[8] else NA_character_)
     })
     df <- as.data.frame(do.call(rbind, extracted), stringsAsFactors = FALSE)
     colnames(df) <- c("POS", "SEQ", "SCORE", "COLOR", "BE")
@@ -5169,15 +5245,16 @@ shinyServer(function(input, output, session) {
     }
   })
 
-  # Reset uploaded files when gene changes — but only when a real gene is selected
+  # Reset uploaded files when gene changes — ignoreInit=TRUE so startup
+  # auto-selection of CASR does not wipe files uploaded before clicking Go
   observeEvent(input$gene_name, {
     req(!is.null(input$gene_name) && nchar(trimws(input$gene_name)) > 0)
     shinyjs::reset("consurf_file")
-  })
+  }, ignoreInit = TRUE)
   observeEvent(input$gene_name, {
     req(!is.null(input$gene_name) && nchar(trimws(input$gene_name)) > 0)
     shinyjs::reset("user_file")
-  })
+  }, ignoreInit = TRUE)
   
   variants <- eventReactive(input$goButton,{
     raw <- strsplit(input$variants, "[,]")[[1]]
@@ -5682,9 +5759,9 @@ shinyServer(function(input, output, session) {
 
       # ── VarSome-style criterion grid ─────────────────────────────────────
       tag_pts_map <- c(
-        PVS1=8, PS1=4, PS2=4, PS3=4, PS4=4,
+        PVS1=8, PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
         PM1_strong=4, PP3_strong=4, PP1_strong=4,
-        PM1=2, PM2=2, PM3=2, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
+        PM1=2, PM2=2, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
         PP1=1, PP2=1, PP3=1, PP4=1, PP5=1,
         BA1=-8, BS1=-4, BS2=-4, BS3=-4, BS4=-4, BP6=-4,
         BP1=-1, BP2=-1, BP3=-1, BP4=-1, BP5=-1, BP7=-1
@@ -5694,7 +5771,13 @@ shinyServer(function(input, output, session) {
         if (grepl("_moderate$", tag))  return("Moderate")
         if (tag %in% c("PVS1"))        return("Very Strong")
         if (tag %in% c("PS1","PS2","PS3","PS4","BS1","BS2","BS3","BS4","BP6")) return("Strong")
-        if (tag %in% c("PM1","PM2","PM3","PM4","PM5","PM6")) return("Moderate")
+        if (tag %in% c("PM1","PM2","PM4","PM5","PM6")) return("Moderate")
+        if (tag == "PM3_strong")   return("Strong")
+        if (tag == "PM3_moderate") return("Moderate")
+        if (tag == "PM3")          return("Supporting")
+        if (tag == "PS3_supporting")  return("Supporting")
+        if (tag == "PS1_moderate")   return("Moderate")
+        if (tag == "PS1_supporting")  return("Supporting")
         if (tag %in% c("PP1","PP2","PP3","PP4","PP5","BP1","BP2","BP3","BP4","BP5","BP7")) return("Supporting")
         if (tag == "BA1") return("Stand Alone")
         return("Supporting")
@@ -5802,6 +5885,10 @@ shinyServer(function(input, output, session) {
         # ── Per-card cosegregation input (unique ID per variant) ──────────
         seg_input_id <- paste0("seg_", i)
         card_seg     <- if (!is.null(input[[seg_input_id]])) input[[seg_input_id]] else "none"
+        pm3_input_id <- paste0("pm3_", i)
+        card_pm3     <- if (!is.null(input[[pm3_input_id]])) input[[pm3_input_id]] else "none"
+        dn_input_id  <- paste0("dn_", i)
+        card_dn      <- if (!is.null(input[[dn_input_id]])) input[[dn_input_id]] else "not_denovo"
 
         # ── classify using shared engine + per-card PP1 ───────────────────
         tags_vec <- if (nchar(as.character(r$ACMG_Tags)) > 0)
@@ -5814,12 +5901,29 @@ shinyServer(function(input, output, session) {
           NULL
         )
         if (!is.null(pp1_tag)) tags_vec <- c(tags_vec, pp1_tag)
+        pm3_tag <- switch(card_pm3,
+          pm3          = "PM3",
+          pm3_moderate = "PM3_moderate",
+          pm3_strong   = "PM3_strong",
+          NULL
+        )
+        if (!is.null(pm3_tag)) tags_vec <- c(tags_vec, pm3_tag)
+        # PTM hit — add PS3_supporting to tags if strong PTM site
+        if (nchar(as.character(r$PTM_ACMG)) > 0 && r$PTM_ACMG == "PS3_supporting")
+          tags_vec <- c(tags_vec, "PS3_supporting")
+        # Per-card de novo — overrides global denovo_status for this variant
+        dn_tag <- switch(card_dn,
+          denovo_confirmed = "PS2",
+          denovo_assumed   = "PM6",
+          NULL
+        )
+        if (!is.null(dn_tag)) tags_vec <- c(tags_vec, dn_tag)
         acmg_res <- classify_acmg(tags_vec)
         pts      <- acmg_res$pts
 
         # ── gnomAD AF color — uses same inheritance-aware thresholds as ACMG engine ─
         # Re-derive thresholds from current UI inputs for display consistency
-        card_inh_mode <- if (isTRUE(input$denovo_status %in% c("denovo_confirmed","denovo_assumed"))) "monoallelic" else
+        card_inh_mode <- if (isTRUE(card_dn %in% c("denovo_confirmed","denovo_assumed"))) "monoallelic" else
                          if (isTRUE(input$inh == "biallelic")) "biallelic" else "monoallelic"
         card_bs1_thresh <- if (card_inh_mode == "biallelic") 0.05 else 0.01
         # Pull data() ONCE per card — used for both colour coding and pill display
@@ -6097,9 +6201,9 @@ shinyServer(function(input, output, session) {
         else '<span style="color:#cbd5e1;font-size:12px;">No ACMG criteria fired</span>'
 
         # De novo context label
-        denovo_note <- if (!is.null(input$denovo_status) && input$denovo_status != "not_denovo") {
-          dn_label <- if (input$denovo_status == "denovo_confirmed") "De Novo (confirmed) — PS2 applied" else "De Novo (assumed) — PM6 applied"
-          dn_color <- if (input$denovo_status == "denovo_confirmed") "#1e40af" else "#6d28d9"
+        denovo_note <- if (!is.null(card_dn) && card_dn != "not_denovo") {
+          dn_label <- if (card_dn == "denovo_confirmed") "De Novo (confirmed) — PS2 applied" else "De Novo (assumed) — PM6 applied"
+          dn_color <- if (card_dn == "denovo_confirmed") "#1e40af" else "#6d28d9"
           paste0(
             '<span style="display:inline-flex;align-items:center;gap:4px;',
             'background:', dn_color, '15;color:', dn_color,
@@ -6170,6 +6274,22 @@ shinyServer(function(input, output, session) {
           '<td colspan="99" style="padding:8px 10px;border:1px solid #e5e7eb;background:#fff;">',
           if (nchar(denovo_note) > 0 || nchar(seg_note) > 0 || TRUE)
             paste0('<div style="margin-bottom:5px;">', denovo_note, seg_note, inh_note, '</div>') else "",
+          # Per-card de novo selector
+          '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">',
+          '<span style="font-size:11px;font-weight:600;color:#374151;white-space:nowrap;">',
+          '&#9800; De novo:</span>',
+          as.character(selectInput(
+            inputId  = paste0("dn_", i),
+            label    = NULL,
+            choices  = list(
+              "Not assessed"                                  = "not_denovo",
+              "Confirmed de novo — both parents tested (PS2 +4)"  = "denovo_confirmed",
+              "Assumed de novo — parents not tested (PM6 +2)"     = "denovo_assumed"
+            ),
+            selected = card_dn,
+            width    = "320px"
+          )),
+          '</div>',
           # Per-card cosegregation selector
           '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">',
           '<span style="font-size:11px;font-weight:600;color:#374151;white-space:nowrap;">',
@@ -6185,6 +6305,22 @@ shinyServer(function(input, output, session) {
             ),
             selected = card_seg,
             width    = "280px"
+          )),
+          '</div>',
+          '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">',
+          '<span style="font-size:11px;font-weight:600;color:#374151;white-space:nowrap;">',
+          '&#9650; In trans (PM3 — AR genes):</span>',
+          as.character(selectInput(
+            inputId  = paste0("pm3_", i),
+            label    = NULL,
+            choices  = list(
+              "Not assessed (PM3 N/A)"                          = "none",
+              "1 compound het observation (PM3 Supporting +1)"  = "pm3",
+              "2 compound het observations (PM3 Moderate +2)"   = "pm3_moderate",
+              "\u22653 compound het observations (PM3 Strong +4)" = "pm3_strong"
+            ),
+            selected = card_pm3,
+            width    = "320px"
           )),
           '</div>',
           '<div style="margin-bottom:6px;">', badges_html, '</div>',
@@ -6318,6 +6454,35 @@ shinyServer(function(input, output, session) {
         val <- tryCatch(input[[paste0("seg_", i)]], error = function(e) "none")
         switch(val, pp1="PP1", pp1_moderate="PP1_moderate", pp1_strong="PP1_strong", "")
       })
+      dn_labels <- c(
+        not_denovo       = "Not assessed",
+        denovo_confirmed = "Confirmed de novo, both parents tested (PS2)",
+        denovo_assumed   = "Assumed de novo, parents not tested (PM6)"
+      )
+      vtbl$DeNovo_Evidence <- sapply(seq_len(nrow(vtbl)), function(i) {
+        val <- tryCatch(input[[paste0("dn_", i)]], error = function(e) "not_denovo")
+        if (is.null(val) || !val %in% names(dn_labels)) val <- "not_denovo"
+        dn_labels[[val]]
+      })
+      vtbl$DeNovo_Applied <- sapply(seq_len(nrow(vtbl)), function(i) {
+        val <- tryCatch(input[[paste0("dn_", i)]], error = function(e) "not_denovo")
+        switch(val, denovo_confirmed="PS2", denovo_assumed="PM6", "")
+      })
+      pm3_labels <- c(
+        none         = "Not assessed",
+        pm3          = "1 compound het observation (PM3 Supporting)",
+        pm3_moderate = "2 compound het observations (PM3 Moderate)",
+        pm3_strong   = ">=3 compound het observations (PM3 Strong)"
+      )
+      vtbl$PM3_Evidence <- sapply(seq_len(nrow(vtbl)), function(i) {
+        val <- tryCatch(input[[paste0("pm3_", i)]], error = function(e) "none")
+        if (is.null(val) || !val %in% names(pm3_labels)) val <- "none"
+        pm3_labels[[val]]
+      })
+      vtbl$PM3_Applied <- sapply(seq_len(nrow(vtbl)), function(i) {
+        val <- tryCatch(input[[paste0("pm3_", i)]], error = function(e) "none")
+        switch(val, pm3="PM3", pm3_moderate="PM3_moderate", pm3_strong="PM3_strong", "")
+      })
 
       # Recompute Final_ACMG_Tags and Final_Classification with PP1
       vtbl$Final_ACMG_Tags <- sapply(seq_len(nrow(vtbl)), function(i) {
@@ -6326,6 +6491,15 @@ shinyServer(function(input, output, session) {
                      else character(0)
         pp1 <- vtbl$PP1_Applied[i]
         if (nchar(pp1) > 0) base_tags <- c(base_tags, pp1)
+        pm3 <- vtbl$PM3_Applied[i]
+        if (nchar(pm3) > 0) base_tags <- c(base_tags, pm3)
+        dn <- vtbl$DeNovo_Applied[i]
+        if (nchar(dn) > 0) base_tags <- c(base_tags, dn)
+        ptm_tag_export <- if ("PTM_ACMG" %in% colnames(vtbl) &&
+                              nchar(as.character(vtbl$PTM_ACMG[i])) > 0 &&
+                              vtbl$PTM_ACMG[i] == "PS3_supporting")
+                            "PS3_supporting" else ""
+        if (nchar(ptm_tag_export) > 0) base_tags <- c(base_tags, ptm_tag_export)
         paste(base_tags, collapse=", ")
       })
       vtbl$Final_Classification <- sapply(seq_len(nrow(vtbl)), function(i) {
