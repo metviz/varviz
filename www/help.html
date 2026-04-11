@@ -101,7 +101,7 @@
   <a href="#datasources">Data Sources</a>
   <a href="#scores">Score Reference</a>
   <a href="#caching">Caching</a>
-  <a href="#export">Export</a>
+  <a href="#analysis-params">Analysis Parameters</a> &middot; <a href="#export">Export</a>
   <a href="#references">References</a>
   <a href="#faq">FAQ</a>
 </div>
@@ -887,6 +887,34 @@
 </div>
 
 <!-- CACHING -->
+<h2 id="analysis-params">Analysis Parameters</h2>
+<p>The sidebar parameters govern how allele frequency thresholds are derived and which inheritance model is applied. All values are recorded in the TSV export for reproducibility.</p>
+
+<div class="card">
+  <h3>Inheritance Mode</h3>
+  <p>Select <strong>Monoallelic</strong> (autosomal dominant, X-linked) or <strong>Biallelic</strong> (autosomal recessive) in the sidebar. This controls two thresholds:</p>
+  <ul>
+    <li><strong>PM2 threshold:</strong> monoallelic = prevalence-derived AF (typically &lt;0.0001); biallelic = 0.01</li>
+    <li><strong>BS1 threshold:</strong> monoallelic = 0.01; biallelic = 0.05</li>
+  </ul>
+  <p>The actual thresholds used for each variant are recorded in <code>Analysis_PM2_Threshold</code> and <code>Analysis_BS1_Threshold</code> in the TSV.</p>
+</div>
+
+<div class="card">
+  <h3>Frequency Cutoff (PM2 AF threshold)</h3>
+  <p>Two methods are available via the <em>Edit parameters</em> panel:</p>
+  <ol>
+    <li><strong>Calculate AF (by prevalence)</strong>: derives maximum credible allele frequency from disease prevalence, allelic heterogeneity, genetic heterogeneity, and penetrance using the Whiffin et al. (2017) [14] formula. Parameters are stored in <code>Analysis_Prevalence</code>, <code>Analysis_Allelic_Het</code>, <code>Analysis_Genetic_Het</code>, <code>Analysis_Penetrance</code>.</li>
+    <li><strong>Manual AC filter</strong>: directly specify maximum tolerated allele count from population size and confidence interval. Stored in <code>Analysis_AC_Cutoff</code>, <code>Analysis_Pop_Size</code>, <code>Analysis_CI</code>.</li>
+  </ol>
+  <p>The selected cutoff method is recorded in <code>Analysis_Cutoff_Method</code>.</p>
+</div>
+
+<div class="card">
+  <h3>Analysis Parameters in Variant Cards</h3>
+  <p>A <strong>&#9881; Analysis parameters</strong> row appears in each variant card between the annotation data and the ACMG Classification section. It displays colour-coded pills showing the active inheritance mode, PM2 AF threshold, disease prevalence, ClinGen gene-disease classification, and ConSurf file name (if uploaded). This makes the analytical context visible at a glance without requiring the user to scroll back to the sidebar.</p>
+</div>
+
 <h2 id="caching">Caching</h2>
 <p>All API responses and local lookups are cached in memory for the session. Returning to a previously loaded gene is instant. Cached sources: UniProt gene info, UniProt features, AlphaFold pLDDT, AlphaFold pathogenicity, gnomAD API, gnomAD parsed data, ClinVar, CCRS regions, dbNSFP (MyVariant.info), NCBI gene summaries, UCSC conservation (per transcript), Ensembl exon structure.</p>
 <p>Failed results are <em>not</em> cached. Click Go again to retry.</p>
@@ -901,20 +929,38 @@
 <p>Click <strong>Download the plot</strong> above the visualization. Formats: <strong>PDF</strong> (vector, publication-ready), <strong>PNG</strong> (300 DPI), <strong>JPEG</strong> (300 DPI). Output is 12&Prime; wide; height scales with track count. Variant labels rendered via ggplot at 65&deg; with 6-level staggering.</p>
 
 <h3>Variant Table Download</h3>
-<p>Click <strong>Download TSV</strong> immediately below the Variant Summary. Exports all 40+ columns: dbNSFP scores, conservation metrics, population frequencies, and ACMG tags. Filename: <code>VarViz_GENE_variant_summary_YYYYMMDD.tsv</code>.</p>
-<p>Five columns are added for the cosegregation selections in each card:</p>
+<p>Click <strong>Download TSV</strong> immediately below the Variant Summary. Exports all columns including dbNSFP scores, conservation metrics, population frequencies, ACMG tags, per-variant clinical inputs, and session analysis parameters. Filename: <code>VarViz_GENE_variant_summary_YYYYMMDD.tsv</code>.</p>
+
+<h4>Per-variant clinical input columns</h4>
 <ul>
-  <li><code>DeNovo_Evidence</code>: human-readable de novo status per variant (e.g. "Confirmed de novo, both parents tested (PS2)")</li>
-  <li><code>DeNovo_Applied</code>: tag applied (PS2 or PM6, blank if not assessed)</li>
-  <li><code>PTM_ACMG</code>: ACMG proxy tag for PTM site disruption (PS3_supporting or PP_PTM)</li>
-  <li><code>PTM_Strength</code>: PTM functional impact classification (Strong / Moderate functional site)</li>
-  <li><code>Cosegregation</code>: human-readable description (e.g. &ldquo;3&ndash;4 affected relatives (PP1 Moderate)&rdquo;)</li>
-  <li><code>PP1_Applied</code>: machine-readable tag applied (e.g. <code>PP1_moderate</code>)</li>
-  <li><code>Final_ACMG_Tags</code>: all tags including PP1 if applied</li>
-  <li><code>Final_Classification</code>: classification after cosegregation (may differ from pre-cosegregation)</li>
-  <li><code>Final_Points</code>: total Tavtigian point score after cosegregation</li>
+  <li><code>DeNovo_Evidence</code> / <code>DeNovo_Applied</code>: de novo status and tag (PS2 or PM6) per variant</li>
+  <li><code>Cosegregation</code> / <code>PP1_Applied</code>: cosegregation evidence and PP1 tier per variant</li>
+  <li><code>PM3_Evidence</code> / <code>PM3_Applied</code>: compound heterozygosity evidence and PM3 tier per variant</li>
+  <li><code>PTM_ACMG</code> / <code>PTM_Strength</code>: PTM site ACMG proxy tag and functional impact tier</li>
+  <li><code>Final_ACMG_Tags</code>, <code>Final_Classification</code>, <code>Final_Points</code>: post-dropdown classification state</li>
 </ul>
-<p>The original <code>ACMG_Tags</code> column is kept so both pre- and post-cosegregation states are in the file.</p>
+
+<h4>Analysis session parameter columns</h4>
+<p>These columns record the exact analysis settings used when the table was generated, enabling complete reproduction of any classification from the TSV alone.</p>
+<table class="data-table" style="max-width:700px;">
+  <tr><th>Column</th><th>Description</th></tr>
+  <tr><td><code>Analysis_Inheritance</code></td><td>Inheritance mode applied: <code>monoallelic</code> (AD/XL) or <code>biallelic</code> (AR)</td></tr>
+  <tr><td><code>Analysis_Cutoff_Method</code></td><td>Frequency cutoff method: <code>calc_af</code> (prevalence-derived) or <code>manual_ac</code></td></tr>
+  <tr><td><code>Analysis_PM2_Threshold</code></td><td>Allele frequency threshold used for PM2 firing</td></tr>
+  <tr><td><code>Analysis_BS1_Threshold</code></td><td>Allele frequency threshold used for BS1 firing</td></tr>
+  <tr><td><code>Analysis_AF_Cutoff</code></td><td>Maximum credible AF displayed as dashed line in gnomAD plot</td></tr>
+  <tr><td><code>Analysis_AC_Cutoff</code></td><td>Maximum tolerated allele count</td></tr>
+  <tr><td><code>Analysis_Prevalence</code></td><td>Disease prevalence used (e.g. "1 in 2000")</td></tr>
+  <tr><td><code>Analysis_Allelic_Het</code></td><td>Allelic heterogeneity parameter (proportion of cases due to this locus)</td></tr>
+  <tr><td><code>Analysis_Genetic_Het</code></td><td>Genetic heterogeneity parameter</td></tr>
+  <tr><td><code>Analysis_Penetrance</code></td><td>Penetrance parameter</td></tr>
+  <tr><td><code>Analysis_Pop_Size</code></td><td>Reference population size used for AC calculation</td></tr>
+  <tr><td><code>Analysis_CI</code></td><td>Confidence interval used for Poisson AC bound</td></tr>
+  <tr><td><code>ClinGen_Disease</code></td><td>ClinGen gene-disease validity disease name (fetched automatically)</td></tr>
+  <tr><td><code>ClinGen_MOI</code></td><td>ClinGen mode of inheritance classification</td></tr>
+  <tr><td><code>ConSurf_File</code></td><td>Filename of uploaded ConSurf grades file (blank if not used)</td></tr>
+</table>
+<p>The original <code>ACMG_Tags</code> column records the automated pre-dropdown classification; <code>Final_ACMG_Tags</code> records the state after all per-variant clinical inputs are applied.</p>
 
 <!-- REFERENCES -->
 <h2 id="references">References</h2>

@@ -3792,7 +3792,18 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
                                  clinvar_missense = NULL, consurf_data = NULL,
                                  denovo_status = "not_denovo",
                                  inh_param = "monoallelic",
-                                 segregation = "none") {
+                                 segregation = "none",
+                                 # ── Analysis session parameters ──────────────────
+                                 cutoff_method = "calc_af",
+                                 prevalence_1_in_n = 2000,
+                                 allelic_het = 0.5,
+                                 genetic_het = 1.0,
+                                 penetrance = 1.0,
+                                 pop_size = 125748,
+                                 conf_interval = 0.95,
+                                 clingen_disease_param = "",
+                                 clingen_moi_param = "",
+                                 consurf_file_name = "") {
   if (is.null(highlight_df) || nrow(highlight_df) == 0) return(NULL)
   
   # Pre-compute density curves for gnomAD (blue) and ClinVar missense (red)
@@ -5000,6 +5011,22 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       ACMG_Tags = acmg_str,
       Comment = acmg_comment,
       dbNSFP_JSON = as.character(dbnsfp_json),
+      # ── Session analysis parameters (same for all variants in run) ──
+      Analysis_Inheritance = inh_param,
+      Analysis_Cutoff_Method = cutoff_method,
+      Analysis_PM2_Threshold = signif(pm2_thresh, 4),
+      Analysis_BS1_Threshold = bs1_thresh,
+      Analysis_AF_Cutoff = ifelse(!is.null(af_cutoff) && !is.na(af_cutoff), signif(as.numeric(af_cutoff), 4), ""),
+      Analysis_AC_Cutoff = ifelse(!is.null(ac_cutoff) && !is.na(ac_cutoff), as.integer(ac_cutoff), ""),
+      Analysis_Prevalence = paste0("1 in ", prevalence_1_in_n),
+      Analysis_Allelic_Het = allelic_het,
+      Analysis_Genetic_Het = genetic_het,
+      Analysis_Penetrance = penetrance,
+      Analysis_Pop_Size = pop_size,
+      Analysis_CI = conf_interval,
+      ClinGen_Disease = clingen_disease_param,
+      ClinGen_MOI = clingen_moi_param,
+      ConSurf_File = consurf_file_name,
       stringsAsFactors = FALSE
     )
   })
@@ -5626,15 +5653,30 @@ shinyServer(function(input, output, session) {
           message("[VariantTable] No ConSurf data available")
         }
         
+        # Capture all session analysis parameters for provenance tracking
+        cg_res     <- tryCatch(clingen_validity(), error = function(e) NULL)
+        cg_disease <- if (!is.null(cg_res) && length(cg_res$disease) > 0) cg_res$disease[1] else ""
+        cg_moi     <- if (!is.null(cg_res) && length(cg_res$moi)     > 0) cg_res$moi[1]     else ""
+        cs_fname   <- if (!is.null(input$consurf_file)) input$consurf_file$name else ""
         vtbl <- build_variant_table(
           h, af(), mean_data(), afs_data(), gene_gnomad_data(), cv_data,
           pfam_data(), uniprot_data(), gene_ccrs_data(),
-          af_cutoff = current_af_cutoff,
-          ac_cutoff = current_ac_cutoff,
-          clinvar_missense = cv_missense,
-          consurf_data = cs_data,
-          denovo_status = isolate(input$denovo_status),
-          inh_param     = isolate(input$inh)
+          af_cutoff             = current_af_cutoff,
+          ac_cutoff             = current_ac_cutoff,
+          clinvar_missense       = cv_missense,
+          consurf_data           = cs_data,
+          denovo_status          = isolate(input$denovo_status),
+          inh_param              = isolate(input$inh),
+          cutoff_method          = isolate(input$cutoff_method),
+          prevalence_1_in_n      = isolate(input$prev),
+          allelic_het            = isolate(input$hetA),
+          genetic_het            = isolate(input$hetG),
+          penetrance             = isolate(input$pen),
+          pop_size               = isolate(if (input$cutoff_method == "calc_af") input$popSize_af else input$popSize),
+          conf_interval          = isolate(if (input$cutoff_method == "calc_af") input$CI_af else input$CI),
+          clingen_disease_param  = cg_disease,
+          clingen_moi_param      = cg_moi,
+          consurf_file_name      = cs_fname
         )
         message("[VariantTable] Built table with ", 
                 if(!is.null(vtbl)) nrow(vtbl) else 0, " rows")
@@ -6268,6 +6310,43 @@ shinyServer(function(input, output, session) {
             '</div>'
           )
         } else ""
+        # ── Analysis Parameters card row ──────────────────────────────
+        inh_label  <- switch(as.character(r$Analysis_Inheritance),
+          monoallelic = "Monoallelic (AD / XL)",
+          biallelic   = "Biallelic (AR)",
+          as.character(r$Analysis_Inheritance))
+        pm2_disp   <- if (nchar(as.character(r$Analysis_PM2_Threshold)) > 0)
+                        paste0("PM2 AF < ", r$Analysis_PM2_Threshold) else ""
+        prev_disp  <- if (nchar(as.character(r$Analysis_Prevalence)) > 0)
+                        paste0("Prevalence ", r$Analysis_Prevalence) else ""
+        param_pills <- paste0(
+          '<span style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;',
+          'padding:2px 7px;font-size:10px;color:#0369a1;margin-right:4px;">', inh_label, '</span>',
+          if (nchar(pm2_disp) > 0) paste0(
+            '<span style="background:#fef9c3;border:1px solid #fde68a;border-radius:4px;',
+            'padding:2px 7px;font-size:10px;color:#854d0e;margin-right:4px;">', pm2_disp, '</span>') else "",
+          if (nchar(prev_disp) > 0) paste0(
+            '<span style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;',
+            'padding:2px 7px;font-size:10px;color:#166534;margin-right:4px;">', prev_disp, '</span>') else "",
+          if (nchar(as.character(r$ClinGen_Disease)) > 0) paste0(
+            '<span style="background:#fdf4ff;border:1px solid #e9d5ff;border-radius:4px;',
+            'padding:2px 7px;font-size:10px;color:#7e22ce;margin-right:4px;">',
+            r$ClinGen_Disease,
+            if (nchar(as.character(r$ClinGen_MOI)) > 0) paste0(" (", r$ClinGen_MOI, ")") else "",
+            '</span>') else "",
+          if (nchar(as.character(r$ConSurf_File)) > 0) paste0(
+            '<span style="background:#fff7ed;border:1px solid #fed7aa;border-radius:4px;',
+            'padding:2px 7px;font-size:10px;color:#9a3412;margin-right:4px;">ConSurf: ',
+            r$ConSurf_File, '</span>') else ""
+        )
+        row5b <- paste0(
+          '<tr><td colspan="99" style="padding:4px 10px 4px;border:1px solid #e5e7eb;',
+          'background:#f8fafc;font-size:11px;color:#64748b;">',
+          '<strong style="color:#374151;">&#9881; Analysis parameters:</strong> ',
+          param_pills,
+          '</td></tr>'
+        )
+
         row6 <- paste0(
           sec_hdr("&#9670; ACMG Classification", "#b45309"),
           '<tr>',
@@ -6342,7 +6421,7 @@ shinyServer(function(input, output, session) {
           # scrollable body for data rows
           '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">',
           '<table style="border-collapse:collapse;table-layout:auto;width:auto;">',
-          row1, row2, row3, row4, row5, row6,
+          row1, row2, row3, row4, row5, row5b, row6,
           '</table>',
           '</div>',
           '</div>'
