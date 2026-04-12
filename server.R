@@ -1202,6 +1202,8 @@ extract_gnomad <- function(gene_name) {
                           colnames(gnomad_data))
     result <- data.frame(
       prot_pos           = gnomad_data$aa_pos,
+      aa_ref             = gnomad_data$aa_ref,
+      aa_alt             = gnomad_data$aa_alt,
       gnomad_allele_freq = gnomad_data$exome_af,
       gnomad_allele_count = gnomad_data$exome_ac,
       gnomad_data[, anc_cols, drop = FALSE],
@@ -3684,7 +3686,7 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
       s(paste0("In silico tool predictions suggest the variant is likely tolerated", score_str, " (BP4)."))
     # PS3 proxy note — when AM >= 0.90 + REVEL >= 0.773, note that PP3_strong is used as proxy
     if (isTRUE(ps3_proxy))
-      s(paste0("Convergent structural (AlphaMissense) and ensemble (REVEL) evidence supports damaging effect; PP3_strong applied as proxy for PS3_supporting pending DMS functional data (Wang et al. 2023)."))
+      s(paste0("Convergent structural (AlphaMissense) and ensemble (REVEL) evidence supports damaging effect; PP3_strong applied as proxy for PS3_supporting pending experimental functional data."))
     if (isTRUE(bs3_proxy))
       s(paste0("Convergent benign structural (AlphaMissense < 0.10) and ensemble (REVEL <= 0.29) evidence suggests tolerated effect; consistent with BS3_supporting pending DMS functional data."))
   }
@@ -3952,20 +3954,79 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       }
     }
     
-    # --- gnomAD (closest variant at this position) ---
+    # --- gnomAD: exact ref+alt match first, position fallback, absent = AF 0 ---
     gnomad_af      <- NA_real_
     gnomad_ac      <- NA_integer_
     gnomad_nhomalt <- NA_integer_   # homozygote count — used for BS2
+    gnomad_match_type <- "absent"   # "exact", "position", or "absent"
     if (!is.null(gnomad_data) && nrow(gnomad_data) > 0) {
-      idx <- which(gnomad_data$prot_pos == pos)
-      if (length(idx) > 0) {
-        # Take the max AF variant at this position
-        best <- idx[which.max(gnomad_data$gnomad_allele_freq[idx])]
-        gnomad_af      <- signif(gnomad_data$gnomad_allele_freq[best], 4)
-        gnomad_ac      <- gnomad_data$gnomad_allele_count[best]
-        if ("exome_ac_hom" %in% colnames(gnomad_data)) {
+      # Parse ref and alt from user variant string (3-letter or 1-letter)
+      mut_bare <- sub("^p\\.", "", as.character(mut))
+      m3 <- regmatches(mut_bare,
+                       regexec("^([A-Za-z]{3})([0-9]+)([A-Za-z]{3}|Ter|\\*)", mut_bare))[[1]]
+      m1 <- regmatches(mut_bare,
+                       regexec("^([A-Z])([0-9]+)([A-Z\\*])", mut_bare))[[1]]
+      three_to_one_lk <- c(Ala="A",Arg="R",Asn="N",Asp="D",Cys="C",
+                           Gln="Q",Glu="E",Gly="G",His="H",Ile="I",
+                           Leu="L",Lys="K",Met="M",Phe="F",Pro="P",
+                           Ser="S",Thr="T",Trp="W",Tyr="Y",Val="V",
+                           Ter="*",Sec="U")
+      if (length(m3) == 4) {
+        user_ref <- three_to_one_lk[m3[2]]; if (is.na(user_ref)) user_ref <- m3[2]
+        user_alt <- if (m3[4] %in% c("Ter","*")) "*" else three_to_one_lk[m3[4]]
+        if (is.na(user_alt)) user_alt <- m3[4]
+      } else if (length(m1) == 4) {
+        user_ref <- m1[2]; user_alt <- m1[4]
+      } else {
+        user_ref <- NA_character_; user_alt <- NA_character_
+      }
+
+      # Step 1: exact match — same position AND same ref AND same alt
+      idx_pos <- which(gnomad_data$prot_pos == pos)
+      idx_exact <- integer(0)
+      if (length(idx_pos) > 0 &&
+          !is.na(user_ref) && !is.na(user_alt) &&
+          "aa_ref" %in% colnames(gnomad_data) &&
+          "aa_alt" %in% colnames(gnomad_data)) {
+        idx_exact <- idx_pos[
+          !is.na(gnomad_data$aa_ref[idx_pos]) &
+          !is.na(gnomad_data$aa_alt[idx_pos]) &
+          gnomad_data$aa_ref[idx_pos] == user_ref &
+          gnomad_data$aa_alt[idx_pos] == user_alt
+        ]
+      }
+
+      if (length(idx_exact) > 0) {
+        # Exact match found — use it
+        best <- idx_exact[which.max(gnomad_data$gnomad_allele_freq[idx_exact])]
+        gnomad_af         <- signif(gnomad_data$gnomad_allele_freq[best], 4)
+        gnomad_ac         <- gnomad_data$gnomad_allele_count[best]
+        gnomad_match_type <- "exact"
+        if ("exome_ac_hom" %in% colnames(gnomad_data))
           gnomad_nhomalt <- as.integer(gnomad_data$exome_ac_hom[best])
-        }
+        message("[gnomAD] Exact match for ", mut, " at pos ", pos,
+                ": AF=", gnomad_af, " AC=", gnomad_ac)
+
+      } else if (length(idx_pos) > 0 && (is.na(user_ref) || is.na(user_alt) ||
+                 !("aa_ref" %in% colnames(gnomad_data)))) {
+        # No ref/alt info available — fall back to max-AF at position
+        best <- idx_pos[which.max(gnomad_data$gnomad_allele_freq[idx_pos])]
+        gnomad_af         <- signif(gnomad_data$gnomad_allele_freq[best], 4)
+        gnomad_ac         <- gnomad_data$gnomad_allele_count[best]
+        gnomad_match_type <- "position"
+        if ("exome_ac_hom" %in% colnames(gnomad_data))
+          gnomad_nhomalt <- as.integer(gnomad_data$exome_ac_hom[best])
+        message("[gnomAD] Position-only match for ", mut, " at pos ", pos,
+                ": AF=", gnomad_af, " AC=", gnomad_ac)
+
+      } else {
+        # No match at this position — variant is absent from gnomAD
+        gnomad_af         <- 0
+        gnomad_ac         <- 0L
+        gnomad_nhomalt    <- 0L
+        gnomad_match_type <- "absent"
+        message("[gnomAD] No match for ", mut, " at pos ", pos,
+                " — treating as absent (AF=0)")
       }
     }
     
@@ -4201,7 +4262,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     
     # --- gnomAD filter status: is this position above or below the AC/AF cutoff? ---
     gnomad_filter <- "absent"
-    if (!is.na(gnomad_af)) {
+    if (!is.na(gnomad_af) && gnomad_match_type != "absent") {
+      # Variant found in gnomAD — classify by AF/AC
       if (!is.null(af_cutoff) && !is.na(af_cutoff) && gnomad_af > as.numeric(af_cutoff)) {
         gnomad_filter <- "common"
       } else if (!is.null(ac_cutoff) && !is.na(gnomad_ac) && gnomad_ac > as.numeric(ac_cutoff)) {
@@ -4209,6 +4271,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       } else {
         gnomad_filter <- "rare"
       }
+    } else if (gnomad_match_type == "absent") {
+      # Variant genuinely absent from gnomAD — AF=0, AC=0
+      gnomad_af <- 0
+      gnomad_ac <- 0L
+      gnomad_filter <- "absent"
     }
     
     # --- ConSurf conservation ---
@@ -4326,9 +4393,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     get_gnomad_pop <- function(col) {
       if (is.null(gnomad_data) || nrow(gnomad_data) == 0 ||
           !col %in% colnames(gnomad_data)) return(NA_real_)
-      idx <- which(gnomad_data$prot_pos == pos)
-      if (length(idx) == 0) return(NA_real_)
-      best <- idx[which.max(gnomad_data$gnomad_allele_freq[idx])]
+      # Use the same exact-match index determined above
+      if (gnomad_match_type == "absent") return(0)
+      idx_use <- if (gnomad_match_type == "exact") idx_exact else idx_pos
+      if (length(idx_use) == 0) return(NA_real_)
+      best <- idx_use[which.max(gnomad_data$gnomad_allele_freq[idx_use])]
       v <- gnomad_data[[col]][best]
       # NA  = population data not available (old gnomAD data or missing field)
       # 0   = variant genotyped in this ancestry cohort but AC=0 (absent)
@@ -4706,8 +4775,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # PS3: well-established functional studies show damaging effect (+4 pts, Strong Pathogenic)
     # BS3: well-established functional studies show no damaging effect (-4 pts, Strong Benign)
     #
-    # Ideal: direct DMS (deep mutational scanning) Pd scores from Wang et al. (2023/2024)
-    # for PPP2R5C and related B56 subunit genes. At near-saturation DMS coverage, each
+    # Ideal: direct DMS (deep mutational scanning) functional scores for the gene under study.
+    # For PPP2R5C and related B56 subunit genes, saturation mutagenesis data would provide At near-saturation DMS coverage, each
     # variant has an experimentally measured functional score that maps directly to PS3/BS3.
     # VarViz does not yet ingest DMS data tables, so these criteria cannot fire from
     # experimental data. This is the core limitation identified for PPP2R5C analysis.
@@ -4951,6 +5020,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       AF_Path_Category = af_path_cat,
       gnomAD_AF = ifelse(is.na(gnomad_af), "", gnomad_af),
       gnomAD_AC = ifelse(is.na(gnomad_ac), "", gnomad_ac),
+      gnomAD_Match = if (exists("gnomad_match_type")) gnomad_match_type else "",
       gnomAD_Filter = gnomad_filter,
       gnomAD_Nhomalt = ifelse(is.na(gnomad_nhomalt), "", as.integer(gnomad_nhomalt)),
       Density_gnomAD = ifelse(is.na(gnomad_dens_val), "", signif(gnomad_dens_val, 4)),
@@ -5051,6 +5121,23 @@ shinyServer(function(input, output, session) {
                          selected = "CASR", server = TRUE,
                          options = list(placeholder = "Type or select a gene..."))
   }, once = TRUE)
+  
+  # ── Variant file upload -> populate text area ──────────────────────────
+  observeEvent(input$variant_file, {
+    req(input$variant_file)
+    tryCatch({
+      lines <- readLines(input$variant_file$datapath)
+      lines <- trimws(lines[nchar(trimws(lines)) > 0])
+      all_vars <- unlist(strsplit(paste(lines, collapse = ","), "[,\n\r]+"))
+      all_vars <- trimws(all_vars[nchar(trimws(all_vars)) > 0])
+      all_vars <- ifelse(grepl("^p\\.", all_vars, ignore.case = TRUE),
+                         all_vars, paste0("p.", all_vars))
+      updateTextAreaInput(session, "variants", value = paste(all_vars, collapse = ", "))
+      message("[VariantFile] Loaded ", length(all_vars), " variants from: ", input$variant_file$name)
+    }, error = function(e) {
+      message("[VariantFile] Error: ", e$message)
+    })
+  })
   
   observeEvent(input$launchApp,  { updateTabsetPanel(session, "nav", selected = "Protein View") })
   observeEvent(input$launchApp2, { updateTabsetPanel(session, "nav", selected = "Protein View") })
@@ -5263,10 +5350,41 @@ shinyServer(function(input, output, session) {
   })
 
 
-  user_path_variants <- eventReactive(input$gene_name, {
-    req(!is.null(input$gene_name) && nchar(trimws(input$gene_name)) > 0)  # don't fire on empty/NULL selection
+  user_path_variants <- eventReactive(input$goButton, {
+    # Read custom pathogenic positions file.
+    # Accepts two formats:
+    #   (a) p.notation variant names (p.Arg175His, one per line or TSV)
+    #       -> numeric position extracted via extract_protein_position()
+    #   (b) raw numeric positions (one per line or TSV V1 column)
+    # Returns data.frame with column V1 containing numeric positions.
     if (!is.null(input$user_file)) {
-      fread(input$user_file$datapath, sep = "\t", header = FALSE, quote = "")
+      tryCatch({
+        raw_lines <- readLines(input$user_file$datapath)
+        raw_lines <- trimws(raw_lines[nchar(trimws(raw_lines)) > 0])
+        # Detect p.notation format
+        if (any(grepl("^p\\.", raw_lines, ignore.case = TRUE))) {
+          # Extract numeric positions from p.notation strings
+          positions <- sapply(raw_lines, extract_protein_position)
+          positions <- as.numeric(positions[!is.na(positions)])
+          message("[UserFile] Parsed ", length(positions), " p.notation variants -> positions")
+        } else {
+          # Try as TSV with numeric positions in first column
+          df <- tryCatch(
+            data.table::fread(input$user_file$datapath, sep = "\t", header = FALSE, quote = ""),
+            error = function(e) NULL
+          )
+          positions <- if (!is.null(df) && nrow(df) > 0)
+            suppressWarnings(as.numeric(df$V1))
+          else as.numeric(raw_lines)
+          positions <- positions[!is.na(positions)]
+          message("[UserFile] Parsed ", length(positions), " numeric positions from TSV")
+        }
+        if (length(positions) == 0) return(data.frame())
+        data.frame(V1 = positions)
+      }, error = function(e) {
+        message("[UserFile] Parse error: ", e$message)
+        data.frame()
+      })
     } else {
       data.frame()
     }
@@ -7338,6 +7456,79 @@ shinyServer(function(input, output, session) {
   
   output$highlight <- DT::renderDataTable( highlight_data(), options = list(scrollX = TRUE))
   
+  # ── gnomAD raw data download ──────────────────────────────────────────────
+  output$download_gnomad_raw <- downloadHandler(
+    filename = function() {
+      gene  <- tryCatch(input$gene_name, error = function(e) "gene")
+      paste0("VarViz_", gene, "_gnomAD_raw_", format(Sys.Date(), "%Y%m%d"), ".tsv")
+    },
+    content = function(file) {
+      gd <- tryCatch(gene_gnomad_data(), error = function(e) NULL)
+      if (is.null(gd) || nrow(gd) == 0) {
+        write.table(data.frame(message = "No gnomAD data available for this gene."),
+                    file, sep = "\t", row.names = FALSE, quote = FALSE)
+        return()
+      }
+      # Re-fetch raw API JSON to get variant_id and all fields
+      gene_name  <- tryCatch(input$gene_name, error = function(e) "")
+      json_raw   <- tryCatch(query_gnomad_api(gene_name), error = function(e) NULL)
+      if (is.null(json_raw) || length(json_raw$data$gene$variants) == 0) {
+        # Fall back to already-parsed gene_gnomad_data
+        out <- gd
+        out$Gene <- gene_name
+        out$Source <- "VarViz_parsed"
+        write.table(out, file, sep = "\t", row.names = FALSE, quote = FALSE, na = "")
+        return()
+      }
+      # Parse all fields from raw JSON including variant_id and both exome+genome
+      variants <- json_raw$data$gene$variants
+      pop_val <- function(pops, pop_id, field) {
+        if (is.null(pops) || length(pops) == 0) return(NA_real_)
+        for (p in pops) {
+          if (identical(p$id, pop_id)) {
+            v <- p[[field]]
+            return(if (!is.null(v)) as.numeric(v) else NA_real_)
+          }
+        }
+        NA_real_
+      }
+      rows <- lapply(variants, function(v) {
+        ex <- v$exome; ge <- v$genome
+        ex_pops <- if (!is.null(ex$populations)) ex$populations else list()
+        ge_pops <- if (!is.null(ge$populations)) ge$populations else list()
+        data.frame(
+          Gene            = gene_name,
+          Variant_ID      = if (!is.null(v$variant_id)) v$variant_id else NA_character_,
+          HGVSp           = if (!is.null(v$hgvsp))     v$hgvsp      else NA_character_,
+          Exome_AC        = if (!is.null(ex$ac))  as.integer(ex$ac)  else NA_integer_,
+          Exome_AN        = if (!is.null(ex$an))  as.integer(ex$an)  else NA_integer_,
+          Exome_AF        = if (!is.null(ex$af))  as.numeric(ex$af)  else NA_real_,
+          Exome_Nhomalt   = if (!is.null(ex$ac_hom)) as.integer(ex$ac_hom) else NA_integer_,
+          Genome_AC       = if (!is.null(ge$ac))  as.integer(ge$ac)  else NA_integer_,
+          Genome_AN       = if (!is.null(ge$an))  as.integer(ge$an)  else NA_integer_,
+          Genome_AF       = if (!is.null(ge$af))  as.numeric(ge$af)  else NA_real_,
+          Genome_Nhomalt  = if (!is.null(ge$ac_hom)) as.integer(ge$ac_hom) else NA_integer_,
+          Exome_AF_AFR    = pop_val(ex_pops, "afr", "af"),
+          Exome_AF_NFE    = pop_val(ex_pops, "nfe", "af"),
+          Exome_AF_EAS    = pop_val(ex_pops, "eas", "af"),
+          Exome_AF_SAS    = pop_val(ex_pops, "sas", "af"),
+          Exome_AF_AMR    = pop_val(ex_pops, "amr", "af"),
+          Exome_AF_FIN    = pop_val(ex_pops, "fin", "af"),
+          Genome_AF_AFR   = pop_val(ge_pops, "afr", "af"),
+          Genome_AF_NFE   = pop_val(ge_pops, "nfe", "af"),
+          Genome_AF_EAS   = pop_val(ge_pops, "eas", "af"),
+          Genome_AF_SAS   = pop_val(ge_pops, "sas", "af"),
+          Genome_AF_AMR   = pop_val(ge_pops, "amr", "af"),
+          Genome_AF_FIN   = pop_val(ge_pops, "fin", "af"),
+          stringsAsFactors = FALSE
+        )
+      })
+      out <- do.call(rbind, rows)
+      write.table(out, file, sep = "\t", row.names = FALSE, quote = FALSE, na = "")
+      message("[gnomAD download] Wrote ", nrow(out), " variants for ", gene_name)
+    }
+  )
+
   # downloadHandler 
   output$down <- downloadHandler(
     filename =  function() {
