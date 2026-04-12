@@ -5096,6 +5096,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       Analysis_CI = conf_interval,
       ClinGen_Disease = clingen_disease_param,
       ClinGen_MOI = clingen_moi_param,
+      ClinGen_Class = clingen_class,
       ConSurf_File = consurf_file_name,
       stringsAsFactors = FALSE
     )
@@ -6409,7 +6410,49 @@ shinyServer(function(input, output, session) {
           '</span>'
         )
 
-        cmt <- if ("Comment" %in% colnames(vtbl)) as.character(r$Comment) else ""
+        # ── Regenerate comment live from current tags (includes PP1/PS2/PM3) ──
+        # Derive clingen_class from PP2 tag presence + ClinVar data
+        # (clingen_class is not stored in vtbl, infer from tags and GeVIR)
+        live_clingen_class <- if ("PP2" %in% tags_vec) {
+          gv <- suppressWarnings(as.numeric(r$GeVIR_Gene_Pct))
+          if (!is.na(gv) && gv < 25) "Definitive" else ""
+        } else ""
+        cmt <- tryCatch(
+          generate_acmg_comment(
+            acmg_tags_str      = paste(tags_vec, collapse = ", "),
+            gene               = as.character(r$Variant),
+            mut                = as.character(r$Variant),
+            gnomad_af          = suppressWarnings(as.numeric(r$gnomAD_AF)),
+            gnomad_ac          = suppressWarnings(as.integer(r$gnomAD_AC)),
+            gnomad_nhomalt     = suppressWarnings(as.integer(r$gnomAD_Nhomalt)),
+            clinvar_sig        = as.character(r$ClinVar),
+            clinvar_name       = as.character(r$ClinVar_Name),
+            clinvar_vcv        = as.character(r$ClinVar_VCV),
+            clinvar_vcv_pos    = as.character(r$ClinVar_VCV_Pos),
+            clinvar_trait      = as.character(r$ClinVar_Trait),
+            clinvar_match_type = as.character(r$ClinVar_Match),
+            domain             = as.character(r$Domain),
+            pp2_applies        = isTRUE("PP2" %in% tags_vec),
+            revel_score        = suppressWarnings(as.numeric(r$REVEL_Score)),
+            am_score           = suppressWarnings(as.numeric(r$AM_Score)),
+            cadd_score         = suppressWarnings(as.numeric(r$CADD_Score)),
+            metasvm_v          = as.character(r$MetaSVM_V),
+            phylop_val         = suppressWarnings(as.numeric(r$PhyloP_100V)),
+            phastcons_val      = suppressWarnings(as.numeric(r$PhastCons)),
+            gerp_val           = suppressWarnings(as.numeric(r$GERP_RS)),
+            consurf_grade      = as.character(r$ConSurf_Grade),
+            variant_pos        = suppressWarnings(as.integer(r$Position)),
+            clingen_class      = if ("ClinGen_Class" %in% colnames(vtbl)) as.character(r$ClinGen_Class) else live_clingen_class,
+            clingen_disease    = as.character(r$ClinGen_Disease),
+            clingen_moi        = as.character(r$ClinGen_MOI),
+            ps3_proxy          = isTRUE("PS3_supporting" %in% tags_vec),
+            gevir_gene_pct     = suppressWarnings(as.numeric(r$GeVIR_Gene_Pct))
+          ),
+          error = function(e) {
+            message("[Comment] Live regen error: ", e$message)
+            if ("Comment" %in% colnames(vtbl)) as.character(r$Comment) else ""
+          }
+        )
 
         # VUS reclassification note (fires for any VUS tier)
         vus_note <- if (grepl("^VUS", acmg_res$classification)) {

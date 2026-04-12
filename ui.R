@@ -247,6 +247,12 @@ shinyUI(fluidPage(
                             tags$div(style = "background:#ffffff; border:1px solid #e2e8f0; border-radius:14px; padding:16px 14px 10px; box-shadow:0 1px 4px rgba(0,0,0,0.04);",
                             uiOutput("selects1"),
                             selectizeInput("gene_name", "Choose a gene", choices = NULL),
+                            fileInput("variant_file",
+                                      label = NULL,
+                                      buttonLabel = "Upload variants (.txt)",
+                                      placeholder = "or paste below",
+                                      accept = c("text/plain", ".txt", ".csv")
+                            ),
                             textAreaInput(
                               "variants",
                               "Variants (comma-separated, p-notation):",
@@ -392,6 +398,9 @@ shinyUI(fluidPage(
                                        conditionalPanel(
                                          condition = "output.variant_table_ready",
                                          div(style = "margin:-10px 0 18px; text-align:right;",
+                                             downloadButton("download_gnomad_raw", 
+                                                            label = "Download gnomAD data",
+                                                            style = "margin-right:8px; background:#1d6a96; color:#fff; border:none; border-radius:6px; padding:5px 12px; font-size:12px;"),
                                              downloadButton("download_variant_table", 
                                                             label = "Download TSV",
                                                             style = "background:#003f5c; color:#fff; border:none; border-radius:8px; padding:8px 18px; font-size:13px; cursor:pointer;")
