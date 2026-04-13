@@ -3109,7 +3109,7 @@ conservplot <- function(consurf_score, prot_length, highlight = data.frame()) {
       limits = c(-prot_length * 0.01, prot_length + prot_length * 0.01),
       expand = c(0, 0)
     ) +
-    labs(y = "Conservation", x = "Position") +
+    labs(y = "ConSurf Scores", x = "Position") +
     theme_minimal(base_size = vv_axis_size) +
     theme_vv()
   
@@ -3631,8 +3631,8 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   if ("PM2" %in% tags) {
     af_txt <- fmt_af(gnomad_af)
     if (!is.null(af_txt) && af_txt != "0%")
-      s(paste0("The variant is observed at an extremely low frequency in the gnomAD v2.1.1 dataset (total allele frequency: ", af_txt, ").")) else
-      s("The variant is absent from the gnomAD v2.1.1 population database.")
+      s(paste0("The variant is observed at an extremely low frequency in the gnomAD v4 dataset (total allele frequency: ", af_txt, ").")) else
+      s("The variant is absent from the gnomAD v4 population database.")
   } else if ("BA1" %in% tags) {
     af_txt <- fmt_af(gnomad_af)
     s(paste0("The variant is extremely common in the general population (gnomAD AF: ", if (!is.null(af_txt)) af_txt else ">5%", "), meeting the BA1 threshold for standalone Benign classification (Richards 2015)."))
@@ -5161,28 +5161,64 @@ shinyServer(function(input, output, session) {
     consurf_state <- reactiveVal("idle")
 
     # parse_consurf_file: shared parser for both file upload and auto-fetch
+    # Handles real ConSurf grades files which use TAB separators with a blank
+    # column between SCORE and COLOR, and variable column positions for B/E.
+    # Strategy: find the header row, map column NAMES to indices, then extract
+    # by name rather than fixed position so blank/extra columns don't break it.
   parse_consurf_file <- function(lines) {
-    header_index <- grep("^\\s*POS\\s", lines)
-    if (length(header_index) == 0) stop("Header line starting with 'POS' not found.")
-    header_clean <- gsub("\\s+", "\\t", trimws(lines[header_index]))
-    data_clean   <- gsub("\\s+", "\\t", trimws(lines[(header_index + 1):length(lines)]))
-    split_data   <- strsplit(c(header_clean, data_clean), "\\t")
-    split_data   <- split_data[sapply(split_data, length) >= 4]
-    extracted <- lapply(split_data, function(row) {
-      c(row[1], row[2], row[3], row[4],
-        if (length(row) >= 8) row[8] else NA_character_)
+    # Find header line — matches " POS", "#POS", "# POS", "\tPOS" etc.
+    # POSIX [:space:] works in base R grep without perl=TRUE
+    header_index <- grep("^[[:space:]#]*POS\\b", lines)[1]
+    if (is.na(header_index)) stop("Header line with POS column not found.")
+
+    # Strip leading whitespace/# from header, split on TAB
+    header_raw  <- gsub("^[#[:space:]]+", "", lines[header_index])
+    hdr_cols    <- trimws(strsplit(header_raw, "\\t")[[1]])
+
+    # Locate the columns we need by name
+    pos_col   <- which(hdr_cols == "POS")[1]
+    seq_col   <- which(hdr_cols == "SEQ")[1]
+    score_col <- which(hdr_cols == "SCORE")[1]
+    color_col <- which(hdr_cols == "COLOR")[1]
+    be_col    <- which(hdr_cols %in% c("B/E", "BE"))[1]
+    if (any(is.na(c(pos_col, seq_col, score_col, color_col))))
+      stop("Required columns (POS, SEQ, SCORE, COLOR) not all found in header.")
+
+    # Data lines: skip the units row (contains "normalized") and blank/comment lines
+    data_lines <- lines[(header_index + 1):length(lines)]
+    data_lines <- data_lines[!grepl("normalized|^[[:space:]]*#|^[[:space:]]*$", data_lines)]
+    if (length(data_lines) == 0) stop("No data lines found after header.")
+
+    # Parse each data row by TAB — extract by column index
+    safe_col <- function(row, idx) {
+      if (is.na(idx) || length(row) < idx) NA_character_ else row[idx]
+    }
+    rows <- lapply(data_lines, function(line) {
+      row <- strsplit(line, "\\t")[[1]]
+      c(safe_col(row, pos_col),
+        safe_col(row, seq_col),
+        safe_col(row, score_col),
+        safe_col(row, color_col),
+        safe_col(row, be_col))
     })
-    df <- as.data.frame(do.call(rbind, extracted), stringsAsFactors = FALSE)
+    rows <- rows[sapply(rows, function(r) !is.na(r[1]) && nchar(trimws(r[1])) > 0)]
+    if (length(rows) == 0) stop("No valid data rows extracted.")
+
+    df <- as.data.frame(do.call(rbind, rows), stringsAsFactors = FALSE)
     colnames(df) <- c("POS", "SEQ", "SCORE", "COLOR", "BE")
-    df$POS   <- as.integer(gsub("[^0-9]",        "", str_trim(df$POS)))
-    df$SEQ   <- gsub("[^A-Za-z]",     "", str_trim(df$SEQ))
-    df$SCORE <- as.numeric(gsub("[^0-9.\\-]", "", str_trim(df$SCORE)))
-    df$COLOR <- as.numeric(gsub("[^0-9.]",       "", str_trim(df$COLOR)))
-    df$BE    <- tolower(gsub("[^A-Za-z]",         "", str_trim(df$BE)))
+    df$POS   <- suppressWarnings(as.integer(gsub("[^0-9]",     "", trimws(df$POS))))
+    df$SEQ   <- gsub("[^A-Za-z]",                                  "", trimws(df$SEQ))
+    df$SCORE <- suppressWarnings(as.numeric(gsub("[^0-9.\\-]", "", trimws(df$SCORE))))
+    df$COLOR <- suppressWarnings(as.numeric(gsub("[^0-9.]",       "", trimws(df$COLOR))))
+    df$BE    <- tolower(gsub("[^A-Za-z]",                          "", trimws(df$BE)))
     df[!is.na(df$POS) & !is.na(df$COLOR), ]
   }
 
-  consurf_score <- eventReactive(input$goButton, {
+  consurf_score <- reactive({
+    # Depend on both Go button and file upload so uploading a ConSurf file
+    # after Go is clicked immediately updates the plot without re-clicking Go
+    if (input$goButton == 0) return(data.frame())
+    input$consurf_file  # reactive dependency — invalidates when file changes
     consurf_state("idle")
 
     # Priority 1: user-uploaded file (explicit user choice always wins)
