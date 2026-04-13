@@ -296,11 +296,10 @@ shinyUI(fluidPage(
                             # Toggle link
                             tags$a(id = "toggleCutoff", 
                                    style = "cursor:pointer; font-size:12px; color:#58508d; font-weight:600;",
-                                   icon("sliders-h"), " Edit parameters"),
+                                   icon("sliders-h"), " Hide parameters"),
                             br(),
-                            # Hidden detail panels
-                            shinyjs::hidden(
-                              div(id = "cutoff_details",
+                            # Parameter detail panels — shown by default, toggle to hide
+                            div(id = "cutoff_details",
                                   # --- Calculate AF Panel ---
                                   conditionalPanel(
                                     condition = "input.cutoff_method == 'calc_af'",
@@ -346,27 +345,20 @@ shinyUI(fluidPage(
                                                   selected = 0.95)
                                     )
                                   )
-                              )
                             ),
                             br(),
                             fileInput("consurf_file",
                                       accept = c("text/csv","text/comma-separated-values,text/plain",".txt"),
                                       label = h5("ConSurf grades file (tab-separated):")
                             ),
-                            fileInput("user_file",
-                                      accept = c("text/csv","text/comma-separated-values,text/plain",".txt"),
-                                      label = h5("Custom pathogenic positions file:")
-                            ),
+                            # Custom pathogenic positions file removed — redundant with variant input
                             radioButtons("label", "Variant Label:", inline = TRUE,
                                          choices = list("Yes","No"), selected = "Yes"),
                             radioButtons("clinvar_filter", "ClinVar Variants Filter:", inline = TRUE,
                                          choices = list("Any Star","1 Star or more","2 Stars or more"),
                                          selected = "1 Star or more"),
-                            radioButtons("denovo_status", "De Novo Status:", inline = TRUE,
-                                         choices = list("Not De Novo"          = "not_denovo",
-                                                        "De Novo (confirmed)"  = "denovo_confirmed",
-                                                        "De Novo (assumed)"    = "denovo_assumed"),
-                                         selected = "not_denovo"),
+                            # De Novo Status: moved to per-variant card dropdowns
+                            # (applied individually per variant, not globally)
                             radioButtons("format", "Download format:",
                                          choices = c("jpeg","png","pdf"), selected = "pdf", inline = TRUE),
                             br()

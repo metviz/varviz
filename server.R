@@ -2856,13 +2856,15 @@ densityplot <- function(gnomad_data,clinvar_data,prot_length,allele_count,highli
   return(p)
 }
 
-clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_data,gene_ccrs_data) 
+clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_data,gene_ccrs_data,highlight=data.frame()) 
 {
   begin = end = NULL
+  L <- pfam_data$sequence$length   # protein length shorthand
+  label_x <- L * 0.02              # inside-plot row labels: just right of x=0
   p <- ggplot2::ggplot()
-  p <- p + ggplot2::ylim(0, 2.1) 
-  p <- p + scale_x_continuous(limits = c(-pfam_data$sequence$length * 0.04, pfam_data$sequence$length + pfam_data$sequence$length * 0.01), expand = c(0,0))
-  p <- p + ggplot2::labs(y = "ClinVar/PTMs/CCRs") 
+  p <- p + ggplot2::ylim(0, 2.1)
+  p <- p + scale_x_continuous(limits = c(0, L + L * 0.01), expand = c(0,0))
+  p <- p + ggplot2::labs(y = "ClinVar/PTMs/CCRs")
   p <- p + ggplot2::theme(
     axis.title.y = element_text(size = vv_axis_size, face = "bold"),
     axis.text.y = element_blank(),
@@ -2872,16 +2874,19 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank(),
     axis.line.x  = element_blank(),
-    plot.margin = unit(c(0.15, 0.3, 0.15, 1.2), "cm"),
+    plot.margin = unit(c(0.15, 0.3, 0.15, 0.3), "cm"),
     legend.position="none")
-  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=pfam_data$sequence$length, ymin=1.7, ymax=1.85, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "var Mis", x = -pfam_data$sequence$length * 0.008, y = 1.775, size = 2.6, colour = "red", hjust = 1, vjust = 0.5)
-  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=pfam_data$sequence$length, ymin=1.2, ymax=1.35, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "var LOF", x = -pfam_data$sequence$length * 0.008, y = 1.275, size = 2.6, colour = "red", hjust = 1, vjust = 0.5)
-  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=pfam_data$sequence$length, ymin=0.7, ymax=0.85, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "PTM", x = -pfam_data$sequence$length * 0.008, y = 0.775, size = 2.6, colour = "red", hjust = 1, vjust = 0.5)
-  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=pfam_data$sequence$length, ymin=0.1, ymax=0.25, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "CCRS", x = -pfam_data$sequence$length * 0.008, y = 0.175, size = 2.6, colour = "red", hjust = 1, vjust = 0.5)
+  # Row bands — labels sit BELOW each band (vjust=1 anchors text top at y=band_bottom-gap)
+  lbl_sz  <- vv_axis_size * 0.27
+  lbl_col <- "#555555"
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=1.7, ymax=1.85, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "Mis", x = label_x, y = 1.69, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=1.2, ymax=1.35, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "LOF", x = label_x, y = 1.19, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.7, ymax=0.85, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "PTM", x = label_x, y = 0.69, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.1, ymax=0.25, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "RS",  x = label_x, y = 0.09, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
   # Color scale: ClinVar gold stars + PTM types
   ptm_colors <- c(
     "Phosphorylation"              = "#E69F00",
@@ -2918,6 +2923,13 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   }
   if(!is.null(gene_ccrs_data) && is.data.frame(gene_ccrs_data) && nrow(gene_ccrs_data) > 0 && "prot_pos" %in% colnames(gene_ccrs_data)){
     p <- p + ggplot2::geom_segment(data=gene_ccrs_data,aes(x=prot_pos,xend=prot_pos,y=0.1,yend=0.25),colour="#ADFF2F",linewidth=0.5) 
+  }
+  # Variant dashed lines — spans full y range so all rows are marked
+  if (!is.null(highlight) && is.data.frame(highlight) && nrow(highlight) > 0 && "prot_pos" %in% colnames(highlight)) {
+    p <- p + ggplot2::geom_vline(data = highlight,
+                                  ggplot2::aes(xintercept = prot_pos),
+                                  linetype = "dashed", color = "black",
+                                  linewidth = 0.45, alpha = 0.7)
   }
   return(p)
 }
@@ -3297,7 +3309,7 @@ pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,fo
     axis.title.y  = element_text(size=vv_axis_size, face="bold"),
     axis.title.x  = element_text(size=vv_axis_size, face="bold"),
     axis.text.x   = element_text(size=vv_axis_size - 1),
-    plot.margin   = unit(c(0.1, 0.3, 0.2, 0.3), "cm"),
+    plot.margin   = unit(c(0.15, 0.3, 0.15, 0.3), "cm"),
     legend.position = "none")
 
   # ── Lollipops (ggplot geoms — drawn for BOTH ggplot and plotly paths) ─────
@@ -5468,7 +5480,19 @@ shinyServer(function(input, output, session) {
   })
   
   # Toggle cutoff details panel
-  shinyjs::onclick("toggleCutoff", shinyjs::toggle(id = "cutoff_details", anim = TRUE))
+  shinyjs::onclick("toggleCutoff", {
+    shinyjs::toggle(id = "cutoff_details", anim = TRUE)
+    shinyjs::runjs('
+      var lnk = document.getElementById("toggleCutoff");
+      var spans = lnk.querySelectorAll("span:not(.fa)");
+      var txt = lnk.textContent.trim();
+      if (txt.indexOf("Hide") !== -1) {
+        lnk.childNodes[lnk.childNodes.length-1].textContent = " Edit parameters";
+      } else {
+        lnk.childNodes[lnk.childNodes.length-1].textContent = " Hide parameters";
+      }
+    ')
+  })
   
   # ============================================================
   # UNIFIED: data() reactive routes to the selected method for plotting
@@ -5784,7 +5808,7 @@ shinyServer(function(input, output, session) {
           ac_cutoff             = current_ac_cutoff,
           clinvar_missense       = cv_missense,
           consurf_data           = cs_data,
-          denovo_status          = isolate(input$denovo_status),
+          denovo_status          = "not_denovo",  # handled per-variant in card dropdowns
           inh_param              = isolate(input$inh),
           cutoff_method          = isolate(input$cutoff_method),
           prevalence_1_in_n      = isolate(input$prev),
@@ -7265,7 +7289,7 @@ shinyServer(function(input, output, session) {
     p2 <- plot_afmps(mean_data(), highlight(), prot_length = pfam_data()$sequence$length) 
     p6 <- plot_pLDDT(af(), highlight(), prot_length = pfam_data()$sequence$length)
     incProgress(0.1, detail = "Building ClinVar/PTM/CCRS track...")
-    p7 <- clinvar_ccrsplot(pfam_data(),uniprot_data(),gene_clinvar_data,gene_ptm_data,gene_ccrs_data())
+    p7 <- clinvar_ccrsplot(pfam_data(),uniprot_data(),gene_clinvar_data,gene_ptm_data,gene_ccrs_data(),highlight=highlight())
     message("[Plot] clinvar_ccrsplot generated with ", nrow(gene_ptm_data), " PTM sites")
     
     incProgress(0.1, detail = "Building gnomAD & density plots...")
