@@ -1259,12 +1259,12 @@ query_gnomad_api <- function(gene_name) {
   
   url <- "https://gnomad.broadinstitute.org/api"
   
-  # Try gnomad_r4 first, fallback to gnomad_r2_1_1
-  for (dataset in c("gnomad_r4", "gnomad_r2_1_1")) {
-    # Retry up to 3 times for transient errors (overloaded, timeout)
-    for (attempt in 1:3) {
-      message("[gnomAD API] Trying dataset: ", dataset, " for ", gene_name,
-              if (attempt > 1) paste0(" (retry ", attempt, ")") else "")
+  # gnomAD v4 only (GRCh38, MANE Select transcript)
+  # No v2.1.1 fallback — avoids cross-version transcript numbering discrepancies
+  # where the same genomic variant has different residue numbers in old vs new transcripts
+  for (attempt in 1:3) {
+    message("[gnomAD API] Querying gnomad_r4 for ", gene_name,
+            if (attempt > 1) paste0(" (retry ", attempt, ")") else "")
     
     response <- tryCatch({
       POST(
@@ -1273,8 +1273,8 @@ query_gnomad_api <- function(gene_name) {
           query = query,
           variables = list(
             geneId = gene_name,
-            referenceGenome = ifelse(dataset == "gnomad_r2_1_1", "GRCh37", "GRCh38"),
-            datasetId = dataset
+            referenceGenome = "GRCh38",
+            datasetId = "gnomad_r4"
           )
         ),
         encode = "json",
@@ -1291,14 +1291,14 @@ query_gnomad_api <- function(gene_name) {
     resp_text <- httr::content(response, "text", encoding = "UTF-8")
     
     if (status_code(response) != 200) {
-      message("[gnomAD API] HTTP ", status_code(response), " for dataset ", dataset)
+      message("[gnomAD API] HTTP ", status_code(response))
       Sys.sleep(2)
       next
     }
     
     json_parsed <- fromJSON(resp_text, simplifyDataFrame = FALSE)
     
-    # Check for GraphQL errors — retry if overloaded
+    # Check for GraphQL errors — retry if transient
     if (!is.null(json_parsed$errors)) {
       err_msg <- substr(toJSON(json_parsed$errors, auto_unbox = TRUE), 1, 300)
       message("[gnomAD API] GraphQL errors: ", err_msg)
@@ -1307,28 +1307,25 @@ query_gnomad_api <- function(gene_name) {
         Sys.sleep(3)
         next
       }
-      break  # Non-transient error, try next dataset
+      break
     }
     
-    # Check data
     if (is.null(json_parsed$data$gene)) {
-      message("[gnomAD API] No gene data for ", gene_name, " in ", dataset)
-      break  # Gene not found in this dataset, try next
+      message("[gnomAD API] No gene data in gnomad_r4 for ", gene_name)
+      break
     }
     
     n_variants <- length(json_parsed$data$gene$variants)
-    message("[gnomAD API] Got ", n_variants, " raw variants from ", dataset)
+    message("[gnomAD API] Got ", n_variants, " variants from gnomad_r4")
     
     if (n_variants > 0) {
       cache_set("gnomad_api", gene_name, json_parsed)
       return(json_parsed)
     }
-    break  # Got 0 variants, try next dataset
-    }  # end attempt loop
-  }  # end dataset loop
+    break
+  }  # end retry loop
   
-  message("[gnomAD API] No data from any dataset for ", gene_name)
-  # Do NOT cache empty results — allow retry on next query
+  message("[gnomAD API] No gnomAD v4 data for ", gene_name)
   return(list(data = list(gene = list(variants = list()))))
 }
 

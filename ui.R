@@ -37,8 +37,8 @@ shinyUI(fluidPage(
         width:280px; z-index:9999;
       }
       .shiny-notification{
-        background:#fff; border:1px solid #e2e8f0;
-        border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.12);
+        background:#f0dd62; border:1px solid #faab66;
+        border-radius:10px; box-shadow:0 4px 16px rgba(0, 0, 0,0.12);
         padding:12px 16px; font-size:13px; color:#1e293b;
       }
       .shiny-notification::before{
