@@ -2084,7 +2084,6 @@ fetch_ucsc_window <- function(chr, start, end) {
         message("[UCSC Cons] HTTP ", httr::status_code(resp), " for track='", track_name, "'")
         return(NULL)
       }
-      message("[UCSC Cons] HTTP 200 for track='", track_name, "'")
       raw_text <- httr::content(resp, "text", encoding = "UTF-8")
       parsed <- jsonlite::fromJSON(raw_text, simplifyVector = TRUE)
       top_keys <- names(parsed)
@@ -2199,94 +2198,73 @@ fetch_conservation_scores <- function(gene_symbol, prot_length) {
   chr    <- exon_df$chr[1]
   strand <- exon_df$strand[1]
 
-  # ── Diagnostic: test one UCSC request before the main loop ──
   gene_start <- min(exon_df$genomic_start)
   gene_end   <- max(exon_df$genomic_end)
-  chr_ucsc_diag <- if (grepl("^chr", chr)) chr else paste0("chr", chr)
-  diag_end   <- min(gene_start + 5000L, gene_end)
-  diag_url   <- paste0(
-    "https://api.genome.ucsc.edu/getData/track",
-    "?genome=hg38;track=phyloP100wayAll",
-    ";chrom=", chr_ucsc_diag,
-    ";start=", gene_start - 1L,
-    ";end=",   diag_end
-  )
-  message("[UCSC Cons] Diagnostic URL: ", diag_url)
-  diag_resp <- tryCatch(httr::GET(diag_url, httr::timeout(20)), error = function(e) {
-    message("[UCSC Cons] Diagnostic request error: ", e$message); NULL
-  })
-  if (!is.null(diag_resp)) {
-    message("[UCSC Cons] Diagnostic HTTP status: ", httr::status_code(diag_resp))
-    diag_txt <- httr::content(diag_resp, as = "text", encoding = "UTF-8")
-    message("[UCSC Cons] Diagnostic response (first 400 chars): ",
-            substr(gsub("\\s+", " ", diag_txt), 1, 400))
-  }
-  # ── End diagnostic ──
 
   # Step 2: Fetch UCSC data for the full genomic span of CDS
   # Split into windows ≤ 50,000 bp to respect UCSC API limits
   win_size   <- 50000L
   windows    <- seq(gene_start, gene_end, by = win_size)
 
-  all_tracks <- list(phylop100 = c(), phylop470 = c(), phastcons = c())
+  # Accumulate windows as lists first, then combine once — avoids O(n^2) c() growth
+  raw_windows <- list(phylop100 = list(), phylop470 = list(), phastcons = list())
 
   for (win_start in windows) {
     win_end <- min(win_start + win_size - 1L, gene_end)
     message("[UCSC Cons] Fetching window chr", chr, ":", win_start, "-", win_end)
     win_data <- fetch_ucsc_window(chr, win_start, win_end)
     Sys.sleep(0.3)  # rate limit courtesy
-
-    for (nm in names(all_tracks)) {
-      if (!is.null(win_data[[nm]])) {
-        all_tracks[[nm]] <- c(all_tracks[[nm]], win_data[[nm]])
-      }
+    for (nm in names(raw_windows)) {
+      if (!is.null(win_data[[nm]]) && length(win_data[[nm]]) > 0)
+        raw_windows[[nm]] <- c(raw_windows[[nm]], list(win_data[[nm]]))
     }
   }
+  # Combine all windows into single named vectors in one pass
+  all_tracks <- lapply(raw_windows, function(wlist) {
+    if (length(wlist) == 0) return(NULL)
+    do.call(c, wlist)
+  })
 
-  # Step 3: Map genomic positions → amino acid positions
-  aa_positions <- seq_len(prot_length)
-  result <- data.frame(
-    aa_pos        = aa_positions,
-    phylop100_raw = NA_real_,
-    phylop470_raw = NA_real_,
-    phastcons_raw = NA_real_,
-    stringsAsFactors = FALSE
-  )
+  # Step 3: Map genomic positions -> amino acid positions
+  # Convert named vectors to environments for O(1) lookup (avoids %in% names() per AA)
+  make_env <- function(named_vec) {
+    if (is.null(named_vec) || length(named_vec) == 0) return(NULL)
+    e <- new.env(hash = TRUE, parent = emptyenv(), size = length(named_vec))
+    for (i in seq_along(named_vec)) assign(names(named_vec)[i], named_vec[[i]], envir = e)
+    e
+  }
+  env100 <- make_env(all_tracks$phylop100)
+  env470 <- make_env(all_tracks$phylop470)
+  envcst <- make_env(all_tracks$phastcons)
 
-  # Debug: report track coverage
-  for (nm in names(all_tracks)) {
-    tr <- all_tracks[[nm]]
-    if (!is.null(tr) && length(tr) > 0) {
-      message("[UCSC Cons] Track '", nm, "': ", length(tr), " positions, ",
-              "sample keys: ", paste(head(names(tr), 3), collapse=", "),
-              " | sample vals: ", paste(round(head(tr, 3), 3), collapse=", "))
-    } else {
-      message("[UCSC Cons] Track '", nm, "': NULL or empty")
-    }
-  }
-  # Debug: sample AA->genomic mapping
-  for (test_aa in c(1, 50, 100, 200)) {
-    if (test_aa <= prot_length) {
-      gp <- aa_to_genomic(test_aa, exon_df)
-      message("[UCSC Cons] AA ", test_aa, " -> genomic pos ", gp,
-              " | in phylop100 names: ",
-              if (!is.null(all_tracks$phylop100)) as.character(gp) %in% names(all_tracks$phylop100) else "N/A")
-    }
-  }
+  message("[UCSC Cons] Track sizes: phylop100=", length(all_tracks$phylop100),
+          " phylop470=", length(all_tracks$phylop470),
+          " phastcons=", length(all_tracks$phastcons))
+
+  aa_positions  <- seq_len(prot_length)
+  p100 <- rep(NA_real_, prot_length)
+  p470 <- rep(NA_real_, prot_length)
+  pcst <- rep(NA_real_, prot_length)
 
   for (aa in aa_positions) {
     gpos <- aa_to_genomic(aa, exon_df)
     if (is.na(gpos)) next
-    gpos_chr <- as.character(gpos)
-
-    if (!is.null(all_tracks$phylop100) && gpos_chr %in% names(all_tracks$phylop100))
-      result$phylop100_raw[aa] <- all_tracks$phylop100[[gpos_chr]]
-    if (!is.null(all_tracks$phylop470) && gpos_chr %in% names(all_tracks$phylop470))
-      result$phylop470_raw[aa] <- all_tracks$phylop470[[gpos_chr]]
-    if (!is.null(all_tracks$phastcons) && gpos_chr %in% names(all_tracks$phastcons))
-      result$phastcons_raw[aa] <- all_tracks$phastcons[[gpos_chr]]
-
+    gk <- as.character(gpos)
+    if (!is.null(env100) && exists(gk, envir = env100, inherits = FALSE))
+      p100[aa] <- get(gk, envir = env100, inherits = FALSE)
+    if (!is.null(env470) && exists(gk, envir = env470, inherits = FALSE))
+      p470[aa] <- get(gk, envir = env470, inherits = FALSE)
+    if (!is.null(envcst) && exists(gk, envir = envcst, inherits = FALSE))
+      pcst[aa] <- get(gk, envir = envcst, inherits = FALSE)
   }
+
+  result <- data.frame(
+    aa_pos        = aa_positions,
+    phylop100_raw = p100,
+    phylop470_raw = p470,
+    phastcons_raw = pcst,
+    stringsAsFactors = FALSE
+  )
 
   # Step 4: Normalize each score to [0, 1] (min-max, NA-aware)
   # Raw values preserve the real biological scale in tooltips
@@ -3109,7 +3087,7 @@ conservplot <- function(consurf_score, prot_length, highlight = data.frame()) {
       limits = c(-prot_length * 0.01, prot_length + prot_length * 0.01),
       expand = c(0, 0)
     ) +
-    labs(y = "ConSurf Scores", x = "Position") +
+    labs(y = "Conservation", x = "Position") +
     theme_minimal(base_size = vv_axis_size) +
     theme_vv()
   
