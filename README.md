@@ -22,7 +22,7 @@ VarViz addresses this by fetching **nine evidence streams** through live API cal
 
 ## Live application
 
-**[https://varviz.shinyapps.io/varviz/](https://varviz.shinyapps.io/varviz/)**
+**[https://varviz.shinyapps.io/varviz/](https://varviz.shinyapps.io/varviz/) or [https://varviz.org](https://varviz.org)**
 
 No installation required. A modern web browser is sufficient. No user data are stored between sessions.
 
