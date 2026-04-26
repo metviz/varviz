@@ -10,8 +10,21 @@ shinyUI(fluidPage(
   tags$head(
     tags$link(rel = "shortcut icon", href = "favicon.ico"),
     tags$style(HTML("
-      :root{ --c1:#003f5c; --c2:#58508d; --c3:#bc5090; --c4:#ff6361; --c5:#ffa600; --bg:#f9fafb; --ink:#0f172a; }
-      html,body{background:var(--bg); color:var(--ink)}
+      :root{
+        --c1:#003f5c; --c2:#58508d; --c3:#bc5090; --c4:#ff6361; --c5:#ffa600;
+        --bg:#f9fafb; --ink:#0f172a;
+        /* Typography tier system — multipliers match server-side typography.R (1.0/0.75/0.55) */
+        --vv-base-font: 16px;
+        --vv-big:    calc(var(--vv-base-font) * 1.00);
+        --vv-medium: calc(var(--vv-base-font) * 0.75);
+        --vv-small:  calc(var(--vv-base-font) * 0.55);
+        --vv-font-family: Helvetica, Arial, sans-serif;
+      }
+      html,body{background:var(--bg); color:var(--ink); font-family:var(--vv-font-family)}
+      body, .shiny-input-container, .well{ font-family:var(--vv-font-family); font-size:var(--vv-medium); }
+      .txt-big   { font-size:var(--vv-big);    font-family:var(--vv-font-family); }
+      .txt-medium{ font-size:var(--vv-medium); font-family:var(--vv-font-family); }
+      .txt-small { font-size:var(--vv-small);  font-family:var(--vv-font-family); }
       .vv-appbar{
         background:linear-gradient(135deg,var(--c1),var(--c2));
         color:#fff; border-bottom:6px solid var(--c5);
