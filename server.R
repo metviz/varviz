@@ -6067,10 +6067,11 @@ shinyServer(function(input, output, session) {
       class_badge <- function(acmg_res) {
         lbl <- acmg_res$classification
         pal <- if (lbl %in% names(cls_colors)) cls_colors[[lbl]] else list(bg="#f1f5f9", col="#475569")
-        paste0('<span style="background:', pal$bg, ';color:', pal$col,
-               ';padding:3px 10px;border-radius:6px;font-weight:800;font-size:12px;">',
+        # Classification label sits at Big tier per SK Comment 3(ii); rule sits at Medium tier.
+        paste0('<span class="txt-big" style="background:', pal$bg, ';color:', pal$col,
+               ';padding:3px 10px;border-radius:6px;font-weight:800;">',
                lbl, '</span>',
-               ' <span style="font-size:10px;color:', pal$col,
+               ' <span class="txt-medium" style="color:', pal$col,
                ';background:', pal$bg,
                ';padding:2px 7px;border-radius:4px;margin-left:4px;',
                'border:1px solid ', pal$col, '44;">',
@@ -6190,7 +6191,7 @@ shinyServer(function(input, output, session) {
 
         title_bar <- paste0(
           '<tr><td colspan="99" style="padding:10px 14px;background:#003f5c;border:none;">',
-          '<span style="font-size:16px;font-weight:800;color:#fff;">',
+          '<span class="txt-big" style="font-weight:800;color:#fff;">',
           esc(as.character(r$Variant)), '</span>',
           rsid_link,
           pubmed_link,
