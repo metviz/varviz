@@ -22,7 +22,9 @@ suppressMessages(tryCatch(library(ggrepel), error=function(e) NULL))
 theme_set(theme_cowplot(font_size=12))
 
 # --- Unified VarViz plot theme for consistent axis fonts ---
-vv_axis_size <- 9  # uniform axis title + text size across all subplots
+# Typography tiers (vv_base_font / vv_big / vv_medium / vv_small) live in
+# typography.R so they can be unit-tested without sourcing the full server.
+source("typography.R", local = FALSE)
 
 theme_vv <- function() {
   theme(
