@@ -17,7 +17,7 @@ test_that("font tier globals derive from base_font with correct multipliers", {
   expect_equal(vv_small,  vv_base_font * 0.55)
 })
 
-test_that("default base_font is 12 pt for live app", {
-  expect_equal(vv_base_font, 12)
+test_that("base_font default is 14 pt — unified anchor for live app + AppNote export", {
+  expect_equal(vv_base_font, 14)
 })
 
