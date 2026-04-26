@@ -16,3 +16,14 @@ data/*.tbi
 
 # Ignore log files
 *.log
+
+# --- Manuscript & internal review materials (never push to public mirror) ---
+# These contain in-review manuscript drafts, reviewer comments, revision plans,
+# and cover-letter responses. Keep local; do not commit to any public remote.
+*.docx
+*.pdf
+docs/plans/
+docs/cover-letter-*.md
+varviz-research.md
+varviz-humanized-research.md
+clinvar_debug_raw.json
