@@ -28,8 +28,9 @@ source("typography.R", local = FALSE)
 
 theme_vv <- function() {
   theme(
-    axis.title   = element_text(size = vv_medium, face = "bold"),
-    axis.text    = element_text(size = vv_small),
+    text         = element_text(family = "Helvetica"),
+    axis.title   = element_text(size = vv_medium, face = "bold", family = "Helvetica"),
+    axis.text    = element_text(size = vv_small, family = "Helvetica"),
     plot.margin  = unit(c(0.15, 0.3, 0.15, 0.3), "cm"),
     legend.position = "none"
   )
@@ -2320,7 +2321,7 @@ plot_multiconservation <- function(cons_data, prot_length, highlight = data.fram
         plotly::layout(
           yaxis = list(
             title = list(text = "<b>Multi-<br>Conservation</b>",
-                         font = list(size = vv_medium)),
+                         font = list(size = vv_medium, family = "Helvetica")),
             range = c(0, 1), showticklabels = FALSE, showgrid = FALSE
           ),
           xaxis = list(range = c(0, prot_length), showgrid = FALSE),
@@ -2335,11 +2336,11 @@ plot_multiconservation <- function(cons_data, prot_length, highlight = data.fram
     plotly::layout(
       yaxis = list(
         title = list(text = "<b>Multi-\nConservation</b>",
-                     font = list(size = vv_medium)),
+                     font = list(size = vv_medium, family = "Helvetica")),
         range      = c(-0.05, 1.1),
         tickvals   = c(0, 0.5, 1),
         ticktext   = c("0", "0.5", "1"),
-        tickfont   = list(size = vv_small),
+        tickfont   = list(size = vv_small, family = "Helvetica"),
         showgrid   = TRUE,
         gridcolor  = "#f0f0f0",
         zeroline   = TRUE,
