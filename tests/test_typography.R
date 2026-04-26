@@ -21,7 +21,3 @@ test_that("default base_font is 12 pt for live app", {
   expect_equal(vv_base_font, 12)
 })
 
-test_that("vv_axis_size backward-compat alias resolves to medium tier", {
-  expect_true(exists("vv_axis_size"))
-  expect_equal(vv_axis_size, vv_medium)
-})

@@ -28,8 +28,8 @@ source("typography.R", local = FALSE)
 
 theme_vv <- function() {
   theme(
-    axis.title   = element_text(size = vv_axis_size, face = "bold"),
-    axis.text    = element_text(size = vv_axis_size - 1),
+    axis.title   = element_text(size = vv_medium, face = "bold"),
+    axis.text    = element_text(size = vv_small),
     plot.margin  = unit(c(0.15, 0.3, 0.15, 0.3), "cm"),
     legend.position = "none"
   )
@@ -589,7 +589,7 @@ plot_pLDDT <- function(af, highlight = data.frame(), prot_length = NULL) {
                         label = "AlphaFold pLDDT data not available for this protein", 
                         size = 4.5, color = "#94a3b8", fontface = "italic") +
       labs(y = "AlphaFold pLDDT") +
-      theme_bw(base_size = vv_axis_size) + theme_vv() +
+      theme_bw(base_size = vv_medium) + theme_vv() +
       theme(axis.title.x = element_blank(),
             axis.text = element_blank(), axis.ticks = element_blank(),
             panel.grid = element_blank())
@@ -612,7 +612,7 @@ plot_pLDDT <- function(af, highlight = data.frame(), prot_length = NULL) {
     geom_hline(yintercept = 50, colour = "#BB0000", linetype = "dashed", alpha = 0.7) +
     labs(x = "", y = "AlphaFold pLDDT") +
     scale_x_continuous(limits = c(-xmax * 0.01, xmax + xmax * 0.01), expand = c(0,0)) +
-    theme_minimal(base_size = vv_axis_size) +
+    theme_minimal(base_size = vv_medium) +
     theme_vv()
   
   p <- add_variant_vlines(p, highlight, xmax = xmax)
@@ -694,7 +694,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
                         label = "AlphaFold Mean Pathogenicity data not available for this protein", 
                         size = 4.5, color = "#94a3b8", fontface = "italic") +
       labs(y = "AF Mean Pathogenicity") +
-      theme_bw(base_size = vv_axis_size) + theme_vv() +
+      theme_bw(base_size = vv_medium) + theme_vv() +
       theme(axis.title.x = element_blank(),
             axis.text = element_blank(), axis.ticks = element_blank(),
             panel.grid = element_blank())
@@ -724,7 +724,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
     ggplot2::annotate(geom = "text", x = xmax * 0.05, y = 0.78, label = "Pathogenic", color = "gray30", size = 3) +
     labs(x = "", y = "AF Mean Pathogenicity") +
     scale_x_continuous(limits = c(-xmax * 0.01, xmax + xmax * 0.01), expand = c(0,0)) +
-    theme_minimal(base_size = vv_axis_size) +
+    theme_minimal(base_size = vv_medium) +
     theme(panel.grid.major.x = element_blank(),
           panel.grid.minor.x = element_blank()) +
     theme_vv()
@@ -2320,7 +2320,7 @@ plot_multiconservation <- function(cons_data, prot_length, highlight = data.fram
         plotly::layout(
           yaxis = list(
             title = list(text = "<b>Multi-<br>Conservation</b>",
-                         font = list(size = vv_axis_size)),
+                         font = list(size = vv_medium)),
             range = c(0, 1), showticklabels = FALSE, showgrid = FALSE
           ),
           xaxis = list(range = c(0, prot_length), showgrid = FALSE),
@@ -2335,11 +2335,11 @@ plot_multiconservation <- function(cons_data, prot_length, highlight = data.fram
     plotly::layout(
       yaxis = list(
         title = list(text = "<b>Multi-\nConservation</b>",
-                     font = list(size = vv_axis_size)),
+                     font = list(size = vv_medium)),
         range      = c(-0.05, 1.1),
         tickvals   = c(0, 0.5, 1),
         ticktext   = c("0", "0.5", "1"),
-        tickfont   = list(size = vv_axis_size - 1),
+        tickfont   = list(size = vv_small),
         showgrid   = TRUE,
         gridcolor  = "#f0f0f0",
         zeroline   = TRUE,
@@ -2421,7 +2421,7 @@ plot_multiconservation_static <- function(cons_data, prot_length, highlight = da
                         label = "Conservation scores unavailable",
                         size = 4, color = "#94a3b8", fontface = "italic") +
       labs(y = "Multi-\nConservation") +
-      theme_bw(base_size = vv_axis_size) + theme_vv() +
+      theme_bw(base_size = vv_medium) + theme_vv() +
       theme(axis.title.x = element_blank(), axis.text = element_blank(),
             axis.ticks = element_blank(), panel.grid = element_blank())
     return(p)
@@ -2450,7 +2450,7 @@ plot_multiconservation_static <- function(cons_data, prot_length, highlight = da
                         label = "No conservation data available",
                         size = 4, color = "#94a3b8", fontface = "italic") +
       labs(y = "Multi-\nConservation") +
-      theme_bw(base_size = vv_axis_size) + theme_vv() +
+      theme_bw(base_size = vv_medium) + theme_vv() +
       theme(axis.title.x = element_blank(), axis.text = element_blank(),
             axis.ticks = element_blank(), panel.grid = element_blank())
     return(p)
@@ -2465,7 +2465,7 @@ plot_multiconservation_static <- function(cons_data, prot_length, highlight = da
     scale_y_continuous(limits = c(-0.05, 1.1),
                        breaks = c(0, 0.5, 1), labels = c("0", "0.5", "1")) +
     labs(y = "Multi-\nConservation") +
-    theme_bw(base_size = vv_axis_size) + theme_vv() +
+    theme_bw(base_size = vv_medium) + theme_vv() +
     theme(
       axis.title.x = element_blank(),
       legend.position = "top",
@@ -2773,7 +2773,7 @@ gnomad_freqplot <- function(gene_name, af_cutoff, highlight = data.frame(), prot
              label = paste0("AF cutoff = ", signif(af_cutoff, 3)), 
              hjust = 1, vjust = -0.5, size = 2.5, color = "red") +
     labs(y = "gnomAD Freq") +
-    theme_bw(base_size = vv_axis_size) +
+    theme_bw(base_size = vv_medium) +
     theme_vv() +
     theme(axis.title.x = element_blank())
   
@@ -2843,7 +2843,7 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   p <- p + scale_x_continuous(limits = c(0, L + L * 0.01), expand = c(0,0))
   p <- p + ggplot2::labs(y = "ClinVar/PTMs/CCRs")
   p <- p + ggplot2::theme(
-    axis.title.y = element_text(size = vv_axis_size, face = "bold"),
+    axis.title.y = element_text(size = vv_medium, face = "bold"),
     axis.text.y = element_blank(),
     axis.ticks.y = element_blank(),
     axis.line.y  = element_blank(),
@@ -2854,7 +2854,7 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
     plot.margin = unit(c(0.15, 0.3, 0.15, 0.3), "cm"),
     legend.position="none")
   # Row bands — labels sit BELOW each band (vjust=1 anchors text top at y=band_bottom-gap)
-  lbl_sz  <- vv_axis_size * 0.27
+  lbl_sz  <- vv_small * 0.27
   lbl_col <- "#555555"
   p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=1.7, ymax=1.85, fill="#C0C0C0", alpha=0.2)
   p <- p + ggplot2::annotate(geom = "text", label = "Mis", x = label_x, y = 1.69, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
@@ -3090,7 +3090,7 @@ conservplot <- function(consurf_score, prot_length, highlight = data.frame()) {
       expand = c(0, 0)
     ) +
     labs(y = "Conservation", x = "Position") +
-    theme_minimal(base_size = vv_axis_size) +
+    theme_minimal(base_size = vv_medium) +
     theme_vv()
   
   p <- add_variant_vlines(p, highlight, xmax = prot_length)
@@ -3283,9 +3283,9 @@ pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,fo
     axis.text.y   = element_blank(),
     axis.ticks.y  = element_blank(),
     axis.line.y   = element_blank(),
-    axis.title.y  = element_text(size=vv_axis_size, face="bold"),
-    axis.title.x  = element_text(size=vv_axis_size, face="bold"),
-    axis.text.x   = element_text(size=vv_axis_size - 1),
+    axis.title.y  = element_text(size=vv_medium, face="bold"),
+    axis.title.x  = element_text(size=vv_medium, face="bold"),
+    axis.text.x   = element_text(size=vv_small),
     plot.margin   = unit(c(0.15, 0.3, 0.15, 0.3), "cm"),
     legend.position = "none")
 
@@ -7314,7 +7314,7 @@ shinyServer(function(input, output, session) {
               label = "gnomAD data not available — API may be temporarily overloaded, try again", 
               size = 4.5, color = "#94a3b8", fontface = "italic") +
             labs(y = "gnomAD Freq") +
-            theme_bw(base_size = vv_axis_size) + theme_vv() +
+            theme_bw(base_size = vv_medium) + theme_vv() +
             theme(axis.title.x = element_blank(), axis.text = element_blank(), 
                   axis.ticks = element_blank(), panel.grid = element_blank())
     }
@@ -7333,7 +7333,7 @@ shinyServer(function(input, output, session) {
               label = "Mutation density data not available — requires gnomAD data", 
               size = 4.5, color = "#94a3b8", fontface = "italic") +
             labs(y = "Mutation Density") +
-            theme_bw(base_size = vv_axis_size) + theme_vv() +
+            theme_bw(base_size = vv_medium) + theme_vv() +
             theme(axis.title.x = element_blank(), axis.text = element_blank(), 
                   axis.ticks = element_blank(), panel.grid = element_blank())
     }
@@ -7356,7 +7356,7 @@ shinyServer(function(input, output, session) {
               label = cs_msg, size = 3.8, color = "#ef4444",
               fontface = "italic", hjust = 0.5, vjust = 0.5) +
             labs(y = "Conservation") +
-            theme_bw(base_size = vv_axis_size) + theme_vv() +
+            theme_bw(base_size = vv_medium) + theme_vv() +
             theme(axis.title.x = element_blank(), axis.text = element_blank(),
                   axis.ticks = element_blank(), panel.grid = element_blank())
     }

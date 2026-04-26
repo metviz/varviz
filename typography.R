@@ -6,6 +6,3 @@ vv_base_font <- 12       # live-app default (pt); cowplot export overrides via b
 vv_big       <- vv_base_font * 1.00
 vv_medium    <- vv_base_font * 0.75
 vv_small     <- vv_base_font * 0.55
-
-# Backward-compat alias — existing call sites resolve to medium tier until migrated (Task 14).
-vv_axis_size <- vv_medium
