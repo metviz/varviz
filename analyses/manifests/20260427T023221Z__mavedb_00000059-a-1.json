@@ -1,0 +1,42 @@
+{
+  "label": "mavedb_00000059-a-1",
+  "url": "https://api.mavedb.org/api/v1/score-sets/urn%3Amavedb%3A00000059-a-1/scores",
+  "params": {
+    "urn": "urn:mavedb:00000059-a-1",
+    "gene": "TP53"
+  },
+  "timestamp_utc": "2026-04-27T02:32:21Z",
+  "http_status": 200,
+  "response_bytes": 588703,
+  "response_sha256": "a58f9f7d3fa70fe2dbf1ae347fb5fc46280a68f98d9d042d108ee707fe64ff41",
+  "r_version": "R version 4.5.2 (2025-10-31)",
+  "platform": "x86_64-pc-linux-gnu",
+  "package_versions": {
+    "digest": "0.6.39",
+    "R6": "2.6.1",
+    "tidyselect": "1.2.1",
+    "tzdb": "0.5.0",
+    "magrittr": "2.0.4",
+    "rappdirs": "0.3.4",
+    "glue": "1.8.0",
+    "stringr": "1.6.0",
+    "tibble": "3.3.1",
+    "pkgconfig": "2.0.3",
+    "dplyr": "1.2.1",
+    "generics": "0.1.4",
+    "lifecycle": "1.0.5",
+    "readr": "2.2.0",
+    "cli": "3.6.5",
+    "vctrs": "0.7.1",
+    "compiler": "4.5.2",
+    "tools": "4.5.2",
+    "curl": "7.0.0",
+    "hms": "1.1.4",
+    "pillar": "1.11.1",
+    "httr2": "1.2.2",
+    "otel": "0.2.0",
+    "jsonlite": "2.0.0",
+    "rlang": "1.1.7",
+    "stringi": "1.8.7"
+  }
+}
