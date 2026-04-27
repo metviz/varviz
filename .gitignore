@@ -27,3 +27,11 @@ docs/cover-letter-*.md
 varviz-research.md
 varviz-humanized-research.md
 clinvar_debug_raw.json
+
+# --- Pass 2 analysis artifacts (regeneratable; never push to public mirror) ---
+analyses/raw/
+analyses/derived/
+analyses/classifications/
+analyses/figures/
+analyses/reports/
+# Keep tracked: analyses/*.R, analyses/lib/*.R, analyses/manifests/*.json
