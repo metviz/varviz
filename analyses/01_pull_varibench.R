@@ -1,149 +1,222 @@
-# Pulls VariBench missense pathogenicity test sets into analyses/raw/varibench/
-# and writes canonical TSVs to analyses/derived/.
-#
-# VariBench host: https://structure.bmc.lu.se/VariBench/ (HTTPS, after redirect from HTTP).
-# Two test sets are downloaded:
-#   * F1  — Dataset 1 F1: ClinVar one-star variants (14,819 rows; 7,346 benign + 7,473 pathogenic)
-#   * F11 — Dataset 1 F11: Exclude LP/LB, ClinVar Sept 2016 (7,766 rows; only "pathogenic"/"benign"
-#           assertions; higher stringency)
-# Files are tab-separated despite the .csv extension. Columns differ between F1 and F11; both are
-# normalized to the canonical schema (gene, p_notation, hgvs_p_raw, label, review_status, source, set).
-#
-# The canonical TSVs are filtered to the seven VarViz-supported genes
-# (TP53, PPP2R5C, BAP1, DDR2, TSHR, SLC13A5, CASR). Per-gene/label counts in F1
-# (probed 2026-04-26): TP53 62P+6B, CASR 18P+6B, BAP1 0P+2B, TSHR 1P+0B; others 0.
-# Filtering happens here so downstream `03_build_universe.R` works on a small, on-panel set.
-#
-# Run from project root:
-#   Rscript analyses/01_pull_varibench.R
-#
-# Outputs:
-#   analyses/raw/varibench/D1_F1_clinvar_one_star.tsv      (raw download — gitignored)
-#   analyses/raw/varibench/D1_F11_clinvar_exclude_LP_LB.tsv
-#   analyses/derived/varibench_canonical.tsv               (panel-filtered union — gitignored)
-#   analyses/manifests/<timestamp>__varibench_*.json       (one per fetch — committed)
+## analyses/01_pull_varibench.R  — Task P2-T1.1
+## Download VariBench PON-PS D2 held-out clinical truth VCFs and translate
+## ClinVar Variation IDs to HGVS protein notation via NCBI E-utilities esummary.
+##
+## ID-type decision (tested 2026-04-26):
+##   VCF column 3 = ClinVar VARIATION ID (e.g., 225696 → VCV000225696).
+##   VCF INFO ALLELEID = ClinVar ALLELE ID (e.g., 227511) — a different concept.
+##   NCBI esummary?db=clinvar accepts the VARIATION ID (column 3), NOT ALLELEID.
+##   Confirmed: id=225696 returns title="NM_001170535.3(ATAD3A):c.1582C>T (p.Arg528Trp)".
+##   ALLELEID is retained in output only for traceability.
+##
+## Run from project root:
+##   Rscript analyses/01_pull_varibench.R
+##
+## Outputs (all gitignored except manifests):
+##   analyses/raw/varibench/phenotype_D2_clinvar_pathogenic.vcf.gz
+##   analyses/raw/varibench/phenotype_D2_clinvar_benign.vcf.gz
+##   analyses/raw/varibench/clinvar_protein_changes/batch_NNNNN.json  (cached)
+##   analyses/derived/varibench_canonical.tsv
+##   analyses/manifests/<timestamp>__varibench_*.json
 
 suppressMessages({
   library(httr2)
   library(dplyr)
   library(readr)
+  library(purrr)
+  library(jsonlite)
   library(stringr)
 })
+
 source("analyses/lib/manifest.R")
 
-OUT_RAW       <- "analyses/raw/varibench"
-OUT_DERIVED   <- "analyses/derived"
-OUT_MANIFEST  <- "analyses/manifests"
-dir.create(OUT_RAW,     recursive = TRUE, showWarnings = FALSE)
-dir.create(OUT_DERIVED, recursive = TRUE, showWarnings = FALSE)
+OUT_RAW      <- "analyses/raw/varibench"
+OUT_DERIVED  <- "analyses/derived"
+OUT_MANIFEST <- "analyses/manifests"
+EUTILS_CACHE <- "analyses/raw/varibench/clinvar_protein_changes"
+
+dir.create(OUT_RAW,      recursive = TRUE, showWarnings = FALSE)
+dir.create(OUT_DERIVED,  recursive = TRUE, showWarnings = FALSE)
 dir.create(OUT_MANIFEST, recursive = TRUE, showWarnings = FALSE)
-
-VARVIZ_GENES <- c("TP53", "PPP2R5C", "BAP1", "DDR2", "TSHR", "SLC13A5", "CASR")
+dir.create(EUTILS_CACHE, recursive = TRUE, showWarnings = FALSE)
 
 # ---------------------------------------------------------------------------
-# fetch_varibench_file(): download one VariBench file, write raw + manifest.
-# Returns the local file path.
+# Step A: Download both VCFs (resumable; skip if already cached)
 # ---------------------------------------------------------------------------
-fetch_varibench_file <- function(url, out_name, label) {
-  out_file <- file.path(OUT_RAW, out_name)
-  message("[varibench] GET ", url)
-  resp <- request(url) |>
-    req_timeout(60) |>
-    req_user_agent("VarViz-Pass2/1.0 (research)") |>
-    req_perform()
-  if (resp_status(resp) != 200) stop("[varibench] HTTP ", resp_status(resp), " for ", url)
-  raw_bytes <- resp_body_raw(resp)
-  writeBin(raw_bytes, out_file)
-
-  write_manifest(
-    out_dir       = OUT_MANIFEST,
-    label         = label,
-    url           = url,
-    params        = list(),
-    response_raw  = raw_bytes,
-    http_status   = resp_status(resp)
-  )
+download_vcf <- function(label, url) {
+  out_file <- file.path(OUT_RAW, basename(url))
+  if (file.exists(out_file)) {
+    cat("CACHED:", basename(url), "\n")
+    return(out_file)
+  }
+  cat("DOWNLOADING:", url, "\n")
+  req  <- request(url) |>
+    req_user_agent("VarViz-Pass2/1.0 (mailto:agasthyametpally5@gmail.com)") |>
+    req_timeout(180)
+  resp <- req_perform(req)
+  raw  <- resp_body_raw(resp)
+  writeBin(raw, out_file)
+  write_manifest(OUT_MANIFEST,
+                 sprintf("varibench_%s_vcf", label),
+                 url, list(), raw, resp_status(resp))
   out_file
 }
 
-# ---------------------------------------------------------------------------
-# Three-letter ↔ one-letter helpers — convert NP_xxxxx.x:p.Arg387Gln to p.R387Q
-# ---------------------------------------------------------------------------
-AA_3to1 <- c(
-  Ala="A", Arg="R", Asn="N", Asp="D", Cys="C", Gln="Q", Glu="E", Gly="G",
-  His="H", Ile="I", Leu="L", Lys="K", Met="M", Phe="F", Pro="P", Ser="S",
-  Thr="T", Trp="W", Tyr="Y", Val="V", Ter="*", Stop="*", Sec="U", Pyl="O"
+vcf_paths <- c(
+  pathogenic = download_vcf(
+    "pathogenic",
+    "https://structure.bmc.lu.se/VariBench/data/ponps/phenotype_D2_clinvar_pathogenic.vcf.gz"
+  ),
+  benign = download_vcf(
+    "benign",
+    "https://structure.bmc.lu.se/VariBench/data/ponps/phenotype_D2_clinvar_benign.vcf.gz"
+  )
 )
 
-normalize_p_notation <- function(hgvs_p) {
-  # Examples to handle:
-  #   "NP_000633.2:p.Arg387Gln"          -> "p.R387Q"
-  #   "p.Arg387Gln"                       -> "p.R387Q"
-  #   "p.R387Q"                           -> "p.R387Q"
-  #   "NP_000633.2:p.(Arg387Gln)"         -> "p.R387Q"
-  #   "NP_000633.2:p.Arg387Ter"           -> "p.R387*"
-  s <- sub("^[^:]*:", "", hgvs_p)             # strip protein-id prefix
-  s <- gsub("[()]", "", s)                    # strip parentheses
-  m <- regmatches(s, regexec("^p\\.([A-Za-z]{3}|\\*)([0-9]+)([A-Za-z]{3}|\\*)$", s))[[1]]
-  if (length(m) != 4) return(NA_character_)   # not a clean missense substitution
-  ref3 <- m[2]; pos <- m[3]; alt3 <- m[4]
-  ref1 <- if (ref3 == "*") "*" else AA_3to1[ref3]
-  alt1 <- if (alt3 == "*") "*" else AA_3to1[alt3]
-  if (is.na(ref1) || is.na(alt1)) return(NA_character_)
-  paste0("p.", ref1, pos, alt1)
+# ---------------------------------------------------------------------------
+# Step B: Parse VCFs
+#   col 3 = ClinVar Variation ID  (used for esummary lookup)
+#   INFO   = ALLELEID (stored for traceability), GENEINFO, CLNHGVS
+# ---------------------------------------------------------------------------
+parse_vcf <- function(path, label_collapsed) {
+  con  <- gzfile(path, "rt")
+  on.exit(close(con))
+  rows <- readLines(con)
+  rows <- rows[!startsWith(rows, "#")]
+
+  fields <- strsplit(rows, "\t", fixed = TRUE)
+
+  df <- tibble(
+    chrom      = vapply(fields, `[`, character(1), 1),
+    pos        = vapply(fields, `[`, character(1), 2),
+    clinvar_id = vapply(fields, `[`, character(1), 3),   # Variation ID
+    ref        = vapply(fields, `[`, character(1), 4),
+    alt        = vapply(fields, `[`, character(1), 5),
+    info       = vapply(fields, `[`, character(1), 8)
+  )
+
+  # Filter to missense only
+  df <- df |> filter(grepl("missense_variant", info, fixed = TRUE))
+
+  # Extract INFO fields
+  df$gene             <- str_match(df$info, "GENEINFO=([^:|;]+)")[, 2]
+  df$hgvs_g           <- str_match(df$info, "CLNHGVS=([^;]+)")[, 2]
+  df$clinvar_alleleid <- str_match(df$info, "ALLELEID=([0-9]+)")[, 2]
+  df$label            <- label_collapsed
+  df$source           <- "VariBench"
+  df$set              <- "PON-PS_D2"
+
+  df |> select(-info)
 }
-normalize_p_notation_v <- Vectorize(normalize_p_notation, USE.NAMES = FALSE)
+
+vb <- bind_rows(
+  parse_vcf(vcf_paths["pathogenic"], "Pathogenic"),
+  parse_vcf(vcf_paths["benign"],     "Benign")
+)
+
+cat("Parsed:", nrow(vb), "missense rows\n")
+cat("Unique Variation IDs:", length(unique(vb$clinvar_id)), "\n")
 
 # ---------------------------------------------------------------------------
-# canonicalize(): map a VariBench frame to the shared schema.
+# Step C: Translate ClinVar Variation IDs → HGVS protein via NCBI esummary
+#   Endpoint: esummary.fcgi?db=clinvar&id=<csv_ids>&retmode=json
+#   Batch size: 200 IDs (safe under NCBI's ~500 limit)
+#   Rate limit: Sys.sleep(0.34) ≈ 2.9 req/sec (no API key → max 3 req/sec)
+#   Per-batch JSON cached to EUTILS_CACHE/batch_NNNNN.json for resumability
 # ---------------------------------------------------------------------------
-canonicalize <- function(df, source_label) {
-  df |>
-    transmute(
-      gene          = symbol,
-      hgvs_p_raw    = hgvs_p,
-      p_notation    = normalize_p_notation_v(hgvs_p),
-      label         = clinical_significance,
-      review_status = review_status,
-      source        = source_label,
-      set           = "test"
-    ) |>
-    filter(!is.na(p_notation), gene %in% VARVIZ_GENES) |>
-    distinct(gene, p_notation, .keep_all = TRUE)
+
+ESUM_URL <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+fetch_batch <- function(ids, batch_idx) {
+  cache_file <- file.path(EUTILS_CACHE, sprintf("batch_%05d.json", batch_idx))
+  if (file.exists(cache_file)) {
+    return(jsonlite::fromJSON(cache_file, simplifyVector = FALSE))
+  }
+  Sys.sleep(0.34)  # NCBI rate limit: 3 req/sec without API key
+  req <- request(ESUM_URL) |>
+    req_url_query(db = "clinvar", id = paste(ids, collapse = ","), retmode = "json") |>
+    req_user_agent("VarViz-Pass2/1.0 (mailto:agasthyametpally5@gmail.com)") |>
+    req_timeout(120) |>
+    req_retry(max_tries = 3, backoff = function(i) 2^i)
+  resp <- req_perform(req)
+  raw  <- resp_body_raw(resp)
+  writeBin(raw, cache_file)
+  write_manifest(
+    OUT_MANIFEST,
+    sprintf("clinvar_esummary_batch%05d", batch_idx),
+    ESUM_URL,
+    list(db = "clinvar", n_ids = length(ids), retmode = "json"),
+    raw,
+    resp_status(resp)
+  )
+  jsonlite::fromJSON(cache_file, simplifyVector = FALSE)
 }
 
-# ---------------------------------------------------------------------------
-# Pull F1 (Dataset 1, one-star ClinVar)
-# ---------------------------------------------------------------------------
-F1_URL  <- "https://structure.bmc.lu.se/VariBench/data/variationtype/substitutions/test/Dataset1/VTD_SCR_TESTD_D1_F1_ClinVar_one_Star.csv"
-f1_path <- fetch_varibench_file(F1_URL, "D1_F1_clinvar_one_star.tsv", "varibench_D1_F1_clinvar_one_star")
-f1_df   <- read_tsv(f1_path, show_col_types = FALSE)
-cat("[varibench] F1 rows: ", nrow(f1_df),
-    "; cols: ", paste(colnames(f1_df), collapse = ","), "\n", sep = "")
-f1_canonical <- canonicalize(f1_df, "VariBench-D1-F1")
-cat("[varibench] F1 panel-filtered: ", nrow(f1_canonical), "\n", sep = "")
+extract_p_notation <- function(title) {
+  # Title example: "NM_000059.4(BRCA2):c.5946delT (p.Ser1982Argfs*22)"
+  # Extract the p.Xxx part from within parentheses
+  m <- str_match(title, "\\(p\\.([A-Za-z0-9*?=]+)\\)")
+  if (is.na(m[1, 1])) NA_character_ else paste0("p.", m[, 2])
+}
+
+unique_ids <- unique(na.omit(vb$clinvar_id))
+cat("Translating", length(unique_ids), "ClinVar Variation IDs in batches of 200\n")
+batches <- split(unique_ids, ceiling(seq_along(unique_ids) / 200L))
+
+p_lookup <- list()
+for (i in seq_along(batches)) {
+  if (i %% 10 == 0 || i == 1 || i == length(batches)) {
+    cat(sprintf("[%3d/%d] batch with %d ids\n", i, length(batches), length(batches[[i]])))
+  }
+  resp_data <- tryCatch(
+    fetch_batch(batches[[i]], i),
+    error = function(e) {
+      cat("  ERR batch", i, ":", conditionMessage(e), "\n")
+      NULL
+    }
+  )
+  if (is.null(resp_data)) next
+
+  uids <- resp_data$result$uids
+  if (is.null(uids)) next
+
+  for (uid in uids) {
+    rec   <- resp_data$result[[uid]]
+    if (is.null(rec)) next
+    title <- rec$title %||%
+             tryCatch(rec$variation_set[[1]]$variation_name, error = function(e) "") %||%
+             ""
+    p_lookup[[as.character(uid)]] <- extract_p_notation(title)
+  }
+}
+
+cat(sprintf("p_lookup populated for %d unique IDs\n", length(p_lookup)))
+
+# Map back to the full data frame (use clinvar_id — Variation ID)
+vb$p_notation <- unlist(p_lookup[vb$clinvar_id], use.names = FALSE)
+
+# Coerce to character; NULL entries become "NULL" string after unlist
+vb$p_notation <- as.character(vb$p_notation)
+vb$p_notation[vb$p_notation == "NULL"] <- NA_character_
+
+unmatched <- sum(is.na(vb$p_notation))
+cat(sprintf(
+  "Translated: %d / %d (%.1f%% unmatched)\n",
+  sum(!is.na(vb$p_notation)), nrow(vb), 100 * unmatched / nrow(vb)
+))
 
 # ---------------------------------------------------------------------------
-# Pull F11 (Dataset 1, Exclude LP/LB; higher stringency)
+# Step D: Write canonical TSV
 # ---------------------------------------------------------------------------
-F11_URL  <- "https://structure.bmc.lu.se/VariBench/data/variationtype/substitutions/test/Dataset1/VTD_SCR_TESTD_D1_F11_Exclude_Lp_LB_ClinVar_Sep_2016.csv"
-f11_path <- fetch_varibench_file(F11_URL, "D1_F11_clinvar_exclude_LP_LB.tsv", "varibench_D1_F11_exclude_LP_LB")
-f11_df   <- read_tsv(f11_path, show_col_types = FALSE)
-cat("[varibench] F11 rows: ", nrow(f11_df),
-    "; cols: ", paste(colnames(f11_df), collapse = ","), "\n", sep = "")
-f11_canonical <- canonicalize(f11_df, "VariBench-D1-F11")
-cat("[varibench] F11 panel-filtered: ", nrow(f11_canonical), "\n", sep = "")
-
-# ---------------------------------------------------------------------------
-# Union, deduplicate (prefer higher-stringency F11 row when same variant in both)
-# ---------------------------------------------------------------------------
-canonical <- bind_rows(f11_canonical, f1_canonical) |>
-  distinct(gene, p_notation, .keep_all = TRUE) |>
-  arrange(gene, p_notation)
+canonical <- vb |>
+  filter(!is.na(p_notation), !is.na(gene)) |>
+  select(gene, p_notation, hgvs_g, clinvar_alleleid, label, source, set)
 
 write_tsv(canonical, file.path(OUT_DERIVED, "varibench_canonical.tsv"))
-
-cat("\n[varibench] canonical written to ", file.path(OUT_DERIVED, "varibench_canonical.tsv"), "\n", sep = "")
-cat("[varibench] union rows: ", nrow(canonical), "\n", sep = "")
-cat("[varibench] per-gene/label breakdown:\n")
-print(canonical |> count(gene, label) |> arrange(gene, label), n = Inf)
+cat("Wrote", nrow(canonical), "canonical rows.\n")
+cat("Label breakdown:\n")
+print(table(canonical$label))
+cat("Top genes:\n")
+print(head(sort(table(canonical$gene), decreasing = TRUE), 10))
