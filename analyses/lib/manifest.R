@@ -9,19 +9,25 @@ suppressMessages({
 
 write_manifest <- function(out_dir, label, url, params, response_raw, http_status) {
   if (!dir.exists(out_dir)) {
-    dir.create(out_dir, recursive = TRUE)
+    ok <- dir.create(out_dir, recursive = TRUE)
+    if (!ok && !dir.exists(out_dir)) stop("write_manifest: cannot create out_dir: ", out_dir)
   }
 
-  ts <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  now <- Sys.time()
+  ts    <- format(now, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  safe_label <- gsub("[^A-Za-z0-9._-]", "_", label)
   fname <- sprintf("%s__%s.json",
-                   format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC"),
-                   label)
+                   format(now, "%Y%m%dT%H%M%SZ", tz = "UTC"),
+                   safe_label)
   out_path <- file.path(out_dir, fname)
 
-  pkgs <- c("jsonlite", "digest", "httr2", "dplyr", "ggplot2")
-  pkg_versions <- vapply(pkgs, function(p) {
-    if (requireNamespace(p, quietly = TRUE)) as.character(utils::packageVersion(p)) else NA_character_
-  }, character(1))
+  loaded_pkgs <- setdiff(loadedNamespaces(),
+                         c("base", "stats", "graphics", "grDevices",
+                           "utils", "datasets", "methods"))
+  pkg_versions <- setNames(
+    vapply(loaded_pkgs, function(p) as.character(utils::packageVersion(p)), character(1)),
+    loaded_pkgs
+  )
 
   manifest <- list(
     label            = label,
@@ -33,7 +39,7 @@ write_manifest <- function(out_dir, label, url, params, response_raw, http_statu
     response_sha256  = digest::digest(response_raw, algo = "sha256", serialize = FALSE),
     r_version        = R.version.string,
     platform         = R.version$platform,
-    package_versions = as.list(pkg_versions[!is.na(pkg_versions)])
+    package_versions = as.list(pkg_versions)
   )
 
   jsonlite::write_json(manifest, out_path,
