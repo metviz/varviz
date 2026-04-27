@@ -86,6 +86,13 @@ parse_vcf <- function(path, label_collapsed) {
 
   fields <- strsplit(rows, "\t", fixed = TRUE)
 
+  # Defensive: drop any rows with fewer than 8 tab-separated fields (corrupt rows
+  # or stray header lines that slipped through the # filter).
+  field_lens <- vapply(fields, length, integer(1))
+  n_short <- sum(field_lens < 8L)
+  if (n_short > 0) warning(sprintf("[parse_vcf] dropped %d rows with <8 fields", n_short))
+  fields <- fields[field_lens >= 8L]
+
   df <- tibble(
     chrom      = vapply(fields, `[`, character(1), 1),
     pos        = vapply(fields, `[`, character(1), 2),
@@ -131,8 +138,13 @@ ESUM_URL <- "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 
 fetch_batch <- function(ids, batch_idx) {
   cache_file <- file.path(EUTILS_CACHE, sprintf("batch_%05d.json", batch_idx))
-  if (file.exists(cache_file)) {
-    return(jsonlite::fromJSON(cache_file, simplifyVector = FALSE))
+  if (file.exists(cache_file) && file.size(cache_file) > 0) {
+    # Belt-and-suspenders: also catch malformed JSON in cached file
+    parsed <- tryCatch(jsonlite::fromJSON(cache_file, simplifyVector = FALSE),
+                       error = function(e) NULL)
+    if (!is.null(parsed)) return(parsed)
+    message(sprintf("[fetch_batch] cache file %s is malformed; re-fetching", cache_file))
+    unlink(cache_file)  # remove the corrupt file so we don't keep retrying it
   }
   Sys.sleep(0.34)  # NCBI rate limit: 3 req/sec without API key
   req <- request(ESUM_URL) |>
@@ -144,12 +156,17 @@ fetch_batch <- function(ids, batch_idx) {
   raw  <- resp_body_raw(resp)
   writeBin(raw, cache_file)
   write_manifest(
-    OUT_MANIFEST,
-    sprintf("clinvar_esummary_batch%05d", batch_idx),
-    ESUM_URL,
-    list(db = "clinvar", n_ids = length(ids), retmode = "json"),
-    raw,
-    resp_status(resp)
+    out_dir       = OUT_MANIFEST,
+    label         = sprintf("clinvar_esummary_batch%05d", batch_idx),
+    url           = ESUM_URL,
+    params        = list(
+      db        = "clinvar",
+      retmode   = "json",
+      n_ids     = length(ids),
+      ids       = as.character(ids)   # full id vector for reproducibility
+    ),
+    response_raw  = raw,
+    http_status   = resp_status(resp)
   )
   jsonlite::fromJSON(cache_file, simplifyVector = FALSE)
 }
@@ -157,8 +174,13 @@ fetch_batch <- function(ids, batch_idx) {
 extract_p_notation <- function(title) {
   # Title example: "NM_000059.4(BRCA2):c.5946delT (p.Ser1982Argfs*22)"
   # Extract the p.Xxx part from within parentheses
-  m <- str_match(title, "\\(p\\.([A-Za-z0-9*?=]+)\\)")
-  if (is.na(m[1, 1])) NA_character_ else paste0("p.", m[, 2])
+  m <- str_match(title, "\\(p\\.([A-Za-z0-9*?]+)\\)")
+  if (is.na(m[1])) return(NA_character_)
+  p <- paste0("p.", m[, 2])
+  # Defensive: filter synonymous (no MaveDB/CASR variant should be `p.X123=`,
+  # but esummary occasionally emits these via 1-letter code mismatches).
+  if (grepl("=$", p)) return(NA_character_)
+  p
 }
 
 unique_ids <- unique(na.omit(vb$clinvar_id))
