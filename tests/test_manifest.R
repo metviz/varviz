@@ -48,3 +48,27 @@ test_that("write_manifest creates the output directory if missing", {
   )
   expect_true(file.exists(out_path))
 })
+
+test_that("write_manifest sanitizes label characters in filename but preserves audit field", {
+  tmpdir <- tempfile("manifest_test_"); dir.create(tmpdir)
+  on.exit(unlink(tmpdir, recursive = TRUE))
+
+  malicious <- "../../escape"
+  out_path <- write_manifest(
+    out_dir       = tmpdir,
+    label         = malicious,
+    url           = "https://example.org",
+    params        = list(),
+    response_raw  = raw(),
+    http_status   = 200L
+  )
+
+  # Path must remain inside tmpdir
+  resolved <- normalizePath(out_path, winslash = "/")
+  expect_true(startsWith(resolved, normalizePath(tmpdir, winslash = "/")))
+  expect_true(file.exists(out_path))
+
+  # Audit field preserves the original (unsanitized) label
+  m <- jsonlite::fromJSON(out_path, simplifyVector = FALSE)
+  expect_identical(m$label, malicious)
+})
