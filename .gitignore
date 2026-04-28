@@ -35,3 +35,8 @@ analyses/classifications/
 analyses/figures/
 analyses/reports/
 # Keep tracked: analyses/*.R, analyses/lib/*.R, analyses/manifests/*.json
+
+# AlphaMissense per-substitution CSVs cached at the project root by the
+# harness (one per UniProt accession; tens of thousands of rows each).
+# Regeneratable from https://alphafold.ebi.ac.uk/files/AF-<UID>-F1-aa-substitutions.csv
+[A-Z][0-9]*-F1-aa-substitutions.csv
