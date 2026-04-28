@@ -21,8 +21,10 @@ results <- list()
 for (p in panels) {
   cat(sprintf("\n>>> %s\n>>> %s\n\n", p$name, strrep("-", nchar(p$name))))
   t0 <- Sys.time()
+  # Source in a fresh env to prevent panels from overwriting the runner's
+  # loop variables (e.g. each panel script defines `p` for its ggplot object).
   ok <- tryCatch({
-    source(p$script, local = TRUE)
+    source(p$script, local = new.env(parent = globalenv()))
     TRUE
   }, error = function(e) {
     cat(sprintf("    PANEL FAILED: %s\n", conditionMessage(e)))
