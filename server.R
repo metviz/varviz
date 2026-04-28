@@ -4407,6 +4407,14 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # VarViz's own data is primary (already fetched from ClinVar, gnomAD, CCRS)
     # dbNSFP computational predictions supplement PP3/BP4
     acmg_tags <- character(0)
+    # pm1_pathway_val: which pathway fired PM1 — used by the Pass 2 dual-pass
+    # benchmark (analyses/05_classify_harness.R) to drive ClinVar-blind
+    # classification via strip_clinvar_tags(). One of "" / "ccrs" /
+    # "uniprot_domain" / "clinvar_hotspot". The neighborhood upgrade branch
+    # (PM1 -> PM1_strong via ClinVar 15aa) intentionally preserves the
+    # original pathway — the helper strips PM1 only when pathway is purely
+    # circular ("clinvar_hotspot"); the strong upgrade itself is not undone.
+    pm1_pathway_val <- ""
     
     # ── ACMG Tag Computation ──────────────────────────────────────────────────
     # Based on Richards et al. (2015) + Tavtigian et al. (2018) Bayesian framework
@@ -4541,17 +4549,21 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         } else {
           acmg_tags <- c(acmg_tags, "PM1")
         }
+        pm1_pathway_val <- "ccrs"
       } else if (ccrs_pct >= 85 && cons_strong) {
         # Path 2: borderline CCRS — conservation required as second line of evidence
         acmg_tags <- c(acmg_tags, "PM1")
+        pm1_pathway_val <- "ccrs"
       } else if (has_domain && cons_strong) {
         # Path 3a: specific domain, conserved — PM1_strong
         # Flag: conservation was used here; suppress duplicate PP3 conservation tier
         acmg_tags <- c(acmg_tags, "PM1_strong")
         cons_used_for_pm1 <- TRUE
+        pm1_pathway_val <- "uniprot_domain"
       } else if (has_domain) {
         # Path 3b: specific domain, not strongly conserved — PM1 supporting
         acmg_tags <- c(acmg_tags, "PM1")
+        pm1_pathway_val <- "uniprot_domain"
       }
     }
 
@@ -4580,6 +4592,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           } else {
             # no domain/CCRS hit but neighborhood is strong — fire PM1
             acmg_tags <- c(acmg_tags, "PM1")
+            pm1_pathway_val <- "clinvar_hotspot"
             message("[PM1] Neighborhood \u00b115aa fires PM1: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
           }
         }
@@ -5069,6 +5082,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       Pop_ExAC = pop_exac,
       # ── ACMG + Comment + JSON ──
       ACMG_Tags = acmg_str,
+      ACMG_PM1_Pathway = pm1_pathway_val,
       Comment = acmg_comment,
       dbNSFP_JSON = as.character(dbnsfp_json),
       # ── Session analysis parameters (same for all variants in run) ──
