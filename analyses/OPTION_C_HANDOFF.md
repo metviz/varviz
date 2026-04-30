@@ -13,17 +13,33 @@ UniProt accessions covered: P01116 (KRAS), P01130 (LDLR), P35557 (GCK), P41180 (
 
 **Missing AM CSV: TSHR (P16473) returned 404** at AlphaFold-EBI (no AM bulk file exists for this protein). TSHR has 4 universe variants — fall back to MyVariant for those.
 
-## What's left (8 tasks; ~3-5h work depending on REVEL parsing approach)
+## What's left (7 tasks; ~3-4h work)
 
-### 1. Extract + index bulk REVEL  *(~30 min)*
-```bash
-cd analyses/raw/revel
-unzip revel-v1.3_all_chromosomes.zip
-# 6.5 GB CSV; columns: chr,hg19_pos,grch38_pos,ref,alt,aaref,aaalt,REVEL,Ensembl_transcriptid,Ensembl_proteinid
+### 1. Extract + index bulk REVEL  ✅ **DONE 2026-04-30**
+
+REVEL bulk has been unzipped, awk-split into 10 per-chromosome CSVs at
+`analyses/raw/revel/by_chrom/chr_{N}.csv` (where N ∈ {1, 3, 7, 10, 11, 12,
+13, 14, 17, 19} — all 14 BENCHMARK_GENES covered). The 6.5 GB intermediate
+was deleted; the 637 MB source zip is retained as backup. 3.3 GB on disk
+across 10 files; 43.5M total rows.
+
+Schema (shared across files): `chr, hg19_pos, grch38_pos, ref, alt, aaref, aaalt, REVEL, Ensembl_transcriptid`
+
+Same (chr, pos, ref, alt) appears multiple times — once per Ensembl
+transcript context. Use `dplyr::distinct(chr, grch38_pos, ref, alt, REVEL)`
+when consolidating, or pick the MANE Select transcript via Ensembl lookup.
+
+Per-chrom row counts:
+  chr1: 8.5M | chr3: 4.8M | chr7: 3.8M | chr10: 3.3M | chr11: 4.9M
+  chr12: 4.4M | chr13: 1.4M | chr14: 2.7M | chr17: 4.5M | chr19: 5.2M
+
+Recommended load pattern in R:
+```r
+library(data.table)
+revel_chr <- fread("analyses/raw/revel/by_chrom/chr_17.csv")
+setkey(revel_chr, grch38_pos, ref, alt)
+# instant lookups by binary search; ~150 MB per chrom in memory
 ```
-Build a tabix-indexed or per-chrom split for fast lookup:
-- Option: use `data.table::fread` for the 14 chromosomes that touch our universe (chr 1, 7, 11, 12, 13, 15, 17, 19 hold our 14 BENCHMARK_GENES). Reduces in-memory load to ~1-2 GB.
-- Or: `tabix` index on bgzipped TSV → instant range queries by genomic coord.
 
 ### 2. Build `analyses/lib/local_predictors.R`  *(~1h)*
 
