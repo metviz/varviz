@@ -36,6 +36,7 @@ cat(sprintf("[harness] Sourced server.R in %.1f sec\n",
             as.numeric(Sys.time() - t0, units = "secs")))
 
 source("analyses/lib/clinvar_blind.R")
+source("analyses/lib/local_predictors.R")
 
 UNIVERSE_IN    <- "analyses/derived/variant_universe_gnomad.tsv"
 CHECKPOINT_DIR <- "analyses/classifications"
@@ -84,6 +85,137 @@ classify_gene <- function(gene_name) {
   afs_d <- if (file.exists(afs_dest)) {
     tryCatch(data.table::fread(afs_dest), error = function(e) NULL)
   } else NULL
+
+  # ---------------------------------------------------------------------------
+  # Local-prediction pre-loads + fetch_dbnsfp() monkey-patch (Option C Task 4)
+  #
+  # Replaces per-variant MyVariant->dbNSFP API calls (~1.5s each) with three
+  # in-memory caches loaded once per gene:
+  #   - REVEL bulk (per-chrom CSV, ~150 MB) for ensemble$REVEL$score
+  #   - AlphaMissense per-UID CSV for pathogenicity$AlphaMissense${score,pred}
+  #   - UCSC PhyloP/PhastCons (cached per gene by fetch_conservation_scores)
+  #     for conservation$PhyloP_100V / PhastCons_100V / PhyloP_470M
+  #
+  # The patched fetch_dbnsfp synthesizes a dbnsfp-shaped list when ANY local
+  # source hits; otherwise it defers to the remote (saved as
+  # fetch_dbnsfp_remote). on.exit restores the original binding so the patch
+  # is scoped to this classify_gene() call.
+  # ---------------------------------------------------------------------------
+  exon_df_local <- tryCatch(fetch_ensembl_exons(gene_name), error = function(e) NULL)
+  chrom_for_gene <- if (!is.null(exon_df_local) && nrow(exon_df_local) > 0) {
+    as.character(exon_df_local$chr[1])
+  } else NA_character_
+
+  revel_dt_local <- if (!is.na(chrom_for_gene)) {
+    tryCatch(load_revel_for_chrom(chrom_for_gene), error = function(e) NULL)
+  } else NULL
+
+  am_dt_local <- tryCatch(load_alphamissense_csv(uid), error = function(e) NULL)
+
+  # Protein length: prefer AM CSV max position, fall back to universe max.
+  prot_length_for_gene <- if (!is.null(am_dt_local) && nrow(am_dt_local) > 0) {
+    suppressWarnings(max(as.integer(sub("^[A-Z*]([0-9]+).*$", "\\1",
+                                        am_dt_local$protein_variant)),
+                         na.rm = TRUE))
+  } else {
+    universe_pos <- extract_pos(universe$p_notation[universe$gene == gene_name])
+    if (length(universe_pos) > 0L) max(universe_pos, na.rm = TRUE) else NA_integer_
+  }
+
+  ucsc_cons_df_local <- if (is.finite(prot_length_for_gene) && prot_length_for_gene > 0) {
+    tryCatch(fetch_conservation_scores(gene_name, prot_length_for_gene),
+             error = function(e) NULL)
+  } else NULL
+
+  # Hash UCSC conservation by aa_pos for O(1) per-variant lookup.
+  ucsc_cons_env <- new.env(hash = TRUE, parent = emptyenv())
+  if (!is.null(ucsc_cons_df_local) && nrow(ucsc_cons_df_local) > 0 &&
+      "phylop100_raw" %in% colnames(ucsc_cons_df_local)) {
+    for (i in seq_len(nrow(ucsc_cons_df_local))) {
+      assign(as.character(ucsc_cons_df_local$aa_pos[i]),
+             list(PhyloP_100V    = ucsc_cons_df_local$phylop100_raw[i],
+                  PhyloP_470M    = ucsc_cons_df_local$phylop470_raw[i],
+                  PhastCons_100V = ucsc_cons_df_local$phastcons_raw[i]),
+             envir = ucsc_cons_env)
+    }
+  }
+
+  cat(sprintf("    [%s] local caches: REVEL=%s, AM=%s, UCSC=%d aa\n",
+              gene_name,
+              if (!is.null(revel_dt_local))
+                sprintf("chr%s/%.1fM", chrom_for_gene, nrow(revel_dt_local) / 1e6)
+              else "NA",
+              if (!is.null(am_dt_local)) sprintf("%d", nrow(am_dt_local)) else "NA",
+              length(ls(ucsc_cons_env))))
+
+  fetch_dbnsfp_remote <- get("fetch_dbnsfp", envir = globalenv())
+  patched_fetch_dbnsfp <- function(gn, hgvsp) {
+    aa_pos_int <- suppressWarnings(as.integer(sub("^p\\.[A-Z*]([0-9]+).*$", "\\1", hgvsp)))
+    alt_aa_chr <- sub("^p\\.[A-Z*][0-9]+([A-Z*])$", "\\1", hgvsp)
+    if (!nzchar(alt_aa_chr) || identical(alt_aa_chr, hgvsp)) alt_aa_chr <- NA_character_
+
+    revel_score <- NA_real_
+    if (!is.null(revel_dt_local) && !is.null(exon_df_local) &&
+        !is.na(aa_pos_int) && !is.na(alt_aa_chr)) {
+      gpos <- tryCatch(aa_to_genomic(aa_pos_int, exon_df_local),
+                       error = function(e) NA_integer_)
+      if (!is.na(gpos)) {
+        strand <- exon_df_local$strand[1]
+        cps <- if (isTRUE(strand == 1)) c(gpos, gpos + 1L, gpos + 2L)
+                                         else c(gpos, gpos - 1L, gpos - 2L)
+        revel_score <- tryCatch(
+          lookup_revel_by_aa(revel_dt_local, chrom_for_gene, cps, alt_aa_chr),
+          error = function(e) NA_real_
+        )
+      }
+    }
+
+    am_result <- if (!is.null(am_dt_local)) lookup_alphamissense(am_dt_local, hgvsp)
+                 else list(score = NA_real_, class = NA_character_)
+
+    cons <- list(PhyloP_100V = NA_real_, PhastCons_100V = NA_real_,
+                 GERP_RS = NA_real_, PhyloP_470M = NA_real_)
+    if (!is.na(aa_pos_int)) {
+      k <- as.character(aa_pos_int)
+      if (exists(k, envir = ucsc_cons_env, inherits = FALSE)) {
+        hit <- get(k, envir = ucsc_cons_env, inherits = FALSE)
+        cons$PhyloP_100V    <- hit$PhyloP_100V
+        cons$PhastCons_100V <- hit$PhastCons_100V
+        cons$PhyloP_470M    <- hit$PhyloP_470M
+        # GERP_RS stays NA — UCSC tracks don't expose GERP. PM1_strong logic
+        # has 4 other conservation gates so this is a tolerable miss.
+      }
+    }
+
+    any_local <- !is.na(revel_score) || !is.na(am_result$score) ||
+                 !is.na(cons$PhyloP_100V) || !is.na(cons$PhastCons_100V) ||
+                 !is.na(cons$PhyloP_470M)
+    if (!any_local) return(fetch_dbnsfp_remote(gn, hgvsp))
+
+    # Return RAW MyVariant.info shape — parse_dbnsfp_scores() (server.R:2507)
+    # consumes hit$dbnsfp via safe_extract_num(d, "<key>", "<sub>", "score") and
+    # converts to the structured shape that build_variant_table() reads. Synthesizing
+    # the parsed shape directly would bypass parse_dbnsfp_scores and break the rest
+    # of the pipeline (verdict fields, classify_pred wrappers, etc.).
+    list(
+      dbnsfp = list(
+        revel         = list(score = revel_score),
+        alphamissense = list(am_pathogenicity = am_result$score,
+                             am_class         = am_result$class),
+        phylop = list(
+          `100way_vertebrate`  = list(score = cons$PhyloP_100V),
+          `470way_mammalian`   = list(score = cons$PhyloP_470M)
+        ),
+        phastcons = list(
+          `100way_vertebrate` = list(score = cons$PhastCons_100V)
+        )
+        # gerp++ omitted — UCSC tracks don't expose it; safe_extract returns NA.
+      )
+    )
+  }
+
+  assign("fetch_dbnsfp", patched_fetch_dbnsfp, envir = globalenv())
+  on.exit(assign("fetch_dbnsfp", fetch_dbnsfp_remote, envir = globalenv()), add = TRUE)
 
   # Build highlight_df for this gene's universe variants
   rows <- universe[universe$gene == gene_name, ]
