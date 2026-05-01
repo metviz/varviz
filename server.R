@@ -4523,6 +4523,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # Note: broad topological labels (cytoplasmic loop, extracellular segment) are excluded
     # from Path 3 by domain_is_structural() whitelist. Paths 1 and 2 bypass domain entirely
     # since CCRS is annotation-agnostic.
+    cons_used_for_pm1 <- FALSE  # init outside !bs1_fires so PP3 logic at L4863/4868 always sees it
     if (!bs1_fires) {
       cs_grade_num  <- { cg <- suppressWarnings(as.integer(consurf_grade));  if (length(cg)==0||is.na(cg[1])) NA_integer_ else cg[1] }
       phylop_v      <- { pv <- if (dbnsfp$has_data) dbnsfp$conservation$PhyloP_100V    else NA_real_; if (is.null(pv)||length(pv)==0) NA_real_ else suppressWarnings(as.numeric(pv[1])) }

@@ -40,3 +40,4 @@ analyses/reports/
 # harness (one per UniProt accession; tens of thousands of rows each).
 # Regeneratable from https://alphafold.ebi.ac.uk/files/AF-<UID>-F1-aa-substitutions.csv
 [A-Z][0-9]*-F1-aa-substitutions.csv
+server.R.bak.*
