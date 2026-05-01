@@ -95,3 +95,42 @@ test_that("lookup_revel errors when called with the wrong chromosome", {
   rev <- load_revel_for_chrom("17", revel_dir = revel_dir)
   expect_error(lookup_revel(rev, "10", 156220L, "G", "A"), "chromosome")
 })
+
+# ---------------------------------------------------------------------------
+# lookup_revel_by_aa — codon-positions + alt_aa filter for missense lookups
+# ---------------------------------------------------------------------------
+
+# Fixture: chr17:156220 G>A produces aaref=T, aaalt=M with REVEL=0.073.
+# The codon spans positions 156220..156222 on the plus strand at that locus.
+
+test_that("lookup_revel_by_aa finds REVEL for codon positions + alt_aa", {
+  skip_if_not(file.exists(revel_chr17_path), "REVEL bulk data not on disk")
+  rev <- load_revel_for_chrom("17", revel_dir = revel_dir)
+  out <- lookup_revel_by_aa(rev, "17", c(156220L, 156221L, 156222L), "M")
+  expect_equal(out, 0.073)
+  expect_type(out, "double")
+})
+
+test_that("lookup_revel_by_aa returns NA when no row matches alt_aa", {
+  skip_if_not(file.exists(revel_chr17_path), "REVEL bulk data not on disk")
+  rev <- load_revel_for_chrom("17", revel_dir = revel_dir)
+  out <- lookup_revel_by_aa(rev, "17", c(156220L, 156221L, 156222L), "Z")
+  expect_true(is.na(out))
+  expect_type(out, "double")
+})
+
+test_that("lookup_revel_by_aa returns NA for empty / all-NA codon_positions", {
+  skip_if_not(file.exists(revel_chr17_path), "REVEL bulk data not on disk")
+  rev <- load_revel_for_chrom("17", revel_dir = revel_dir)
+  expect_true(is.na(lookup_revel_by_aa(rev, "17", integer(0), "M")))
+  expect_true(is.na(lookup_revel_by_aa(rev, "17", c(NA_integer_, NA_integer_), "M")))
+})
+
+test_that("lookup_revel_by_aa errors when called with the wrong chromosome", {
+  skip_if_not(file.exists(revel_chr17_path), "REVEL bulk data not on disk")
+  rev <- load_revel_for_chrom("17", revel_dir = revel_dir)
+  expect_error(
+    lookup_revel_by_aa(rev, "10", c(156220L, 156221L, 156222L), "M"),
+    "chromosome"
+  )
+})
