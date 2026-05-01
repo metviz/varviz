@@ -76,3 +76,23 @@ lookup_revel <- function(revel_dt, chrom, pos, ref, alt) {
   if (nrow(hit) == 0L || is.na(hit$REVEL[1])) return(NA_real_)
   as.numeric(hit$REVEL[1])
 }
+
+# Find REVEL for a missense at amino-acid position whose codon spans
+# `codon_positions` (3 ints — caller computes via aa_to_genomic + strand).
+# Filters by the protein-level alt amino acid (REVEL row's `aaalt`), so the
+# caller does not need to reverse-translate or know the genomic ref nucleotide.
+# When several rows match (rare — different alt nucleotides encoding the same
+# amino acid), returns the median REVEL.
+lookup_revel_by_aa <- function(revel_dt, chrom, codon_positions, alt_aa) {
+  dt_chrom <- attr(revel_dt, "revel_chrom")
+  if (!is.null(dt_chrom) && as.character(chrom) != dt_chrom) {
+    stop(sprintf("revel_dt is for chromosome %s but lookup requested %s",
+                 dt_chrom, chrom), call. = FALSE)
+  }
+  pos_int <- suppressWarnings(as.integer(codon_positions))
+  pos_int <- pos_int[!is.na(pos_int)]
+  if (length(pos_int) == 0L) return(NA_real_)
+  hits <- revel_dt[grch38_pos %in% pos_int & aaalt == as.character(alt_aa)]
+  if (nrow(hits) == 0L) return(NA_real_)
+  as.numeric(stats::median(hits$REVEL, na.rm = TRUE))
+}
