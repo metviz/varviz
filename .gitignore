@@ -34,6 +34,7 @@ analyses/derived/
 analyses/classifications/
 analyses/figures/
 analyses/reports/
+analyses/tmp/
 # Keep tracked: analyses/*.R, analyses/lib/*.R, analyses/manifests/*.json
 
 # AlphaMissense per-substitution CSVs cached at the project root by the
