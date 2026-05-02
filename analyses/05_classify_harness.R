@@ -87,19 +87,22 @@ classify_gene <- function(gene_name) {
   } else NULL
 
   # ---------------------------------------------------------------------------
-  # Local-prediction pre-loads + fetch_dbnsfp() monkey-patch (Option C Task 4)
+  # Local-prediction pre-loads + fetch_dbnsfp() monkey-patch
   #
-  # Replaces per-variant MyVariant->dbNSFP API calls (~1.5s each) with three
-  # in-memory caches loaded once per gene:
-  #   - REVEL bulk (per-chrom CSV, ~150 MB) for ensemble$REVEL$score
-  #   - AlphaMissense per-UID CSV for pathogenicity$AlphaMissense${score,pred}
-  #   - UCSC PhyloP/PhastCons (cached per gene by fetch_conservation_scores)
-  #     for conservation$PhyloP_100V / PhastCons_100V / PhyloP_470M
+  # PRIMARY: single-source local dbNSFP 4.9a (analyses/tmp/...custombuild.bgz,
+  # tabix-indexed). One per-gene tabix call; protein-key index resolves hgvsp
+  # directly. Full predictor parity with the live app's MyVariant->dbNSFP path
+  # (SIFT, PP2 HDIV/HVAR, LRT, MutationTaster, FATHMM, PROVEAN, MetaSVM/LR/RNN,
+  # CADD, DANN, GERP_RS/NR, PhyloP/PhastCons multi-way + REVEL + AlphaMissense).
   #
-  # The patched fetch_dbnsfp synthesizes a dbnsfp-shaped list when ANY local
-  # source hits; otherwise it defers to the remote (saved as
-  # fetch_dbnsfp_remote). on.exit restores the original binding so the patch
-  # is scoped to this classify_gene() call.
+  # FALLBACK: legacy REVEL+AM+UCSC synthesis preserved for graceful degradation
+  # when dbNSFP misses a variant. UCSC fetch is the slow link (per-gene API
+  # call); kept warm so the fallback works without cold-cache hits.
+  #
+  # The patched fetch_dbnsfp returns the dbNSFP hit when found; otherwise
+  # synthesizes from REVEL+AM+UCSC; otherwise defers to the remote MyVariant
+  # call (saved as fetch_dbnsfp_remote). on.exit restores the original binding
+  # so the patch is scoped to this classify_gene() call.
   # ---------------------------------------------------------------------------
   exon_df_local <- tryCatch(fetch_ensembl_exons(gene_name), error = function(e) NULL)
   chrom_for_gene <- if (!is.null(exon_df_local) && nrow(exon_df_local) > 0) {
@@ -111,6 +114,20 @@ classify_gene <- function(gene_name) {
   } else NULL
 
   am_dt_local <- tryCatch(load_alphamissense_csv(uid), error = function(e) NULL)
+
+  # dbNSFP 4.9a single-source pre-load (preferred path; covers SIFT, PP2,
+  # MetaSVM/LR/RNN, CADD, DANN, GERP_RS, plus REVEL/AM/PhyloP/PhastCons —
+  # full predictor parity with the live VarViz app via MyVariant->dbNSFP).
+  # Per-gene region pulled by tabix once. The protein-key index built inside
+  # load_dbnsfp_for_region lets the patched fetch_dbnsfp resolve hgvsp
+  # directly without aa->genomic translation.
+  dbnsfp_env_local <- if (!is.na(chrom_for_gene) && !is.null(exon_df_local) &&
+                          nrow(exon_df_local) > 0L) {
+    g_start <- min(exon_df_local$genomic_start, na.rm = TRUE)
+    g_end   <- max(exon_df_local$genomic_end,   na.rm = TRUE)
+    tryCatch(load_dbnsfp_for_region(chrom_for_gene, g_start, g_end),
+             error = function(e) NULL)
+  } else NULL
 
   # Protein length: prefer AM CSV max position, fall back to universe max.
   prot_length_for_gene <- if (!is.null(am_dt_local) && nrow(am_dt_local) > 0) {
@@ -140,8 +157,11 @@ classify_gene <- function(gene_name) {
     }
   }
 
-  cat(sprintf("    [%s] local caches: REVEL=%s, AM=%s, UCSC=%d aa\n",
+  cat(sprintf("    [%s] local caches: dbNSFP=%s, REVEL=%s, AM=%s, UCSC=%d aa\n",
               gene_name,
+              if (!is.null(dbnsfp_env_local))
+                sprintf("%d rows", length(ls(dbnsfp_env_local)))
+              else "NA",
               if (!is.null(revel_dt_local))
                 sprintf("chr%s/%.1fM", chrom_for_gene, nrow(revel_dt_local) / 1e6)
               else "NA",
@@ -154,6 +174,22 @@ classify_gene <- function(gene_name) {
     alt_aa_chr <- sub("^p\\.[A-Z*][0-9]+([A-Z*])$", "\\1", hgvsp)
     if (!nzchar(alt_aa_chr) || identical(alt_aa_chr, hgvsp)) alt_aa_chr <- NA_character_
 
+    # PRIMARY PATH: single-source dbNSFP 4.9a lookup. Returns the full raw
+    # MyVariant-shaped hit (all 458 dbNSFP cols → SIFT, PP2 HDIV/HVAR, LRT,
+    # MutationTaster, FATHMM, PROVEAN, MetaSVM/LR/RNN, REVEL, AlphaMissense,
+    # CADD, DANN, GERP_RS/NR, PhyloP/PhastCons multi-way). Apples-to-apples
+    # with the live app's MyVariant→dbNSFP path.
+    if (!is.null(dbnsfp_env_local) && !is.na(aa_pos_int) && !is.na(alt_aa_chr)) {
+      hit <- tryCatch(
+        lookup_dbnsfp_by_aa(dbnsfp_env_local, chrom_for_gene, aa_pos_int, alt_aa_chr),
+        error = function(e) NULL
+      )
+      if (!is.null(hit)) return(hit)
+    }
+
+    # FALLBACK PATH: legacy REVEL+AM+UCSC synthesis (kept for graceful
+    # degradation when dbNSFP missed a variant — e.g. region-edge cases or
+    # variants outside the pre-loaded window).
     revel_score <- NA_real_
     if (!is.null(revel_dt_local) && !is.null(exon_df_local) &&
         !is.na(aa_pos_int) && !is.na(alt_aa_chr)) {
