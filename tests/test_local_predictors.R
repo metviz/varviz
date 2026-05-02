@@ -134,3 +134,83 @@ test_that("lookup_revel_by_aa errors when called with the wrong chromosome", {
     "chromosome"
   )
 })
+
+# ---------------------------------------------------------------------------
+# dbNSFP 4.9a single-source lookup (~40 GB bgzipped — skip if not built)
+#
+# Fixture: BAP1 p.Q280K — chr3:52405858 G>T (NM_004656.4 / NC_000003.12).
+# Expected per-tool values cross-checked against the live VarViz app's
+# TSV download for the same variant (rs746045584). Because dbNSFP and
+# MyVariant.info both source from dbNSFP, the values should match to
+# the precision dbNSFP stores them.
+# ---------------------------------------------------------------------------
+
+dbnsfp_path <- resolve("analyses/tmp/dbNSFPv4.9a_hg38_custombuild.bgz")
+
+test_that("load_dbnsfp_for_region returns NULL for nonexistent file", {
+  expect_null(load_dbnsfp_for_region("3", 1L, 100L, dbnsfp_path = "/nonexistent.bgz"))
+})
+
+test_that("load_dbnsfp_for_region pulls BAP1 region and hashes by (pos,ref,alt)", {
+  skip_if_not(file.exists(dbnsfp_path), "dbNSFP build not on disk yet")
+  env <- load_dbnsfp_for_region("3", 52401000L, 52410000L, dbnsfp_path = dbnsfp_path)
+  expect_true(is.environment(env))
+  expect_gt(length(ls(env)), 0L)
+  expect_equal(attr(env, "dbnsfp_chrom"), "3")
+})
+
+test_that("lookup_dbnsfp_local returns parse_dbnsfp_scores-shaped list for BAP1 p.Q280K", {
+  skip_if_not(file.exists(dbnsfp_path), "dbNSFP build not on disk yet")
+  env <- load_dbnsfp_for_region("3", 52401000L, 52410000L, dbnsfp_path = dbnsfp_path)
+  hit <- lookup_dbnsfp_local(env, "3", 52405858L, "G", "T")
+  expect_type(hit, "list")
+  expect_named(hit, "dbnsfp")
+  d <- hit$dbnsfp
+  # Values from dbNSFP 4.9a (Aug 2024). The live app's TSV uses MyVariant.info
+  # which caches an older dbNSFP; CADD shifted from 17.77 (old) -> 21.9 (4.9a).
+  # REVEL/AM/PhyloP/PhastCons match the live app to dbNSFP precision.
+  expect_equal(d$revel$score,                    0.190, tolerance = 0.005)
+  expect_equal(d$alphamissense$am_pathogenicity, 0.1204, tolerance = 0.005)
+  expect_equal(d$alphamissense$am_class,         "B")
+  expect_equal(d$cadd$phred,                     21.9,  tolerance = 0.05)
+  expect_equal(d$dann$score,                     0.978, tolerance = 0.005)
+  # Four predictors that were NA under the REVEL+AM+UCSC monkey-patch are
+  # now populated — this is the apples-to-apples-with-live-app win.
+  expect_equal(d$sift$score,                     0.086, tolerance = 0.005)
+  expect_equal(d$polyphen2$hdiv$score,           0.008, tolerance = 0.005)
+  expect_equal(d$metasvm$score,                  -0.894, tolerance = 0.005)
+  expect_equal(d$`gerp++`$rs,                    5.35,  tolerance = 0.05)
+  expect_equal(d$phylop$`100way_vertebrate`$score,    5.454, tolerance = 0.005)
+  expect_equal(d$phylop$`470way_mammalian`$score,    11.827, tolerance = 0.005)
+  expect_equal(d$phastcons$`100way_vertebrate`$score, 1.000, tolerance = 0.005)
+})
+
+test_that("lookup_dbnsfp_local returns NULL for absent (pos,ref,alt)", {
+  skip_if_not(file.exists(dbnsfp_path), "dbNSFP build not on disk yet")
+  env <- load_dbnsfp_for_region("3", 52401000L, 52410000L, dbnsfp_path = dbnsfp_path)
+  expect_null(lookup_dbnsfp_local(env, "3", 52405858L, "G", "Z"))  # bogus alt
+  expect_null(lookup_dbnsfp_local(env, "3", 1L, "A", "T"))         # outside region
+})
+
+test_that("lookup_dbnsfp_local rejects cross-chrom queries silently", {
+  skip_if_not(file.exists(dbnsfp_path), "dbNSFP build not on disk yet")
+  env <- load_dbnsfp_for_region("3", 52401000L, 52410000L, dbnsfp_path = dbnsfp_path)
+  expect_null(lookup_dbnsfp_local(env, "17", 52405858L, "G", "T"))
+})
+
+test_that("lookup_dbnsfp_by_aa resolves BAP1 p.Q280K via protein key", {
+  skip_if_not(file.exists(dbnsfp_path), "dbNSFP build not on disk yet")
+  env <- load_dbnsfp_for_region("3", 52401000L, 52410000L, dbnsfp_path = dbnsfp_path)
+  hit <- lookup_dbnsfp_by_aa(env, "3", 280L, "K")
+  expect_type(hit, "list")
+  expect_named(hit, "dbnsfp")
+  # Same fixture values — protein-key path should find the same row
+  expect_equal(hit$dbnsfp$revel$score,                   0.19, tolerance = 0.02)
+  expect_equal(hit$dbnsfp$alphamissense$am_pathogenicity, 0.12, tolerance = 0.02)
+})
+
+test_that("lookup_dbnsfp_by_aa returns NULL for missing aa change", {
+  skip_if_not(file.exists(dbnsfp_path), "dbNSFP build not on disk yet")
+  env <- load_dbnsfp_for_region("3", 52401000L, 52410000L, dbnsfp_path = dbnsfp_path)
+  expect_null(lookup_dbnsfp_by_aa(env, "3", 280L, "Z"))
+})
