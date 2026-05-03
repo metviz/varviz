@@ -139,8 +139,7 @@ if (nrow(summary_df) > 0) {
     facet_wrap(~ gene + study, ncol = 4, labeller = label_both) +
     scale_fill_manual(values = c("LOF" = "#ef4444", "Partial" = "#f59e0b", "WT-like" = "#10b981")) +
     scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1.10)) +
-    labs(title    = "Panel B - VarViz Pathogenic call rate by MaveDB DMS bin",
-         subtitle = subtitle,
+    labs(title = NULL, subtitle = NULL,
          x        = "DMS bin (per-study quartile split)",
          y        = "VarViz P / LP (%)") +
     theme_minimal(base_size = 11) +
@@ -150,6 +149,7 @@ if (nrow(summary_df) > 0) {
   n_studies <- n_distinct(summary_df$study)
   fig_h <- min(14, 2 + 1.6 * ceiling(n_studies / 4))
   ggsave(FIG_OUT, p, width = 14, height = fig_h, units = "in", limitsize = FALSE)
+  ggsave(sub("\\.pdf$", ".png", FIG_OUT), p, width = 14, height = fig_h, units = "in", dpi = 300, limitsize = FALSE)
 } else {
   cat("[panel_b] No MaveDB rows in classifications yet — skipping figure.\n")
 }

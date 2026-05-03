@@ -116,14 +116,14 @@ p <- ggplot(cm_long, aes(Truth, VarViz, fill = Freq)) +
   geom_text(aes(label = Freq), size = 5) +
   scale_fill_gradient(low = "#f1f5f9", high = "#003f5c") +
   facet_wrap(~ pass, ncol = 2) +
-  labs(title = "Panel A — VariBench clinical concordance (dual-pass)",
-       subtitle = subtitle, x = "VariBench truth", y = "VarViz call") +
+  labs(title = NULL, subtitle = NULL, x = "VariBench truth", y = "VarViz call") +
   theme_minimal(base_size = 13) +
   theme(legend.position = "none",
         panel.grid = element_blank(),
         strip.text = element_text(face = "bold"))
 
 ggsave(FIG_OUT, p, width = 10, height = 5, units = "in")
+ggsave(sub("\\.pdf$", ".png", FIG_OUT), p, width = 10, height = 5, units = "in", dpi = 300)
 
 # HTML companion report
 htmltools::save_html(
