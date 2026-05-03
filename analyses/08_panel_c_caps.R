@@ -150,10 +150,7 @@ p <- ggplot(both, aes(bin, caps, fill = bin)) +
     "Likely Pathogenic" = "#f43f5e",
     "Pathogenic"        = "#dc2626"
   )) +
-  labs(title = "Panel C - CAPS by VarViz classification bin (gnomAD-present)",
-       subtitle = sprintf(
-         "Pooled baseline singleton fraction: %.3f | Pass-Full rho=%.3f (N=%d) | Pass-Blind rho=%.3f (N=%d)",
-         baseline %||% NA, rho_full %||% NA, n_total_full, rho_blind %||% NA, n_total_blind),
+  labs(title = NULL, subtitle = NULL,
        x = "VarViz classification (Benign -> Pathogenic)",
        y = "CAPS = (observed - baseline) / baseline") +
   theme_minimal(base_size = 11) +
@@ -162,6 +159,7 @@ p <- ggplot(both, aes(bin, caps, fill = bin)) +
         strip.text = element_text(face = "bold"))
 
 ggsave(FIG_OUT, p, width = 11, height = 5, units = "in")
+ggsave(sub("\\.pdf$", ".png", FIG_OUT), p, width = 11, height = 5, units = "in", dpi = 300)
 
 htmltools::save_html(
   htmltools::tagList(
