@@ -26,6 +26,12 @@ theme_set(theme_cowplot(font_size=12))
 # typography.R so they can be unit-tested without sourcing the full server.
 source("typography.R", local = FALSE)
 
+# DOLPHIN (Pfam-based PM1 pathway, Corcuff et al. 2023). Optional 4th PM1
+# pathway alongside the existing CCRS, UniProt domain, and ClinVar hotspot
+# pathways. Fails open: any network/parse error → no PM1 firing, no impact
+# on the rest of the engine. Adds at most one HTTP call per analysed variant.
+source("analyses/lib/dolphin.R", local = FALSE)
+
 theme_vv <- function() {
   theme(
     text         = element_text(family = "Helvetica"),
@@ -4565,6 +4571,32 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         # Path 3b: specific domain, not strongly conserved — PM1 supporting
         acmg_tags <- c(acmg_tags, "PM1")
         pm1_pathway_val <- "uniprot_domain"
+      }
+
+      # Path 4 — DOLPHIN Pfam alignment (Corcuff et al. 2023, Front. Bioinform.
+      # 3:1127341). Last-resort PM1 pathway: only consulted when no other path
+      # fired. Strictly orthogonal to gnomAD allele frequency (the API also
+      # returns Dolphin_AF / GnomAD_AF, which we deliberately ignore) and to
+      # ClinVar-derived clinical evidence. Disabled by setting
+      # options(varviz.dolphin_pm1 = FALSE) — used by the dual-pass benchmark
+      # harness to avoid the 60 req/min DOLPHIN rate limit at 90k-variant scale.
+      if (pm1_pathway_val == "" &&
+          isTRUE(getOption("varviz.dolphin_pm1", TRUE))) {
+        dolphin_hit <- tryCatch(
+          dolphin_pm1_call(gene = gene_name_for_api, p_notation = mut,
+                           timeout_s = 8),
+          error = function(e) {
+            message("[PM1] DOLPHIN call failed for ", gene_name_for_api,
+                    " ", mut, ": ", e$message)
+            FALSE
+          }
+        )
+        if (isTRUE(dolphin_hit)) {
+          acmg_tags <- c(acmg_tags, "PM1")
+          pm1_pathway_val <- "dolphin"
+          message("[PM1] DOLPHIN Pfam alignment fires PM1 for ",
+                  gene_name_for_api, " ", mut)
+        }
       }
     }
 
