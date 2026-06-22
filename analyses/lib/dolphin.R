@@ -110,17 +110,19 @@ dolphin_canonical_enst <- function(gene_symbol, timeout_s = 20) {
     )
     resp <- httr::GET(url, httr::timeout(timeout_s),
                       httr::add_headers(Accept = "application/json"))
-    if (httr::status_code(resp) != 200) {
-      message("[DOLPHIN] Ensembl lookup HTTP ", httr::status_code(resp),
-              " for ", gene_symbol)
-      return(NA)
+    sc <- httr::status_code(resp)
+    if (sc != 200) {
+      message("[DOLPHIN] Ensembl lookup HTTP ", sc, " for ", gene_symbol)
+      stop(paste0("HTTP ", sc))
     }
     gene_json <- jsonlite::fromJSON(
       httr::content(resp, "text", encoding = "UTF-8"),
       simplifyVector = FALSE
     )
     transcripts <- gene_json$Transcript
-    if (is.null(transcripts) || length(transcripts) == 0) return(NA)
+    if (is.null(transcripts) || length(transcripts) == 0) {
+      stop("no transcripts")
+    }
 
     canon_tx <- NULL
     for (tx in transcripts) {
@@ -135,10 +137,11 @@ dolphin_canonical_enst <- function(gene_symbol, timeout_s = 20) {
       }, integer(1))
       canon_tx <- transcripts[[which.max(cds_lengths)]]
     }
-    if (is.null(canon_tx) || is.null(canon_tx$id)) return(NA)
+    if (is.null(canon_tx) || is.null(canon_tx$id)) stop("no canonical id")
     canon_tx$id
   }, error = function(e) {
-    message("[DOLPHIN] Ensembl lookup error for ", gene_symbol, ": ", e$message)
+    message("[DOLPHIN] Ensembl lookup error for ", gene_symbol, ": ",
+            conditionMessage(e))
     NA
   })
 
@@ -182,21 +185,50 @@ fetch_dolphin <- function(gene = NULL, p_notation, ensembl = NULL,
     "&frequencies=1"
   )
 
-  result <- tryCatch({
-    resp <- httr::GET(url, httr::timeout(timeout_s),
-                      httr::add_headers(Accept = "application/json"))
-    sc <- httr::status_code(resp)
-    if (sc != 200) {
-      message("[DOLPHIN] HTTP ", sc, " for ", ensembl, " ", variation_1)
-      return(NA)
-    }
-    txt <- httr::content(resp, "text", encoding = "UTF-8")
-    if (nchar(txt) == 0) return(NA)
-    jsonlite::fromJSON(txt, simplifyVector = FALSE)
-  }, error = function(e) {
-    message("[DOLPHIN] Error for ", ensembl, " ", variation_1, ": ", e$message)
-    NA
-  })
+  # Retry loop for transient errors (HTTP 429 rate-limit, 5xx, network).
+  # On 429, sleep one full rate window (65 s) before retry. Max 2 retries.
+  max_retries <- 2
+  attempt <- 0
+  result <- NA
+  repeat {
+    attempt <- attempt + 1
+    result <- tryCatch({
+      resp <- httr::GET(url, httr::timeout(timeout_s),
+                        httr::add_headers(Accept = "application/json"))
+      sc <- httr::status_code(resp)
+      if (sc == 429) {
+        stop(structure(list(message = "HTTP 429 rate-limited",
+                            call = sys.call(), retry_after = 65L),
+                       class = c("dolphin_429", "error", "condition")))
+      }
+      if (sc >= 500 && sc < 600) {
+        stop(paste0("HTTP ", sc, " server error"))
+      }
+      if (sc != 200) {
+        message("[DOLPHIN] HTTP ", sc, " for ", ensembl, " ", variation_1)
+        stop(paste0("HTTP ", sc))
+      }
+      txt <- httr::content(resp, "text", encoding = "UTF-8")
+      if (nchar(txt) == 0) stop("empty body")
+      jsonlite::fromJSON(txt, simplifyVector = FALSE)
+    }, dolphin_429 = function(e) {
+      if (attempt > max_retries) {
+        message("[DOLPHIN] 429 retry budget exhausted for ", ensembl,
+                " ", variation_1)
+        return(NA)
+      }
+      message("[DOLPHIN] HTTP 429 backoff ", e$retry_after,
+              "s (attempt ", attempt, "/", max_retries, ") for ",
+              ensembl, " ", variation_1)
+      Sys.sleep(e$retry_after)
+      "RETRY"
+    }, error = function(e) {
+      message("[DOLPHIN] Error for ", ensembl, " ", variation_1, ": ",
+              conditionMessage(e))
+      NA
+    })
+    if (!identical(result, "RETRY")) break
+  }
 
   .dolphin_cache_set(cache_key, result)
   if (identical(result, NA)) return(NULL)
