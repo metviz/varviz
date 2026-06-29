@@ -26,6 +26,29 @@ UNIVERSE_TSV <- "analyses/derived/varviz_classifications.tsv"
 CACHE_DIR    <- "analyses/raw/dolphin/by_gene"
 LOG_PATH     <- "analyses/raw/dolphin/run_log.tsv"
 
+# Hardcoded canonical Ensembl transcript IDs for the 14 benchmark genes.
+# Bypasses Ensembl REST (rest.ensembl.org), which returned HTTP 500 during the
+# first long-running pass and blocked 6 of 13 genes. These ENSTs were captured
+# from successful runs in earlier sessions; they match the canonical / MANE
+# Select transcripts that the live VarViz app resolves via Ensembl.
+GENE_TO_ENST <- c(
+  BAP1     = "ENST00000460680",
+  BRCA1    = "ENST00000357654",
+  CASR     = "ENST00000639785",
+  DDR2     = "ENST00000367921",
+  GCK      = "ENST00000403799",
+  KCNH2    = "ENST00000262186",
+  KCNQ1    = "ENST00000155840",
+  KRAS     = "ENST00000311936",
+  LDLR     = "ENST00000558518",
+  NUDT15   = "ENST00000258662",
+  PTEN     = "ENST00000371953",
+  SLC13A5  = "ENST00000433363",
+  SNCA     = "ENST00000394991",
+  TP53     = "ENST00000269305",
+  TSHR     = "ENST00000298171"
+)
+
 dir.create(CACHE_DIR, recursive = TRUE, showWarnings = FALSE)
 
 # Read the full universe and aggregate variants per gene.
@@ -76,7 +99,10 @@ for (gene in process) {
 
   t_gene <- Sys.time()
   ok <- tryCatch({
+    enst <- GENE_TO_ENST[gene]
+    if (is.na(enst) || nchar(enst) == 0) enst <- NULL  # falls back to Ensembl REST
     df <- fetch_dolphin_gene(gene, vars,
+                              ensembl = enst,
                               cache_dir = CACHE_DIR,
                               rate_sleep_s = 1.5,
                               flush_every = 50,
