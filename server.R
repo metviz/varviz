@@ -1380,7 +1380,9 @@ parse_gnomad_variants <- function(json_parsed) {
   }
   
   
-  map_df(variants, function(v) {
+  if (length(variants) == 0) return(data.frame())
+
+  do.call(rbind, lapply(variants, function(v) {
     hgvsp_fields <- tryCatch({
       parsed <- parse_hgvsp(v$hgvsp)
       if (length(parsed) != 3) c(NA, NA, NA) else parsed
@@ -1417,8 +1419,8 @@ parse_gnomad_variants <- function(json_parsed) {
       af_fin = pop_af(pops, "fin"),
       stringsAsFactors = FALSE
     )
-  })
-}  
+  }))
+}
 
 
 # ── CCRS: Protein-level constraint from CCRStoAAC (Hasenahuer et al., 2022) ──
