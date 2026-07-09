@@ -79,6 +79,7 @@ api_cache$clingen      <- list()  # gene_name -> ClinGen gene validity (classifi
 api_cache$dbnsfp       <- list()  # gene:variant -> dbNSFP MyVariant.info data
 api_cache$consurf      <- list()  # uniprotID -> ConSurf-DB parsed data.frame
 api_cache$ucsc_cons    <- list()  # gene_name -> data.frame of per-AA conservation scores (PhyloP/PhastCons)
+api_cache$orphadata_prev <- list()  # OMIM id -> Orphadata prevalence display string
 
 cache_get <- function(cache_name, key) {
   if (key %in% names(api_cache[[cache_name]])) {
@@ -91,6 +92,87 @@ cache_get <- function(cache_name, key) {
 cache_set <- function(cache_name, key, value) {
   api_cache[[cache_name]][[key]] <- value
   invisible(value)
+}
+
+# --- Orphadata prevalence lookup (OMIM -> ORPHAcode -> prevalence) -----------
+# Enriches the UniProt "Involvement in Disease" table. Best-effort only: any
+# failure, timeout, or missing mapping returns "—" so gene-info never blocks.
+# Two-step chain matches api.orphadata.com/rd-cross-referencing + rd-epidemiology.
+fetch_orphadata_prevalence <- function(omim_id) {
+  omim_id <- trimws(gsub("MIM:", "", as.character(omim_id)))
+  if (length(omim_id) == 0 || is.na(omim_id) || omim_id == "" || omim_id == "—")
+    return("—")
+
+  cached <- cache_get("orphadata_prev", omim_id)
+  if (!is.null(cached)) return(cached)
+
+  result <- tryCatch({
+    r1 <- httr::GET(paste0("https://api.orphadata.com/rd-cross-referencing/omims/", omim_id),
+                    httr::timeout(8), httr::accept("application/json"))
+    if (httr::status_code(r1) != 200) return("—")
+    j1 <- jsonlite::fromJSON(httr::content(r1, "text", encoding = "UTF-8"),
+                             simplifyVector = FALSE)
+    results <- j1$data$results
+    if (is.null(results) || length(results) == 0) return("—")
+
+    # Rank candidate ORPHAcodes: exact-OMIM subtype first (carries prevalence),
+    # then any exact-OMIM match, else remainder.
+    rank_one <- function(x) {
+      refs <- vapply(x$ExternalReference, function(e) {
+        if (!is.null(e$Source) && e$Source == "OMIM") as.character(e$Reference)
+        else NA_character_
+      }, character(1))
+      exact   <- any(refs == omim_id, na.rm = TRUE)
+      subtype <- grepl("subtype", tolower(if (is.null(x$Typology)) "" else x$Typology))
+      if (exact && subtype) 1L else if (exact) 2L else 3L
+    }
+    best  <- results[[which.min(vapply(results, rank_one, integer(1)))]]
+    orpha <- best$ORPHAcode
+    if (is.null(orpha)) return("—")
+
+    r2 <- httr::GET(paste0("https://api.orphadata.com/rd-epidemiology/orphacodes/", orpha),
+                    httr::timeout(8), httr::accept("application/json"))
+    if (httr::status_code(r2) != 200) return("—")
+    j2 <- jsonlite::fromJSON(httr::content(r2, "text", encoding = "UTF-8"),
+                             simplifyVector = FALSE)
+    prev <- j2$data$results$Prevalence
+    if (is.null(prev) || length(prev) == 0) return("—")
+
+    # Collapse to one estimate per geography (prefer point prevalence).
+    by_geo <- list(); geo_order <- character(0)
+    for (p in prev) {
+      cls <- if (is.null(p$PrevalenceClass)) "" else p$PrevalenceClass
+      if (cls == "") next
+      geo <- if (is.null(p$PrevalenceGeographic) || p$PrevalenceGeographic == "")
+               "?" else p$PrevalenceGeographic
+      is_point <- !is.null(p$PrevalenceType) && grepl("point", tolower(p$PrevalenceType))
+      if (is.null(by_geo[[geo]])) geo_order <- c(geo_order, geo)
+      if (is.null(by_geo[[geo]]) || (is_point && !isTRUE(by_geo[[geo]]$point)))
+        by_geo[[geo]] <- list(cls = cls, point = is_point)
+    }
+    if (length(by_geo) == 0) return("—")
+    lbl <- function(g) if (g == "United States") "US" else g
+
+    # If both US and Worldwide are present, show only those two; otherwise
+    # (either missing) show whatever geographies exist, US/Worldwide first.
+    if (!is.null(by_geo[["United States"]]) && !is.null(by_geo[["Worldwide"]])) {
+      return(paste0("US: ", by_geo[["United States"]]$cls,
+                    "; Worldwide: ", by_geo[["Worldwide"]]$cls))
+    }
+    prio        <- c("United States", "Worldwide")
+    ordered_geo <- c(intersect(prio, geo_order), setdiff(geo_order, prio))
+    entries <- vapply(ordered_geo,
+                      function(g) paste0(lbl(g), ": ", by_geo[[g]]$cls), character(1))
+    if (length(entries) > 4)
+      entries <- c(entries[1:4], paste0("+", length(entries) - 4, " more"))
+    paste(entries, collapse = "; ")
+  }, error = function(e) {
+    message("[Orphadata] prevalence lookup failed for OMIM ", omim_id, ": ", e$message)
+    "—"
+  })
+
+  cache_set("orphadata_prev", omim_id, result)
+  result
 }
 #curl.cainfo = "/data/cacert.pem"
 
@@ -312,7 +394,8 @@ extract_gene_info_uniprot <- function(uniprotID, gene_name) {
           }, error = function(e) "—")
           
           data.frame(Disease = d_name, Description = d_desc,
-                     MIM = d_mim, Notes = d_note, stringsAsFactors = FALSE)
+                     MIM = d_mim, Prevalence = fetch_orphadata_prevalence(d_mim),
+                     Notes = d_note, stringsAsFactors = FALSE)
         })
         do.call(rbind, disease_rows)
       } else {
@@ -590,7 +673,7 @@ plot_pLDDT <- function(af, highlight = data.frame(), prot_length = NULL) {
       ggplot2::annotate(geom = "text", x = 0.5, y = 0.5, 
                         label = "AlphaFold pLDDT data not available for this protein", 
                         size = 4.5, color = "#94a3b8", fontface = "italic") +
-      labs(y = "AlphaFold pLDDT") +
+      labs(y = "AlphaFold\npLDDT") +
       theme_bw(base_size = vv_medium) + theme_vv() +
       theme(axis.title.x = element_blank(),
             axis.text = element_blank(), axis.ticks = element_blank(),
@@ -612,7 +695,7 @@ plot_pLDDT <- function(af, highlight = data.frame(), prot_length = NULL) {
     geom_bar(aes(fill = Confidence_Level), stat = "identity", width = 1) +
     scale_fill_manual(values = confidence_colors) +
     geom_hline(yintercept = 50, colour = "#BB0000", linetype = "dashed", alpha = 0.7) +
-    labs(x = "", y = "AlphaFold pLDDT") +
+    labs(x = "", y = "AlphaFold\npLDDT") +
     scale_x_continuous(limits = c(-xmax * 0.01, xmax + xmax * 0.01), expand = c(0,0)) +
     theme_minimal(base_size = vv_medium) +
     theme_vv()
@@ -695,7 +778,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
       ggplot2::annotate(geom = "text", x = 0.5, y = 0.5, 
                         label = "AlphaFold Mean Pathogenicity data not available for this protein", 
                         size = 4.5, color = "#94a3b8", fontface = "italic") +
-      labs(y = "AF Mean Pathogenicity") +
+      labs(y = "AF Mean\nPathogenicity") +
       theme_bw(base_size = vv_medium) + theme_vv() +
       theme(axis.title.x = element_blank(),
             axis.text = element_blank(), axis.ticks = element_blank(),
@@ -724,7 +807,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
     ggplot2::annotate(geom = "text", x = xmax * 0.05, y = 0.17, label = "Benign", color = "gray30", size = 3) +
     ggplot2::annotate(geom = "text", x = xmax * 0.05, y = 0.45, label = "Uncertain", color = "gray30", size = 3) +
     ggplot2::annotate(geom = "text", x = xmax * 0.05, y = 0.78, label = "Pathogenic", color = "gray30", size = 3) +
-    labs(x = "", y = "AF Mean Pathogenicity") +
+    labs(x = "", y = "AF Mean\nPathogenicity") +
     scale_x_continuous(limits = c(-xmax * 0.01, xmax + xmax * 0.01), expand = c(0,0)) +
     theme_minimal(base_size = vv_medium) +
     theme(panel.grid.major.x = element_blank(),
@@ -2776,7 +2859,7 @@ gnomad_freqplot <- function(gene_name, af_cutoff, highlight = data.frame(), prot
     ggplot2::annotate("text", x = prot_length * 0.98, y = af_cutoff, 
              label = paste0("AF cutoff = ", signif(af_cutoff, 3)), 
              hjust = 1, vjust = -0.5, size = 2.5, color = "red") +
-    labs(y = "gnomAD Freq") +
+    labs(y = "gnomAD\nFreq") +
     theme_bw(base_size = vv_medium) +
     theme_vv() +
     theme(axis.title.x = element_blank())
@@ -2821,7 +2904,7 @@ densityplot <- function(gnomad_data,clinvar_data,prot_length,allele_count,highli
   p <- ggplot2::ggplot()
   p <- p + ggplot2::geom_density(data=gnomad_data[gnomad_data$gnomad_allele_count>as.numeric(allele_count),], aes(x=prot_pos),adjust=kde.adjust,fill='blue',alpha = 0.5, color="blue") 
   p <- p + scale_x_continuous(limits = c(-prot_length * 0.01, prot_length + prot_length * 0.01), expand = c(0,0))
-  p <- p + ggplot2::labs(y = "Mutation Density") 
+  p <- p + ggplot2::labs(y = "Mutation\nDensity") 
   p <- p + ggplot2::labs(x = "") 
   p <- p + theme_vv()
   if(!is.null(clinvar_data) && is.data.frame(clinvar_data) && nrow(clinvar_data) > 2 ){
@@ -2845,7 +2928,7 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   p <- ggplot2::ggplot()
   p <- p + ggplot2::ylim(0, 2.1)
   p <- p + scale_x_continuous(limits = c(0, L + L * 0.01), expand = c(0,0))
-  p <- p + ggplot2::labs(y = "ClinVar/PTMs/CCRs")
+  p <- p + ggplot2::labs(y = "ClinVar/PTMs/\nCCRs")
   p <- p + ggplot2::theme(
     axis.title.y = element_text(size = vv_medium, face = "bold"),
     axis.text.y = element_blank(),
@@ -5958,7 +6041,7 @@ shinyServer(function(input, output, session) {
         paste0(
           '<td style="padding:3px 6px; vertical-align:top; border:1px solid #e5e7eb; ',
           'background:#fff; min-width:55px; max-width:110px;">',
-          '<div style="font-size:8px;color:#94a3b8;text-transform:uppercase;',
+          '<div style="font-size:8px;color:#111827;text-transform:uppercase;',
           'letter-spacing:0.3px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">', label, '</div>',
           '<div style="font-size:11px;color:', color, ';', bw, 'white-space:nowrap;">', value, note_html, '</div>',
           '</td>'
@@ -5972,7 +6055,7 @@ shinyServer(function(input, output, session) {
         paste0(
           '<td style="padding:3px 7px; vertical-align:top; border:1px solid #e5e7eb; ',
           'background:#fff; min-width:70px; max-width:150px; word-break:break-word;">',
-          '<div style="font-size:8px;color:#94a3b8;text-transform:uppercase;',
+          '<div style="font-size:8px;color:#111827;text-transform:uppercase;',
           'letter-spacing:0.3px;margin-bottom:1px;white-space:nowrap;">', label, '</div>',
           '<div style="font-size:11px;color:', color, ';', bw, 'line-height:1.3;">', value, note_html, '</div>',
           '</td>'
@@ -6091,9 +6174,9 @@ shinyServer(function(input, output, session) {
       }
 
       # ── section header row ────────────────────────────────────────────────
-      sec_hdr <- function(label, bg, icon = "") {
+      sec_hdr <- function(label, bg, icon = "", fg = "#fff") {
         paste0('<tr><td colspan="99" style="padding:5px 10px;background:', bg,
-               ';color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;',
+               ';color:', fg, ';font-size:10px;font-weight:700;text-transform:uppercase;',
                'letter-spacing:0.6px;border:none;white-space:nowrap;">', icon, ' ', label, '</td></tr>')
       }
 
@@ -6299,7 +6382,7 @@ shinyServer(function(input, output, session) {
 
         # — Row 2: Pathogenicity —
         row2 <- paste0(
-          sec_hdr("&#9881; Pathogenicity", "#b91c1c"),
+          sec_hdr("&#9881; Pathogenicity", "#e88e8e", fg = "#1f2937"),
           '<tr>',
           sum_cell("SIFT",      score_val(r$SIFT_Score, r$SIFT_V)),
           sum_cell("PP2 HDIV",  score_val(r$PP2_HDIV_Score, r$PP2_HDIV_V)),
@@ -6313,7 +6396,7 @@ shinyServer(function(input, output, session) {
 
         # — Row 3: Ensemble —
         row3 <- paste0(
-          sec_hdr("&#9733; Ensemble", "#6d28d9"),
+          sec_hdr("&#9733; Ensemble", "#c5b0e8", fg = "#1f2937"),
           '<tr>',
           sum_cell("REVEL",     score_val(r$REVEL_Score, r$REVEL_V)),
           sum_cell("MetaSVM",   score_val(r$MetaSVM_Score, r$MetaSVM_V)),
@@ -6342,7 +6425,7 @@ shinyServer(function(input, output, session) {
         gerp_v <- suppressWarnings(as.numeric(r$GERP_RS))
         gerp_col <- if (!is.na(gerp_v) && gerp_v>4.4)"#059669" else if (!is.na(gerp_v) && gerp_v>2)"#0d9488" else "#64748b"
         row4 <- paste0(
-          sec_hdr("&#127795; Conservation", "#047857"),
+          sec_hdr("&#127795; Conservation", "#a1e3cf", fg = "#1f2937"),
           '<tr>',
           sum_cell("PhyloP 100V", {
             v <- suppressWarnings(as.numeric(r$PhyloP_100V))
@@ -6393,7 +6476,7 @@ shinyServer(function(input, output, session) {
         }
         nhom_v <- suppressWarnings(as.integer(r$gnomAD_Nhomalt))
         row5 <- paste0(
-          sec_hdr("&#127758; Population", "#1d4ed8"),
+          sec_hdr("&#127758; Population", "#86b5a7", fg = "#1f2937"),
           '<tr>',
           {
             gv <- suppressWarnings(as.numeric(r$GeVIR_Gene_Pct))
@@ -6592,7 +6675,7 @@ shinyServer(function(input, output, session) {
         )
 
         row6 <- paste0(
-          sec_hdr("&#9670; ACMG Classification", "#b45309"),
+          sec_hdr("&#9670; ACMG Classification", "#ba9973", fg = "#1f2937"),
           '<tr>',
           '<td colspan="99" style="padding:8px 10px;border:1px solid #e5e7eb;background:#fff;">',
           if (nchar(denovo_note) > 0 || nchar(seg_note) > 0 || TRUE)
@@ -7044,6 +7127,7 @@ shinyServer(function(input, output, session) {
                '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-weight:600; min-width:140px;">', esc(row$Disease), '</td>',
                '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:13px; max-width:280px;">', esc(row$Description), '</td>',
                '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; white-space:nowrap;">', mim_cell, '</td>',
+               '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:13px; white-space:nowrap;">', esc(row$Prevalence), '</td>',
                '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:12px; color:#64748b; max-width:300px;">', esc(row$Notes), '</td>',
                '</tr>')
       }), collapse = "\n")
@@ -7056,6 +7140,7 @@ shinyServer(function(input, output, session) {
         '<th style="padding:10px; text-align:left; color:#003f5c; white-space:nowrap;">Disease (UniProt ID)</th>',
         '<th style="padding:10px; text-align:left; color:#003f5c;">Description</th>',
         '<th style="padding:10px; text-align:left; color:#003f5c; white-space:nowrap;">OMIM</th>',
+        '<th style="padding:10px; text-align:left; color:#003f5c; white-space:nowrap;">Prevalence <span style="font-weight:400;font-size:11px;color:#94a3b8;">(Orphanet)</span></th>',
         '<th style="padding:10px; text-align:left; color:#003f5c;">Clinical Notes</th>',
         '</tr></thead><tbody>', disease_rows_html, '</tbody></table>',
         '</div>')
@@ -7359,7 +7444,7 @@ shinyServer(function(input, output, session) {
       p5 <- ggplot() + ggplot2::annotate(geom = "text", x = 0.5, y = 0.5, 
               label = "gnomAD data not available — API may be temporarily overloaded, try again", 
               size = 4.5, color = "#94a3b8", fontface = "italic") +
-            labs(y = "gnomAD Freq") +
+            labs(y = "gnomAD\nFreq") +
             theme_bw(base_size = vv_medium) + theme_vv() +
             theme(axis.title.x = element_blank(), axis.text = element_blank(), 
                   axis.ticks = element_blank(), panel.grid = element_blank())
@@ -7378,7 +7463,7 @@ shinyServer(function(input, output, session) {
       p4 <- ggplot() + ggplot2::annotate(geom = "text", x = 0.5, y = 0.5, 
               label = "Mutation density data not available — requires gnomAD data", 
               size = 4.5, color = "#94a3b8", fontface = "italic") +
-            labs(y = "Mutation Density") +
+            labs(y = "Mutation\nDensity") +
             theme_bw(base_size = vv_medium) + theme_vv() +
             theme(axis.title.x = element_blank(), axis.text = element_blank(), 
                   axis.ticks = element_blank(), panel.grid = element_blank())
