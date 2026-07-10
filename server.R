@@ -1996,17 +1996,38 @@ fetch_ensembl_exons <- function(gene_symbol) {
   cached <- cache_get("ucsc_cons", cache_key)
   if (!is.null(cached)) return(cached)
 
+  # Ensembl REST is occasionally slow — retry transient timeouts/5xx with
+  # backoff (mirrors the gnomAD path) so one slow response doesn't drop the
+  # whole conservation track. Returns a 200 response or NULL after 3 tries.
+  ens_get <- function(url, what) {
+    for (attempt in 1:3) {
+      resp <- tryCatch(
+        httr::GET(url, httr::timeout(20),
+                  httr::add_headers(Accept = "application/json")),
+        error = function(e) {
+          message("[UCSC Cons] ", what, " attempt ", attempt, " error: ", e$message)
+          NULL
+        }
+      )
+      if (!is.null(resp) && httr::status_code(resp) == 200) return(resp)
+      if (!is.null(resp))
+        message("[UCSC Cons] ", what, " attempt ", attempt,
+                " HTTP ", httr::status_code(resp))
+      if (attempt < 3) Sys.sleep(2 * attempt)
+    }
+    NULL
+  }
+
   tryCatch({
     # Step 1: Get canonical transcript ID
     url_gene <- paste0(
       "https://rest.ensembl.org/lookup/symbol/homo_sapiens/", gene_symbol,
       "?content-type=application/json&expand=1"
     )
-    resp <- httr::GET(url_gene, httr::timeout(20),
-                      httr::add_headers(Accept = "application/json"))
-    if (httr::status_code(resp) != 200) {
+    resp <- ens_get(url_gene, paste0("gene lookup ", gene_symbol))
+    if (is.null(resp)) {
       message("[UCSC Cons] Ensembl lookup failed for ", gene_symbol,
-              " (HTTP ", httr::status_code(resp), ")")
+              " after retries")
       return(NULL)
     }
     gene_json <- jsonlite::fromJSON(
@@ -2048,10 +2069,10 @@ fetch_ensembl_exons <- function(gene_symbol) {
       "https://rest.ensembl.org/lookup/id/", tx_id,
       "?content-type=application/json&expand=1"
     )
-    resp2 <- httr::GET(url_tx, httr::timeout(20),
-                       httr::add_headers(Accept = "application/json"))
-    if (httr::status_code(resp2) != 200) {
-      message("[UCSC Cons] Ensembl transcript lookup failed for ", tx_id)
+    resp2 <- ens_get(url_tx, paste0("transcript lookup ", tx_id))
+    if (is.null(resp2)) {
+      message("[UCSC Cons] Ensembl transcript lookup failed for ", tx_id,
+              " after retries")
       return(NULL)
     }
     tx_json <- jsonlite::fromJSON(
