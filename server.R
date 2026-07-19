@@ -3468,6 +3468,17 @@ pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,fo
 
 
 
+# points -> calibrated posterior P(pathogenic).  §4.1 evidence_strength_review.md
+# Evidence Strength (OddsPath) is prior-free; prior_p enters exactly ONCE, here at
+# the posterior. C = 350^(1/8) = 2.0813 (Tavtigian 2018/2020 very-strong OddsPath = 350).
+# Sanity: 0 pts -> posterior == prior; 6 pts -> 0.90 (LP cutpoint); 10 pts -> ~0.99.
+acmg_posterior <- function(points, prior_p = 0.10, C = 2.0813) {
+  if (length(points) != 1 || !is.finite(points)) return(NA_real_)
+  prior_odds <- prior_p / (1 - prior_p)
+  post_odds  <- prior_odds * C^points     # C^points == combined evidence strength
+  post_odds / (1 + post_odds)
+}
+
 # Define server logic for slider examples
 # ============================================================
 # ACMG Classification Engine
@@ -6349,6 +6360,14 @@ shinyServer(function(input, output, session) {
           if (nchar(acmg_res$pts_str) > 0)
             paste0('<br><span style="font-size:10px;color:#93c5fd;letter-spacing:0.2px;">',
                    esc(acmg_res$pts_str), '</span>') else "",
+          local({
+            pp <- acmg_posterior(acmg_res$pts)
+            if (is.finite(pp))
+              paste0('<br><span style="font-size:10px;color:#93c5fd;letter-spacing:0.2px;" ',
+                     'title="calibrated posterior at prior_P=0.10 (OddsPath; Tavtigian 2018)">',
+                     'P(path) &#8776; ', formatC(pp, format = "f", digits = 2), '</span>')
+            else ""
+          }),
           '</span>',
           '</td></tr>'
         )
