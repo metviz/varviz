@@ -329,8 +329,10 @@ git commit -m "feat(calib): assemble per-predictor validation + gene-optimal wit
 - Backup: `server.R.bak.<ts>.pre-4.2benign` before editing
 
 **Interfaces:**
-- Consumes: existing `cache_get`/`cache_set`, `httr`, `jsonlite`, and the esummary parse pattern at server.R:867–1148.
-- Produces: `extract_clinvar_benign(gene_name) -> data.frame` with the same columns `extract_clinvar` returns (incl. `name`, `ClinicalSignificance`), but for LB/B variants.
+- Consumes: existing `cache_get`/`cache_set`, `httr`, `jsonlite`, the esearch/esummary body of `extract_clinvar` (824–1163).
+- Produces: `extract_clinvar(gene_name, clinsig = c("path","benign"))` — new second arg, **default `"path"` so every existing caller is unchanged**. `clinsig="benign"` fetches LB/B. Same return columns (`name`, `ClinicalSignificance`, `clinvar_goldstar`, …). Cache key becomes per-clinsig.
+
+**Decision (supersedes plan text): parameterize, do NOT clone.** No `extract_clinvar_benign`; one function, a `clinsig` argument. This avoids ~340 lines of duplication and keeps the ClinVar parse single-source.
 
 - [ ] **Step 1: Back up + add cache namespace**
 
@@ -341,21 +343,43 @@ cp server.R "server.R.bak.$(date +%Y%m%d_%H%M%S).pre-4.2benign"
 Add to the `api_cache$...` block (server.R ~72–82):
 
 ```r
-api_cache$gene_calib  <- list()   # gene_name -> assembled gene_calibration() result
+api_cache$gene_calib  <- list()   # gene_name -> scored ClinVar arms for gene calibration
 ```
 
-- [ ] **Step 2: Add the benign fetch function**
+- [ ] **Step 2: Parameterize `extract_clinvar` with a `clinsig` arg**
 
-Immediately after `extract_clinvar` closes (find its closing brace after 1163), add a sibling that reuses the *same* esummary parse by delegating to a small shared helper. Minimal-risk approach: `extract_clinvar_benign` is `extract_clinvar` with the search queries swapped to benign clinsig. Copy `extract_clinvar`, rename, and change **only** the `search_queries` vector to:
+Change the signature at 824 from `extract_clinvar <- function(gene_name)` to
+`extract_clinvar <- function(gene_name, clinsig = c("path", "benign"))` and add at the top:
 
 ```r
-    search_queries <- c(
+  clinsig <- match.arg(clinsig)
+```
+
+Make the **cache key** per-clinsig so the two arms don't collide. Where it currently does
+`cache_get("clinvar", gene_name)` / `cache_set("clinvar", gene_name, result)`, key by a
+composite instead:
+
+```r
+  ck <- paste0(gene_name, ":", clinsig)
+  cached <- cache_get("clinvar", ck)
+  ...
+  cache_set("clinvar", ck, result)
+```
+
+Select the `search_queries` by `clinsig` (leave the existing P/LP vector as the `"path"`
+branch verbatim):
+
+```r
+    search_queries <- if (clinsig == "benign") c(
       paste0(gene_name, '[gene] AND ("benign"[clinsig] OR "likely benign"[clinsig]) AND "homo sapiens"[orgn]'),
       paste0(gene_name, '[gene] AND (benign[clinsig]) AND human[orgn]')
+    ) else c(
+      # ... existing P/LP queries unchanged ...
     )
 ```
 
-and change the cache namespace it reads/writes from `"clinvar"` to `"clinvar_benign"` (add `api_cache$clinvar_benign <- list()` to the namespace block). Leave all esummary parsing identical so `ClinicalSignificance`, `name`, `clinvar_goldstar` populate the same way.
+Everything else (esummary fetch + parse) stays identical and shared. Existing callers keep
+calling `extract_clinvar(gene)` → defaults to `"path"`, cache key `"<gene>:path"`.
 
 - [ ] **Step 3: Parse-check**
 
@@ -489,7 +513,7 @@ git commit -m "feat(calib): batch dbNSFP REVEL/AM/CADD fetch via MyVariant.info 
 - Backup: `server.R.bak.<ts>.pre-4.2live`
 
 **Interfaces:**
-- Consumes: `extract_clinvar` (824), `extract_clinvar_benign` (Task 4), `fetch_dbnsfp_batch` (Task 5), `parse_clinvar_hgvsp` + `gene_calibration` (stats core), `cache_get`/`cache_set`.
+- Consumes: `extract_clinvar(gene)` and `extract_clinvar(gene, "benign")` (Task 4), `fetch_dbnsfp_batch` (Task 5), `parse_clinvar_hgvsp` + `gene_calibration` (stats core), `cache_get`/`cache_set`.
 - Produces: `gene_calibration_live(gene_name, query_hgvsp=NULL, min_sens=0.90) -> list` — the `gene_calibration()` result plus `$match_rate` (fraction of ClinVar variants scored) and `$n_raw = list(path, benign)` (pre-match counts). Cached in `api_cache$gene_calib` keyed by `gene_name` (arms only; LR+/optimal recomputed per `min_sens`/`query_hgvsp`).
 
 - [ ] **Step 1: Back up**
@@ -507,8 +531,8 @@ cp server.R "server.R.bak.$(date +%Y%m%d_%H%M%S).pre-4.2live"
 gene_calibration_live <- function(gene_name, query_hgvsp = NULL, min_sens = 0.90) {
   arms <- cache_get("gene_calib", gene_name)
   if (is.null(arms)) {
-    pv <- extract_clinvar(gene_name)          # P/LP arm
-    bn <- extract_clinvar_benign(gene_name)   # LB/B arm
+    pv <- extract_clinvar(gene_name)             # P/LP arm (default clinsig="path")
+    bn <- extract_clinvar(gene_name, "benign")   # LB/B arm
     add_scores <- function(df) {
       if (is.null(df) || !nrow(df)) return(data.frame(hgvsp=character(), revel=numeric(),
                                                       am=numeric(), cadd=numeric()))
