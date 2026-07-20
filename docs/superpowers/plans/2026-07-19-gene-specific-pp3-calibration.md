@@ -190,14 +190,18 @@ Expected: FAIL — `could not find function "parse_clinvar_hgvsp"`.
              Thr="T",Trp="W",Tyr="Y",Val="V",Ter="*")
 
 # ClinVar `name` -> dbNSFP hgvsp like "p.R130G"; NA unless a clean missense p.Xxx###Yyy.
+# NOTE: `[` (not `[[`) on the atomic .AA3TO1 -> NA on unknown token, never throws;
+# perl lookahead (?![A-Za-z]) rejects frameshift (p.Arg130Glyfs*45) so it can't
+# masquerade as a missense. Both were bugs in an earlier draft of this block.
 parse_clinvar_hgvsp <- function(name) {
   vapply(name, function(nm) {
     if (is.na(nm)) return(NA_character_)
-    g <- regmatches(nm, regexec("p\\.([A-Za-z]{3})([0-9]+)([A-Za-z]{3})", nm))[[1]]
+    g <- regmatches(nm, regexec("p\\.([A-Za-z]{3})([0-9]+)([A-Za-z]{3})(?![A-Za-z])",
+                                nm, perl = TRUE))[[1]]
     if (length(g) != 4) return(NA_character_)
-    ref <- .AA3TO1[[g[2]]]; alt <- .AA3TO1[[g[4]]]
-    if (is.null(ref) || is.null(alt) || ref == "*") return(NA_character_)
-    paste0("p.", ref, g[3], alt)
+    ref <- .AA3TO1[g[2]]; alt <- .AA3TO1[g[4]]
+    if (is.na(ref) || is.na(alt) || ref == "*") return(NA_character_)
+    paste0("p.", unname(ref), g[3], unname(alt))
   }, character(1), USE.NAMES = FALSE)
 }
 ```
