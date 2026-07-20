@@ -6499,6 +6499,66 @@ shinyServer(function(input, output, session) {
           '</td></tr>'
         )
 
+        # — Gene-specific calibration (advisory only — never mutates acmg_res/PP3) —
+        calib_section <- tryCatch({
+          gene_nm <- isolate(input$gene_name)
+          q_hgvsp <- as.character(r$Variant)   # already dbNSFP-style "p.<Ref1><pos><Alt1>"
+          cal <- gene_calibration_live(gene_name = gene_nm,
+                                       query_hgvsp = q_hgvsp,
+                                       min_sens = input$calib_min_sens %||% 0.90)
+
+          pred_rows <- lapply(names(cal$predictors), function(pn) {
+            p <- cal$predictors[[pn]]
+            vrows <- apply(p$validation, 1, function(v) {
+              agree <- identical(v[["gene_tier"]], v[["pejaver_tier"]])
+              paste0('<tr><td>', pn, ' &ge; ', v[["threshold"]], '</td>',
+                     '<td>LR+ ', formatC(as.numeric(v[["lr"]]), format="f", digits=1),
+                     ' (', formatC(as.numeric(v[["lo"]]), format="f", digits=1), '&ndash;',
+                     formatC(as.numeric(v[["hi"]]), format="f", digits=1), ')</td>',
+                     '<td>', v[["gene_tier"]], '</td>',
+                     '<td>', if (agree) '=' else '&ne;', ' Pejaver ', v[["pejaver_tier"]], '</td></tr>')
+            })
+            opt <- p$optimal
+            opt_row <- if (is.null(opt)) '' else
+              paste0('<tr><td>', pn, ' optimal &ge; ', formatC(opt$threshold, format="f", digits=3), '</td>',
+                     '<td>LR+ ', formatC(as.numeric(opt$lr), format="f", digits=1),
+                     ' (', formatC(as.numeric(opt$lo), format="f", digits=1), '&ndash;',
+                     formatC(as.numeric(opt$hi), format="f", digits=1), ')</td>',
+                     '<td>', opt$gene_tier, '</td><td>max LR+ @ sens floor</td></tr>')
+            conf_flag <- if (isTRUE(p$confident)) '' else
+              paste0('<tr><td colspan="4" style="color:#b45309;font-size:10px;">',
+                     '&#9888; low confidence (n=', p$n_pos, '/', p$n_neg, ' per arm)</td></tr>')
+            paste0(paste0(vrows, collapse = ""), opt_row, conf_flag)
+          })
+
+          loo_note <- if (isTRUE(cal$loo_applied))
+            '<div style="font-size:10px;color:#64748b;">Queried variant removed from its own calibration arm (leave-one-out).</div>' else ''
+
+          n_stars_cal <- suppressWarnings(as.integer(r$ClinVar_Stars))
+          stars_html <- if (!is.na(n_stars_cal) && n_stars_cal >= 0)
+            paste0(paste(rep("⭐", n_stars_cal), collapse = ""),
+                   paste(rep("☆", 4L - n_stars_cal), collapse = "")) else ""
+          clinvar_line <- paste0(
+            '<div style="font-size:11px;margin-top:4px;">',
+            '<strong>This variant in ClinVar:</strong> <span style="color:', cv_col, ';font-weight:600;">',
+            esc(cv_sig), '</span> ', stars_html,
+            ' <span style="color:#94a3b8;font-size:10px;">(independent of the calibration above &mdash; not double-counted)</span>',
+            '</div>')
+
+          paste0(
+            sec_hdr("Gene-specific calibration", "#334155", "&#9878;"),
+            '<tr><td colspan="99">',
+            '<table style="width:100%;font-size:11px;border-collapse:collapse;">',
+            paste0(pred_rows, collapse = ""),
+            '</table>',
+            loo_note, clinvar_line,
+            '<div style="font-size:10px;color:#94a3b8;">match rate ',
+            formatC(100 * (cal$match_rate %||% 0), format = "f", digits = 0),
+            '% of ClinVar variants scored.</div>',
+            '</td></tr>'
+          )
+        }, error = function(e) "")
+
         # — Row 1: Variant Info (Variant → PTM) —
         row1 <- paste0(
           sec_hdr("Variant Info", "#1e3a5f", "&#9432;"),
@@ -6915,7 +6975,7 @@ shinyServer(function(input, output, session) {
           # scrollable body for data rows
           '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">',
           '<table style="border-collapse:collapse;table-layout:auto;width:auto;">',
-          row1, row2, row3, row4, row5, row5b, row6,
+          row1, row2, row3, row4, row5, row5b, row6, calib_section,
           '</table>',
           '</div>',
           '</div>'

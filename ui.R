@@ -370,6 +370,9 @@ shinyUI(fluidPage(
                             radioButtons("clinvar_filter", "ClinVar Variants Filter:", inline = TRUE,
                                          choices = list("Any Star","1 Star or more","2 Stars or more"),
                                          selected = "1 Star or more"),
+                            numericInput("calib_min_sens",
+                                         label = "Gene calibration — min sensitivity",
+                                         value = 0.90, min = 0.50, max = 1.00, step = 0.05),
                             # De Novo Status: moved to per-variant card dropdowns
                             # (applied individually per variant, not globally)
                             radioButtons("format", "Download format:",
