@@ -80,6 +80,7 @@ api_cache$dbnsfp       <- list()  # gene:variant -> dbNSFP MyVariant.info data
 api_cache$consurf      <- list()  # uniprotID -> ConSurf-DB parsed data.frame
 api_cache$ucsc_cons    <- list()  # gene_name -> data.frame of per-AA conservation scores (PhyloP/PhastCons)
 api_cache$orphadata_prev <- list()  # OMIM id -> Orphadata prevalence display string
+api_cache$gene_calib   <- list()  # gene_name -> scored ClinVar arms for gene calibration
 
 cache_get <- function(cache_name, key) {
   if (key %in% names(api_cache[[cache_name]])) {
@@ -821,18 +822,23 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
 
  #Extract Clinvar data
  # --- ClinVar data via NCBI E-utilities API ----#
- extract_clinvar <- function(gene_name){
-   cached <- cache_get("clinvar", gene_name)
-   if (!is.null(cached)) { message("[ClinVar] Cache hit for: ", gene_name); return(cached) }
+ extract_clinvar <- function(gene_name, clinsig = c("path", "benign")){
+   clinsig <- match.arg(clinsig)
+   ck <- paste0(gene_name, ":", clinsig)
+   cached <- cache_get("clinvar", ck)
+   if (!is.null(cached)) { message("[ClinVar] Cache hit for: ", ck); return(cached) }
    tryCatch({
-     message("[ClinVar] Fetching variants for gene: ", gene_name)
-     
-     # Step 1: Search ClinVar for pathogenic/likely pathogenic variants in this gene
+     message("[ClinVar] Fetching variants for gene: ", gene_name, " (", clinsig, ")")
+
+     # Step 1: Search ClinVar for pathogenic/likely pathogenic (or benign/likely benign) variants in this gene
      # Try multiple search strategies since ClinVar search syntax varies
      ids <- NULL
-     
+
      # Strategy 1: Standard clinical significance filter
-     search_queries <- c(
+     search_queries <- if (clinsig == "benign") c(
+       paste0(gene_name, '[gene] AND ("benign"[clinsig] OR "likely benign"[clinsig]) AND "homo sapiens"[orgn]'),
+       paste0(gene_name, '[gene] AND (benign[clinsig]) AND human[orgn]')
+     ) else c(
        paste0(gene_name, '[gene] AND ("pathogenic"[clinsig] OR "likely pathogenic"[clinsig]) AND "homo sapiens"[orgn]'),
        paste0(gene_name, '[gene] AND (pathogenic[clinsig]) AND human[orgn]'),
        paste0(gene_name, '[gene] AND "clinsig pathogenic"[Properties]'),
@@ -946,11 +952,13 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
          }
          debug_counts$total <- debug_counts$total + 1
          
-         # Skip if not pathogenic/likely pathogenic
-         if (!grepl("pathogenic", clin_sig, ignore.case = TRUE)) {
+         # Skip if not the target arm's clinical significance (path: pathogenic/likely
+         # pathogenic; benign: benign/likely benign)
+         sig_term <- if (clinsig == "benign") "benign" else "pathogenic"
+         if (!grepl(sig_term, clin_sig, ignore.case = TRUE)) {
            debug_counts$skip_not_pathogenic <- debug_counts$skip_not_pathogenic + 1
            if (debug_counts$skip_not_pathogenic <= 3) {
-             message("[ClinVar SKIP] uid=", uid, " not pathogenic: '", clin_sig, "'")
+             message("[ClinVar SKIP] uid=", uid, " not ", sig_term, ": '", clin_sig, "'")
            }
            next
          }
@@ -1160,7 +1168,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
      message("[ClinVar] Extracted ", nrow(result), " variants (",
              sum(result$type == "missense_variant"), " missense, ",
              sum(result$type == "lof_variant"), " LoF)")
-     cache_set("clinvar", gene_name, result)
+     cache_set("clinvar", ck, result)
      return(result)
      
    }, error = function(e) {
