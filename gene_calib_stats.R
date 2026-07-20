@@ -65,10 +65,11 @@ PREDICTORS <- list(
 parse_clinvar_hgvsp <- function(name) {
   vapply(name, function(nm) {
     if (is.na(nm)) return(NA_character_)
-    g <- regmatches(nm, regexec("p\\.([A-Za-z]{3})([0-9]+)([A-Za-z]{3})", nm))[[1]]
+    g <- regmatches(nm, regexec("p\\.([A-Za-z]{3})([0-9]+)([A-Za-z]{3})(?![A-Za-z])",
+                                nm, perl = TRUE))[[1]]
     if (length(g) != 4) return(NA_character_)
-    ref <- .AA3TO1[[g[2]]]; alt <- .AA3TO1[[g[4]]]
-    if (is.null(ref) || is.null(alt) || ref == "*") return(NA_character_)
-    paste0("p.", ref, g[3], alt)
+    ref <- .AA3TO1[g[2]]; alt <- .AA3TO1[g[4]]   # `[` returns NA on unknown key, never errors
+    if (is.na(ref) || is.na(alt) || ref == "*") return(NA_character_)
+    paste0("p.", unname(ref), g[3], unname(alt))
   }, character(1), USE.NAMES = FALSE)
 }
