@@ -29,6 +29,31 @@ stopifnot(!is.null(opt_hi), opt_hi$sens >= 0.90 - 1e-9,
 # floor impossible -> NULL
 stopifnot(is.null(gene_optimal(pos3, neg3, min_sens = 1.01)))
 
+# gene_calibration: assemble per-predictor validation + optimal, with LOO
+mk <- function(hg, rv) data.frame(hgvsp = hg, revel = rv,
+                                  am = rv, cadd = rv*40, stringsAsFactors = FALSE)
+path_arm   <- mk(sprintf("p.A%dV", 1:30), c(rep(0.95, 25), rep(0.60, 5)))
+benign_arm <- mk(sprintf("p.G%dS", 1:30), c(rep(0.10, 27), rep(0.80, 3)))
+
+res <- gene_calibration(path_arm, benign_arm, min_sens = 0.80)
+stopifnot(
+  res$loo_applied == FALSE,
+  res$predictors$REVEL$n_pos == 30, res$predictors$REVEL$n_neg == 30,
+  res$predictors$REVEL$confident == TRUE,                       # both arms >= 20
+  nrow(res$predictors$REVEL$validation) == 3,                   # 3 REVEL cut-points
+  !is.null(res$predictors$REVEL$optimal),
+  res$predictors$REVEL$optimal$lr > 1
+)
+
+# LOO: dropping a P/LP member reduces n_pos by 1
+res2 <- gene_calibration(path_arm, benign_arm, query_hgvsp = "p.A1V", min_sens = 0.80)
+stopifnot(res2$loo_applied == TRUE, res2$predictors$REVEL$n_pos == 29)
+
+# small benign arm -> not confident, still computes
+res3 <- gene_calibration(path_arm, benign_arm[1:8, ], min_sens = 0.80)
+stopifnot(res3$predictors$REVEL$confident == FALSE,
+          !is.null(res3$predictors$REVEL$validation))
+
 # hgvsp parse: ClinVar name string -> dbNSFP hgvsp (1-letter)
 stopifnot(
   parse_clinvar_hgvsp("NM_000314.8(PTEN):c.388C>G (p.Arg130Gly)") == "p.R130G",
