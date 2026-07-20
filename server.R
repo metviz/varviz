@@ -27,6 +27,10 @@ source("typography.R", local = FALSE)
 # on the rest of the engine. Adds at most one HTTP call per analysed variant.
 source("analyses/lib/dolphin.R", local = FALSE)
 
+# Gene-specific calibration stats core (OddsPath/LR+, ClinVar hgvsp parsing,
+# gene_calibration assembly). Pure, no network — unit-tested standalone.
+source("gene_calib_stats.R", local = FALSE)
+
 theme_vv <- function() {
   theme(
     text         = element_text(family = "Helvetica"),
@@ -2066,6 +2070,35 @@ fetch_dbnsfp_batch <- function(gene_name, hgvsps) {
   }
   if (length(rows) == 0) return(empty_df())
   do.call(rbind, rows)
+}
+
+# Live gene-specific calibration: fetch both ClinVar arms, score via dbNSFP batch,
+# join on hgvsp, then assemble. Caches the scored arms per gene; recomputes stats
+# per (query_hgvsp, min_sens) which are cheap.
+gene_calibration_live <- function(gene_name, query_hgvsp = NULL, min_sens = 0.90) {
+  arms <- cache_get("gene_calib", gene_name)
+  if (is.null(arms)) {
+    pv <- extract_clinvar(gene_name)             # P/LP arm (default clinsig="path")
+    bn <- extract_clinvar(gene_name, "benign")   # LB/B arm
+    add_scores <- function(df) {
+      if (is.null(df) || !nrow(df)) return(data.frame(hgvsp=character(), revel=numeric(),
+                                                      am=numeric(), cadd=numeric()))
+      hg <- parse_clinvar_hgvsp(df$name)
+      sc <- fetch_dbnsfp_batch(gene_name, hg)
+      merge(data.frame(hgvsp = hg, stringsAsFactors = FALSE), sc, by = "hgvsp")
+    }
+    arms <- list(path = add_scores(pv), benign = add_scores(bn),
+                 n_raw = list(path = if (is.null(pv)) 0 else nrow(pv),
+                              benign = if (is.null(bn)) 0 else nrow(bn)))
+    cache_set("gene_calib", gene_name, arms)
+  }
+  res <- gene_calibration(arms$path, arms$benign,
+                          query_hgvsp = query_hgvsp, min_sens = min_sens)
+  scored <- nrow(arms$path) + nrow(arms$benign)
+  raw    <- arms$n_raw$path + arms$n_raw$benign
+  res$match_rate <- if (raw > 0) scored / raw else 0
+  res$n_raw <- arms$n_raw
+  res
 }
 
 # =============================================================================
