@@ -2000,6 +2000,13 @@ fetch_dbnsfp <- function(gene_name, hgvsp) {
 # enforced server-side instead of hoped-for client-side. Chunk size 200 (not 1000): URL length
 # stress-tested at ~3KB for 200 terms — comfortably under common 8KB proxy/server limits;
 # raise it if profiling shows headroom.
+# Escape Lucene/query_string metacharacters so an hgvsp/gene value is always matched as a
+# literal term, never parsed as a wildcard/prefix/grouping operator (e.g. dbNSFP's "p.R130*"
+# nonsense-variant notation must not become a live "*" wildcard query).
+escape_lucene <- function(x) {
+  gsub('([-+!(){}\\[\\]^"~*?:\\\\&|/])', '\\\\\\1', x, perl = TRUE)
+}
+
 fetch_dbnsfp_batch <- function(gene_name, hgvsps) {
   empty_df <- function() data.frame(hgvsp=character(), revel=numeric(),
                                      am=numeric(), cadd=numeric(), stringsAsFactors = FALSE)
@@ -2013,20 +2020,36 @@ fetch_dbnsfp_batch <- function(gene_name, hgvsps) {
   rows <- list()
   seen <- character()
   for (ch in chunks) {
-    q <- paste0("dbnsfp.genename:", gene_name,
-                " AND dbnsfp.hgvsp:(", paste(ch, collapse = " OR "), ")")
+    q <- paste0("dbnsfp.genename:", escape_lucene(gene_name),
+                " AND dbnsfp.hgvsp:(", paste(escape_lucene(ch), collapse = " OR "), ")")
     url <- paste0("https://myvariant.info/v1/query?",
                   "q=", URLencode(q, reserved = TRUE),
-                  "&fields=", URLencode("dbnsfp.hgvsp,dbnsfp.revel,dbnsfp.alphamissense,cadd.phred",
+                  "&fields=", URLencode("dbnsfp.genename,dbnsfp.hgvsp,dbnsfp.revel,dbnsfp.alphamissense,cadd.phred",
                                         reserved = TRUE),
                   "&size=1000")  # MyVariant's max page size; gene-scoped result count is always well under it
     resp <- tryCatch(httr::GET(url, httr::timeout(30)), error = function(e) NULL)
     if (is.null(resp) || httr::status_code(resp) != 200) next
-    parsed <- jsonlite::fromJSON(httr::content(resp, "text", encoding = "UTF-8"),
-                                 simplifyVector = FALSE)
+    parsed <- tryCatch(
+      jsonlite::fromJSON(httr::content(resp, "text", encoding = "UTF-8"), simplifyVector = FALSE),
+      error = function(e) NULL)
+    if (is.null(parsed)) next  # malformed/non-JSON body on an HTTP-200 (proxy page, truncation, etc) — skip chunk, don't crash
+    if (!is.null(parsed$hits) && length(parsed$hits) >= 1000) {
+      message("[dbNSFP batch] WARNING: hit count reached the size=1000 cap for gene ", gene_name,
+              " — results may be truncated, some requested hgvsps could be silently missing")
+    }
     for (h in parsed$hits) {
+      hit_genenames <- h$dbnsfp$genename
+      if (is.list(hit_genenames)) hit_genenames <- unlist(hit_genenames)
+      # A dbnsfp block can span >1 gene (readthrough/fusion/overlapping loci); reject the whole
+      # hit unless every gene it names is the one we asked for, so an hgvsp belonging to a
+      # different co-listed gene's transcript can never be attributed to gene_name (required
+      # correctness invariant — do not relax this to "any() matches").
+      if (is.null(hit_genenames) || !all(unique(hit_genenames) == gene_name)) next
       hit_hgvsps <- h$dbnsfp$hgvsp
       if (is.list(hit_hgvsps)) hit_hgvsps <- unlist(hit_hgvsps)
+      # Required correctness invariant: re-key off the hit's own hgvsp field via intersect()
+      # rather than trusting the OR-list position, so scores are only attached to hgvsps this
+      # specific hit actually carries. Do not remove in a future refactor.
       matched <- intersect(ch, hit_hgvsps)  # tie hit back to the caller's requested notation(s)
       for (hg in matched) {
         if (hg %in% seen) next  # first matching hit per hgvsp wins
