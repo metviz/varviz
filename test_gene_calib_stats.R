@@ -29,4 +29,14 @@ stopifnot(!is.null(opt_hi), opt_hi$sens >= 0.90 - 1e-9,
 # floor impossible -> NULL
 stopifnot(is.null(gene_optimal(pos3, neg3, min_sens = 1.01)))
 
+# hgvsp parse: ClinVar name string -> dbNSFP hgvsp (1-letter)
+stopifnot(
+  parse_clinvar_hgvsp("NM_000314.8(PTEN):c.388C>G (p.Arg130Gly)") == "p.R130G",
+  parse_clinvar_hgvsp("NM_000257.4(MYH7):c.1988G>A (p.Arg663His)") == "p.R663H",
+  is.na(parse_clinvar_hgvsp("NM_000314.8(PTEN):c.209+1G>A")),        # splice, no p.
+  identical(
+    parse_clinvar_hgvsp(c("x (p.Gly12Asp)", "no-protein", "y (p.Ter100Cys)")),
+    c("p.G12D", NA_character_, NA_character_))                        # Ter ref not a missense start
+)
+
 cat("gene_calib_stats: all checks pass\n")
