@@ -36,7 +36,13 @@ stopifnot(
   is.na(parse_clinvar_hgvsp("NM_000314.8(PTEN):c.209+1G>A")),        # splice, no p.
   identical(
     parse_clinvar_hgvsp(c("x (p.Gly12Asp)", "no-protein", "y (p.Ter100Cys)")),
-    c("p.G12D", NA_character_, NA_character_))                        # Ter ref not a missense start
+    c("p.G12D", NA_character_, NA_character_)),                       # Ter ref not a missense start
+  is.na(parse_clinvar_hgvsp("NM_x(GENE):c.394del (p.Lys132del)")),          # in-frame del -> NA, no crash
+  is.na(parse_clinvar_hgvsp("NM_x(TP53):c.388del (p.Arg130Glyfs*45)")),     # frameshift -> NA, not p.R130G
+  is.na(parse_clinvar_hgvsp("x (p.Xaa130Gly)")),                            # unknown ref token -> NA
+  identical(parse_clinvar_hgvsp(c("a (p.Gly12Asp)", "b (p.Lys132del)")),
+            c("p.G12D", NA_character_)),                                     # mixed vector: valid survives, no throw
+  parse_clinvar_hgvsp("x (p.Arg130Ter)") == "p.R130*"                       # nonsense ALT still maps
 )
 
 cat("gene_calib_stats: all checks pass\n")
