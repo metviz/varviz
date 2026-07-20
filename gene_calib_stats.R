@@ -73,3 +73,34 @@ parse_clinvar_hgvsp <- function(name) {
     paste0("p.", unname(ref), g[3], unname(alt))
   }, character(1), USE.NAMES = FALSE)
 }
+
+# Assemble per-predictor validation + gene-optimal from two scored arms.
+# path_arm/benign_arm: data.frame(hgvsp, revel, am, cadd). Pure (no network).
+gene_calibration <- function(path_arm, benign_arm, query_hgvsp = NULL, min_sens = 0.90) {
+  loo <- FALSE
+  if (!is.null(query_hgvsp) && !is.na(query_hgvsp)) {
+    if (query_hgvsp %in% path_arm$hgvsp)   { path_arm   <- path_arm[path_arm$hgvsp   != query_hgvsp, , drop = FALSE]; loo <- TRUE }
+    if (query_hgvsp %in% benign_arm$hgvsp) { benign_arm <- benign_arm[benign_arm$hgvsp != query_hgvsp, , drop = FALSE]; loo <- TRUE }
+  }
+  preds <- lapply(names(PREDICTORS), function(pname) {
+    cfg <- PREDICTORS[[pname]]
+    pos <- path_arm[[cfg$col]];  neg <- benign_arm[[cfg$col]]
+    pos <- pos[!is.na(pos)];     neg <- neg[!is.na(neg)]
+    val <- do.call(rbind, lapply(names(cfg$cuts), function(tier) {
+      t <- cfg$cuts[[tier]]; r <- gene_lr_plus(pos, neg, t)
+      gt <- oddspath_tier(r$lr)
+      data.frame(tier_cut = tier, threshold = t, lr = r$lr, lo = r$lo, hi = r$hi,
+                 gene_tier = gt, pejaver_tier = tier,
+                 agree = identical(gt, tier), stringsAsFactors = FALSE)
+    }))
+    opt <- gene_optimal(pos, neg, min_sens = min_sens)
+    opt_out <- if (is.null(opt)) NULL else
+      list(threshold = opt$t, lr = opt$lr, lo = opt$lo, hi = opt$hi,
+           gene_tier = oddspath_tier(opt$lr))
+    list(n_pos = length(pos), n_neg = length(neg),
+         confident = (length(pos) >= 20 && length(neg) >= 20),
+         validation = val, optimal = opt_out)
+  })
+  names(preds) <- names(PREDICTORS)
+  list(loo_applied = loo, predictors = preds)
+}
