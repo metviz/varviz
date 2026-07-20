@@ -1982,6 +1982,69 @@ fetch_dbnsfp <- function(gene_name, hgvsp) {
   return(NULL)
 }
 
+# Bulk REVEL/AM/CADD for a set of dbNSFP hgvsps for one gene, via one MyVariant.info GET
+# per <=200 hgvsps (Lucene "genename AND hgvsp:(v1 OR v2 OR ...)"), replacing per-variant GETs.
+# Returns data.frame(hgvsp, revel, am, cadd); unmatched hgvsps are omitted.
+#
+# DEVIATION FROM ORIGINAL SPEC (POST /v1/query with scopes="dbnsfp.hgvsp"): live-tested and
+# rejected. That batch/scopes endpoint ignores gene_name entirely — hgvsp notation collides
+# across many unrelated genes (e.g. "p.R130G" hit ITSN1, NADK2, TNFRSF8, RAB41, ... with REVEL
+# ranging 0.04-0.78 across them), and even at size=100 the target gene's row can be pushed out
+# of the page entirely (confirmed: SNCA p.A53T returns ZERO hits at size=100 for that endpoint,
+# since hundreds of other genes share that generic amino-acid notation and rank higher).
+# Also, dbnsfp.revel/alphamissense are {rankscore, score} objects (score = per-transcript list),
+# not plain numbers, so `as.numeric(h$dbnsfp$revel %||% NA)` throws "'list' object cannot be
+# coerced to type 'double'" — confirmed live.
+# Fix: use the GET query endpoint (like fetch_dbnsfp above) with an explicit
+# "dbnsfp.genename:<gene> AND dbnsfp.hgvsp:(<v1> OR <v2> OR ...)" clause, so gene-scoping is
+# enforced server-side instead of hoped-for client-side. Chunk size 200 (not 1000): URL length
+# stress-tested at ~3KB for 200 terms — comfortably under common 8KB proxy/server limits;
+# raise it if profiling shows headroom.
+fetch_dbnsfp_batch <- function(gene_name, hgvsps) {
+  empty_df <- function() data.frame(hgvsp=character(), revel=numeric(),
+                                     am=numeric(), cadd=numeric(), stringsAsFactors = FALSE)
+  gene_name <- trimws(gene_name)
+  hgvsps <- unique(trimws(hgvsps[!is.na(hgvsps)]))
+  hgvsps <- hgvsps[nchar(hgvsps) > 0]
+  if (length(hgvsps) == 0 || nchar(gene_name) == 0) return(empty_df())
+
+  chunk_size <- 200
+  chunks <- split(hgvsps, ceiling(seq_along(hgvsps) / chunk_size))
+  rows <- list()
+  seen <- character()
+  for (ch in chunks) {
+    q <- paste0("dbnsfp.genename:", gene_name,
+                " AND dbnsfp.hgvsp:(", paste(ch, collapse = " OR "), ")")
+    url <- paste0("https://myvariant.info/v1/query?",
+                  "q=", URLencode(q, reserved = TRUE),
+                  "&fields=", URLencode("dbnsfp.hgvsp,dbnsfp.revel,dbnsfp.alphamissense,cadd.phred",
+                                        reserved = TRUE),
+                  "&size=1000")  # MyVariant's max page size; gene-scoped result count is always well under it
+    resp <- tryCatch(httr::GET(url, httr::timeout(30)), error = function(e) NULL)
+    if (is.null(resp) || httr::status_code(resp) != 200) next
+    parsed <- jsonlite::fromJSON(httr::content(resp, "text", encoding = "UTF-8"),
+                                 simplifyVector = FALSE)
+    for (h in parsed$hits) {
+      hit_hgvsps <- h$dbnsfp$hgvsp
+      if (is.list(hit_hgvsps)) hit_hgvsps <- unlist(hit_hgvsps)
+      matched <- intersect(ch, hit_hgvsps)  # tie hit back to the caller's requested notation(s)
+      for (hg in matched) {
+        if (hg %in% seen) next  # first matching hit per hgvsp wins
+        seen <- c(seen, hg)
+        rows[[length(rows) + 1]] <- data.frame(
+          hgvsp = hg,
+          revel = safe_extract_num(h$dbnsfp, "revel", "score"),
+          am    = safe_extract_num(h$dbnsfp, "alphamissense", "score"),
+          cadd  = safe_extract_num(h, "cadd", "phred"),
+          stringsAsFactors = FALSE)
+      }
+    }
+    Sys.sleep(0.2)  # rate-limit courtesy, matches existing dbNSFP path
+  }
+  if (length(rows) == 0) return(empty_df())
+  do.call(rbind, rows)
+}
+
 # =============================================================================
 # MULTI-CONSERVATION TRACK — UCSC REST API
 # =============================================================================
