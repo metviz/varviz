@@ -6502,7 +6502,7 @@ shinyServer(function(input, output, session) {
         # — Gene-specific calibration (advisory only — never mutates acmg_res/PP3) —
         calib_section <- tryCatch({
           gene_nm <- isolate(input$gene_name)
-          q_hgvsp <- as.character(r$Variant)   # already dbNSFP-style "p.<Ref1><pos><Alt1>"
+          q_hgvsp <- aa3to1(as.character(r$Variant))   # normalize to dbNSFP-style "p.<Ref1><pos><Alt1>"
           cal <- gene_calibration_live(gene_name = gene_nm,
                                        query_hgvsp = q_hgvsp,
                                        min_sens = input$calib_min_sens %||% 0.90)
