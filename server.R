@@ -1952,10 +1952,14 @@ fetch_dbnsfp <- function(gene_name, hgvsp) {
   
   for (v in variants_to_try) {
     tryCatch({
-      # Build the q= parameter as a single string, then encode the whole thing
-      q_param <- paste0("dbnsfp.genename:", gene_name, " AND dbnsfp.hgvsp:", trimws(v))
+      # Build the q= parameter as a single string, then encode the whole thing.
+      # Escape Lucene metacharacters so an hgvsp like "p.R213*" is matched as a literal
+      # term, never parsed as a "*" wildcard (which silently returns a wrong record).
+      vv <- trimws(v)
+      q_param <- paste0("dbnsfp.genename:", escape_lucene(gene_name),
+                        " AND dbnsfp.hgvsp:(", escape_lucene(vv), ")")
       url <- paste0("https://myvariant.info/v1/query?",
-                     "q=", URLencode(q_param, reserved = FALSE),
+                     "q=", URLencode(q_param, reserved = TRUE),
                      "&fields=dbnsfp,clinvar,dbsnp,cadd&size=5")
       message("[dbNSFP] Trying: ", gene_name, " ", v, " -> ", url)
       resp <- httr::GET(url, httr::timeout(15))
@@ -1963,17 +1967,25 @@ fetch_dbnsfp <- function(gene_name, hgvsp) {
         message("[dbNSFP] HTTP ", httr::status_code(resp), " for ", v)
         next
       }
-      
+
       json_text <- httr::content(resp, "text", encoding = "UTF-8")
       parsed <- jsonlite::fromJSON(json_text, simplifyVector = FALSE)
-      
+
       hits <- parsed$hits
       if (!is.null(hits) && length(hits) > 0) {
-        result <- hits[[1]]
-        message("[dbNSFP] HIT for ", gene_name, " ", v, " — keys: ", 
-                paste(names(result$dbnsfp)[1:min(8, length(names(result$dbnsfp)))], collapse = ", "))
-        cache_set("dbnsfp", cache_key, result)
-        return(result)
+        # Verify the hit actually carries this hgvsp before trusting it — mirror the
+        # intersect-style re-key check in fetch_dbnsfp_batch. Guards against a stray
+        # wildcard/near-match record being attributed to the queried protein change.
+        for (h in hits) {
+          hit_hgvsps <- h$dbnsfp$hgvsp
+          if (is.list(hit_hgvsps)) hit_hgvsps <- unlist(hit_hgvsps)
+          if (length(hit_hgvsps) > 0 && vv %in% hit_hgvsps) {
+            message("[dbNSFP] HIT for ", gene_name, " ", v, " — keys: ",
+                    paste(names(h$dbnsfp)[1:min(8, length(names(h$dbnsfp)))], collapse = ", "))
+            cache_set("dbnsfp", cache_key, h)
+            return(h)
+          }
+        }
       }
     }, error = function(e) {
       message("[dbNSFP] Error querying ", v, ": ", e$message)
