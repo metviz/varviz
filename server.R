@@ -3752,6 +3752,25 @@ classify_acmg <- function(tags_vec) {
   )
 }
 
+# Gated PP3 override, gene-tier x per-variant score gate. Given a calib_override()
+# list (gene/predictor/tier/threshold) and one variant row `r`, returns the
+# tags_vec with any PP3 tag replaced by the gene-specific tier — but ONLY when
+# this row's own score for ovr$predictor clears ovr$threshold. Otherwise
+# tags_vec is returned untouched (row keeps its Pejaver PP3 call).
+apply_calib_override <- function(tags_vec, ovr, r) {
+  if (is.null(ovr)) return(tags_vec)
+  score_col <- c(REVEL = "REVEL_Score", AM = "AM_Score", CADD = "CADD_Score")[ovr$predictor]
+  if (is.na(score_col) || !score_col %in% names(r)) return(tags_vec)
+  score <- suppressWarnings(as.numeric(r[[score_col]]))
+  if (is.na(score) || is.na(ovr$threshold) || score < ovr$threshold) return(tags_vec)
+  lvl <- unname(c(Supporting = "1", Moderate = "2", Strong = "3",
+                  `Very strong` = "3")[ovr$tier])
+  tags_vec <- tags_vec[!grepl("^PP3", tags_vec)]
+  if (!is.na(lvl))
+    tags_vec <- c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[lvl]))
+  tags_vec
+}
+
 # ============================================================
 # ACMG Clinical Comment Generator
 # Produces natural-language variant interpretation text from ACMG tags + data
@@ -5732,7 +5751,7 @@ shinyServer(function(input, output, session) {
     req(p, p$optimal)
     if (isTRUE(p$confident)) {
       calib_override(list(gene = as.character(input$gene_name), predictor = pred,
-                          tier = p$optimal$gene_tier))
+                          tier = p$optimal$gene_tier, threshold = p$optimal$threshold))
     } else {
       showModal(modalDialog(
         title = "Low-confidence gene calibration",
@@ -5752,7 +5771,7 @@ shinyServer(function(input, output, session) {
     p <- cal$predictors[[input$calib_pred]]
     req(p, p$optimal)
     calib_override(list(gene = as.character(input$gene_name), predictor = input$calib_pred,
-                        tier = p$optimal$gene_tier))
+                        tier = p$optimal$gene_tier, threshold = p$optimal$threshold))
   })
 
   variants <- eventReactive(input$goButton,{
@@ -6446,15 +6465,13 @@ shinyServer(function(input, output, session) {
         )
         if (!is.null(dn_tag)) tags_vec <- c(tags_vec, dn_tag)
         # Gated opt-in PP3 override — only fires once the user has applied it
-        # for this exact gene (see calib_apply/calib_confirm observers above).
-        # Default (no override): tags_vec is untouched, byte-identical to pre-feature.
+        # for this exact gene (see calib_apply/calib_confirm observers above),
+        # AND only for rows whose own score clears the gene-optimal threshold
+        # that produced the tier (apply_calib_override gates on r$<predictor>_Score).
+        # Default (no override, or row below threshold): tags_vec is untouched.
         ovr <- calib_override()
         if (!is.null(ovr) && identical(ovr$gene, isolate(as.character(input$gene_name)))) {
-          lvl <- unname(c(Supporting = "1", Moderate = "2", Strong = "3",
-                          `Very strong` = "3")[ovr$tier])
-          tags_vec <- tags_vec[!grepl("^PP3", tags_vec)]
-          if (!is.na(lvl))
-            tags_vec <- c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[lvl]))
+          tags_vec <- apply_calib_override(tags_vec, ovr, r)
         }
         acmg_res <- classify_acmg(tags_vec)
         pts      <- acmg_res$pts
@@ -7169,6 +7186,13 @@ shinyServer(function(input, output, session) {
         switch(val, pm3="PM3", pm3_moderate="PM3_moderate", pm3_strong="PM3_strong", "")
       })
 
+      # Gated opt-in PP3 override — mirrors the exact gate applied to the
+      # on-screen card (server.R ~6451-6458) so the exported "Final" columns
+      # match what the user actually saw, instead of silently reverting to
+      # the pre-override Pejaver PP3 call.
+      ovr <- isolate(calib_override())
+      ovr_active <- !is.null(ovr) && identical(ovr$gene, isolate(as.character(input$gene_name)))
+
       # Recompute Final_ACMG_Tags and Final_Classification with PP1
       vtbl$Final_ACMG_Tags <- sapply(seq_len(nrow(vtbl)), function(i) {
         base_tags <- if (nchar(as.character(vtbl$ACMG_Tags[i])) > 0)
@@ -7185,6 +7209,7 @@ shinyServer(function(input, output, session) {
                               vtbl$PTM_ACMG[i] == "PS3_supporting")
                             "PS3_supporting" else ""
         if (nchar(ptm_tag_export) > 0) base_tags <- c(base_tags, ptm_tag_export)
+        if (ovr_active) base_tags <- apply_calib_override(base_tags, ovr, vtbl[i, ])
         paste(base_tags, collapse=", ")
       })
       vtbl$Final_Classification <- sapply(seq_len(nrow(vtbl)), function(i) {
