@@ -54,3 +54,21 @@ PREDICTORS <- list(
   AM    = list(col = "am",    cuts = c(Supporting = 0.564)),
   CADD  = list(col = "cadd",  cuts = c(Supporting = 28.1, Moderate = 35))
 )
+
+# 3-letter -> 1-letter amino acid. Ter included for alt (nonsense), excluded as a
+# missense ref (a p.Ter### start is not a missense variant).
+.AA3TO1 <- c(Ala="A",Arg="R",Asn="N",Asp="D",Cys="C",Gln="Q",Glu="E",Gly="G",
+             His="H",Ile="I",Leu="L",Lys="K",Met="M",Phe="F",Pro="P",Ser="S",
+             Thr="T",Trp="W",Tyr="Y",Val="V",Ter="*")
+
+# ClinVar `name` -> dbNSFP hgvsp like "p.R130G"; NA unless a clean missense p.Xxx###Yyy.
+parse_clinvar_hgvsp <- function(name) {
+  vapply(name, function(nm) {
+    if (is.na(nm)) return(NA_character_)
+    g <- regmatches(nm, regexec("p\\.([A-Za-z]{3})([0-9]+)([A-Za-z]{3})", nm))[[1]]
+    if (length(g) != 4) return(NA_character_)
+    ref <- .AA3TO1[[g[2]]]; alt <- .AA3TO1[[g[4]]]
+    if (is.null(ref) || is.null(alt) || ref == "*") return(NA_character_)
+    paste0("p.", ref, g[3], alt)
+  }, character(1), USE.NAMES = FALSE)
+}
