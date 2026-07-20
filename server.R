@@ -2048,7 +2048,8 @@ fetch_dbnsfp_batch <- function(gene_name, hgvsps) {
       # hit unless every gene it names is the one we asked for, so an hgvsp belonging to a
       # different co-listed gene's transcript can never be attributed to gene_name (required
       # correctness invariant — do not relax this to "any() matches").
-      if (is.null(hit_genenames) || !all(unique(hit_genenames) == gene_name)) next
+      if (is.null(hit_genenames) || length(hit_genenames) == 0 ||
+          anyNA(hit_genenames) || !all(hit_genenames == gene_name)) next  # fail closed on empty/NA
       hit_hgvsps <- h$dbnsfp$hgvsp
       if (is.list(hit_hgvsps)) hit_hgvsps <- unlist(hit_hgvsps)
       # Required correctness invariant: re-key off the hit's own hgvsp field via intersect()
@@ -2085,7 +2086,11 @@ gene_calibration_live <- function(gene_name, query_hgvsp = NULL, min_sens = 0.90
                                                       am=numeric(), cadd=numeric()))
       hg <- parse_clinvar_hgvsp(df$name)
       sc <- fetch_dbnsfp_batch(gene_name, hg)
-      merge(data.frame(hgvsp = hg, stringsAsFactors = FALSE), sc, by = "hgvsp")
+      m <- merge(data.frame(hgvsp = hg, stringsAsFactors = FALSE), sc, by = "hgvsp")
+      # Dedup by protein change: >1 ClinVar record can map to the same hgvsp, and the
+      # merge would then emit one scored row per record, inflating N and biasing LR+.
+      # Keep first occurrence so each protein change counts exactly once per arm.
+      m[!duplicated(m$hgvsp), , drop = FALSE]
     }
     arms <- list(path = add_scores(pv), benign = add_scores(bn),
                  n_raw = list(path = if (is.null(pv)) 0 else nrow(pv),
@@ -3765,10 +3770,12 @@ apply_calib_override <- function(tags_vec, ovr, r) {
   if (is.na(score) || is.na(ovr$threshold) || score < ovr$threshold) return(tags_vec)
   lvl <- unname(c(Supporting = "1", Moderate = "2", Strong = "3",
                   `Very strong` = "3")[ovr$tier])
+  # Compute the replacement level FIRST. When the gene-optimal tier is "None" (or any
+  # value with no PP3 mapping) there is nothing to put back, so leave the existing
+  # Pejaver PP3 tag intact — never strip evidence with no replacement.
+  if (is.na(lvl)) return(tags_vec)
   tags_vec <- tags_vec[!grepl("^PP3", tags_vec)]
-  if (!is.na(lvl))
-    tags_vec <- c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[lvl]))
-  tags_vec
+  c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[lvl]))
 }
 
 # ============================================================
@@ -6576,16 +6583,25 @@ shinyServer(function(input, output, session) {
                                        query_hgvsp = q_hgvsp,
                                        min_sens = input$calib_min_sens %||% 0.90)
 
+          # LR+ 1.0 with no support on any predictor arm means there's no usable
+          # gene-specific ClinVar data — show a note, not three fake placeholder rows.
+          has_data <- any(vapply(cal$predictors,
+                                 function(p) p$n_pos > 0 || p$n_neg > 0, logical(1)))
+
           pred_rows <- lapply(names(cal$predictors), function(pn) {
             p <- cal$predictors[[pn]]
-            vrows <- apply(p$validation, 1, function(v) {
-              agree <- identical(v[["gene_tier"]], v[["pejaver_tier"]])
-              paste0('<tr><td>', pn, ' &ge; ', v[["threshold"]], '</td>',
-                     '<td>LR+ ', formatC(as.numeric(v[["lr"]]), format="f", digits=1),
-                     ' (', formatC(as.numeric(v[["lo"]]), format="f", digits=1), '&ndash;',
-                     formatC(as.numeric(v[["hi"]]), format="f", digits=1), ')</td>',
-                     '<td>', v[["gene_tier"]], '</td>',
-                     '<td>', if (agree) '=' else '&ne;', ' Pejaver ', v[["pejaver_tier"]], '</td></tr>')
+            val <- p$validation
+            # Index the data.frame column-wise, not apply(,1,): apply coerces the mixed-type
+            # frame to a character matrix, so threshold would print via as.character rather
+            # than formatC like the other numeric fields.
+            vrows <- lapply(seq_len(nrow(val)), function(i) {
+              agree <- identical(val$gene_tier[i], val$pejaver_tier[i])
+              paste0('<tr><td>', pn, ' &ge; ', formatC(val$threshold[i], format="f", digits=3), '</td>',
+                     '<td>LR+ ', formatC(val$lr[i], format="f", digits=1),
+                     ' (', formatC(val$lo[i], format="f", digits=1), '&ndash;',
+                     formatC(val$hi[i], format="f", digits=1), ')</td>',
+                     '<td>', val$gene_tier[i], '</td>',
+                     '<td>', if (agree) '=' else '&ne;', ' Pejaver ', val$pejaver_tier[i], '</td></tr>')
             })
             opt <- p$optimal
             opt_row <- if (is.null(opt)) '' else
@@ -6614,16 +6630,23 @@ shinyServer(function(input, output, session) {
             ' <span style="color:#94a3b8;font-size:10px;">(independent of the calibration above &mdash; not double-counted)</span>',
             '</div>')
 
+          body <- if (!has_data)
+            '<div style="font-size:11px;color:#64748b;">Insufficient gene-specific data &mdash; using genome-wide Pejaver thresholds.</div>'
+          else
+            paste0(
+              '<table style="width:100%;font-size:11px;border-collapse:collapse;">',
+              paste0(pred_rows, collapse = ""),
+              '</table>',
+              loo_note,
+              '<div style="font-size:10px;color:#94a3b8;">match rate ',
+              formatC(100 * (cal$match_rate %||% 0), format = "f", digits = 0),
+              '% of ClinVar variants scored.</div>')
+
           paste0(
             sec_hdr("Gene-specific calibration", "#334155", "&#9878;"),
             '<tr><td colspan="99">',
-            '<table style="width:100%;font-size:11px;border-collapse:collapse;">',
-            paste0(pred_rows, collapse = ""),
-            '</table>',
-            loo_note, clinvar_line,
-            '<div style="font-size:10px;color:#94a3b8;">match rate ',
-            formatC(100 * (cal$match_rate %||% 0), format = "f", digits = 0),
-            '% of ClinVar variants scored.</div>',
+            body,
+            clinvar_line,
             '</td></tr>'
           )
         }, error = function(e) "")

@@ -2,6 +2,10 @@
 # No network, no shiny. Sourced by server.R (like typography.R).
 # Evidence Strength (LR+/OddsPath) is prior-free; prior enters only at acmg_posterior.
 
+# `%||%` is base R only since 4.4; define a fallback for older R. Sourced before
+# server.R uses it. Guarded so it never shadows the identical base operator.
+if (!exists("%||%", mode = "function")) `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
+
 # OddsPath (LR+) -> Tavtigian Evidence-Strength tier. Boundaries = prior-free odds,
 # C = 2.0813 = 350^(1/8), consistent with acmg_posterior in server.R.
 oddspath_tier <- function(lr) {
