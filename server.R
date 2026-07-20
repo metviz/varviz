@@ -5713,7 +5713,48 @@ shinyServer(function(input, output, session) {
     req(!is.null(input$gene_name) && nchar(trimws(input$gene_name)) > 0)
     shinyjs::reset("user_file")
   }, ignoreInit = TRUE)
-  
+
+  # ── Gated opt-in PP3 override (session-only) ─────────────────────────────
+  # calib_override, when set, replaces the Pejaver PP3 tag with the gene-
+  # specific tier (from gene_calibration_live) in the ACMG tag path below.
+  # Keyed to gene; clears whenever a different gene is queried so a stale
+  # override never leaks onto an unrelated gene's call.
+  calib_override <- reactiveVal(NULL)   # list(gene, predictor, tier) or NULL
+
+  observeEvent(input$gene_name, { calib_override(NULL) }, ignoreInit = TRUE)
+
+  observeEvent(input$calib_apply, {
+    req(input$gene_name, input$calib_pred)
+    cal <- gene_calibration_live(as.character(input$gene_name),
+                                  min_sens = input$calib_min_sens %||% 0.90)
+    pred <- input$calib_pred
+    p <- cal$predictors[[pred]]
+    req(p, p$optimal)
+    if (isTRUE(p$confident)) {
+      calib_override(list(gene = as.character(input$gene_name), predictor = pred,
+                          tier = p$optimal$gene_tier))
+    } else {
+      showModal(modalDialog(
+        title = "Low-confidence gene calibration",
+        paste0("This gene has n=", p$n_pos, "/", p$n_neg,
+               " per arm (< 20 per arm floor). Apply the gene-specific PP3 tier anyway?"),
+        footer = tagList(modalButton("Cancel"),
+                         actionButton("calib_confirm", "Apply anyway"))
+      ))
+    }
+  })
+
+  observeEvent(input$calib_confirm, {
+    removeModal()
+    req(input$gene_name, input$calib_pred)
+    cal <- gene_calibration_live(as.character(input$gene_name),
+                                  min_sens = input$calib_min_sens %||% 0.90)
+    p <- cal$predictors[[input$calib_pred]]
+    req(p, p$optimal)
+    calib_override(list(gene = as.character(input$gene_name), predictor = input$calib_pred,
+                        tier = p$optimal$gene_tier))
+  })
+
   variants <- eventReactive(input$goButton,{
     raw <- strsplit(input$variants, "[,]")[[1]]
     raw <- trimws(raw)
@@ -6404,6 +6445,17 @@ shinyServer(function(input, output, session) {
           NULL
         )
         if (!is.null(dn_tag)) tags_vec <- c(tags_vec, dn_tag)
+        # Gated opt-in PP3 override — only fires once the user has applied it
+        # for this exact gene (see calib_apply/calib_confirm observers above).
+        # Default (no override): tags_vec is untouched, byte-identical to pre-feature.
+        ovr <- calib_override()
+        if (!is.null(ovr) && identical(ovr$gene, isolate(as.character(input$gene_name)))) {
+          lvl <- unname(c(Supporting = "1", Moderate = "2", Strong = "3",
+                          `Very strong` = "3")[ovr$tier])
+          tags_vec <- tags_vec[!grepl("^PP3", tags_vec)]
+          if (!is.na(lvl))
+            tags_vec <- c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[lvl]))
+        }
         acmg_res <- classify_acmg(tags_vec)
         pts      <- acmg_res$pts
 

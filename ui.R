@@ -373,6 +373,12 @@ shinyUI(fluidPage(
                             numericInput("calib_min_sens",
                                          label = "Gene calibration — min sensitivity",
                                          value = 0.90, min = 0.50, max = 1.00, step = 0.05),
+                            # Opt-in override: replaces Pejaver PP3 with the gene-specific
+                            # tier for this session only. Advisory by default — nothing
+                            # changes until the user picks a predictor and clicks Apply.
+                            selectInput("calib_pred", "Override PP3 with gene-specific tier:",
+                                        choices = c("REVEL", "AM", "CADD"), selected = "REVEL"),
+                            actionButton("calib_apply", "Apply gene-specific PP3"),
                             # De Novo Status: moved to per-variant card dropdowns
                             # (applied individually per variant, not globally)
                             radioButtons("format", "Download format:",
