@@ -6534,6 +6534,22 @@ shinyServer(function(input, output, session) {
         cv_sig  <- as.character(r$ClinVar)
         cv_col  <- if (grepl("pathogenic", tolower(cv_sig)) && !grepl("benign", tolower(cv_sig))) "#ef4444" else if (grepl("benign", tolower(cv_sig)) && !grepl("pathogenic", tolower(cv_sig))) "#10b981" else if (grepl("uncertain|conflicting", tolower(cv_sig))) "#f59e0b" else "#64748b"
 
+        # Matched ClinVar variant — may be a same-codon (PM5) match, not this exact variant.
+        # cv_pch = the matched record's protein change; cv_link hyperlinks it to its ClinVar page.
+        cv_match <- as.character(r$ClinVar_Match)
+        cv_pch   <- { nm <- as.character(r$ClinVar_Name)
+                      m  <- regmatches(nm, regexpr("p\\.[A-Za-z]{3}[0-9]+[A-Za-z]{3}", nm))
+                      if (length(m)) m[1] else "" }
+        cv_vid   <- { v <- regmatches(as.character(r$ClinVar_VCV),
+                                      regexpr("[0-9]+", as.character(r$ClinVar_VCV)))
+                      if (length(v)) v[1] else "" }
+        cv_link  <- if (nzchar(cv_pch)) {
+          if (nzchar(cv_vid))
+            paste0('<a href="https://www.ncbi.nlm.nih.gov/clinvar/variation/', as.integer(cv_vid),
+                   '/" target="_blank" style="color:#0369a1;">', esc(cv_pch), ' &#8599;</a>')
+          else esc(cv_pch)
+        } else ""
+
         # ── Section rows ──────────────────────────────────────────────────
 
         # — Row 0: title bar —
@@ -6648,12 +6664,25 @@ shinyServer(function(input, output, session) {
           stars_html <- if (!is.na(n_stars_cal) && n_stars_cal >= 0)
             paste0(paste(rep("⭐", n_stars_cal), collapse = ""),
                    paste(rep("☆", 4L - n_stars_cal), collapse = "")) else ""
-          clinvar_line <- paste0(
+          # Distinguish an exact ClinVar record for THIS variant from a same-codon (PM5)
+          # match on a different residue change — the latter is not this variant's own entry.
+          clinvar_line <- if (identical(cv_match, "exact")) paste0(
             '<div style="font-size:11px;margin-top:4px;">',
             '<strong>This variant in ClinVar:</strong> <span style="color:', cv_col, ';font-weight:600;">',
             esc(cv_sig), '</span> ', stars_html,
+            if (nzchar(cv_link)) paste0(' (', cv_link, ')') else '',
             ' <span style="color:#94a3b8;font-size:10px;">(independent of the calibration above &mdash; not double-counted)</span>',
             '</div>')
+          else if (identical(cv_match, "position") && nzchar(cv_sig)) paste0(
+            '<div style="font-size:11px;margin-top:4px;">',
+            '<strong>Same-codon variant in ClinVar (PM5):</strong> <span style="color:', cv_col, ';font-weight:600;">',
+            esc(cv_sig), '</span> ', stars_html,
+            if (nzchar(cv_link)) paste0(' ', cv_link) else '',
+            ' <span style="color:#94a3b8;font-size:10px;">&mdash; this exact variant is not in ClinVar; a different residue change at the same codon (independent of the calibration above, not double-counted)</span>',
+            '</div>')
+          else paste0(
+            '<div style="font-size:11px;margin-top:4px;color:#64748b;">',
+            '<strong>This variant:</strong> not found in ClinVar.</div>')
 
           body <- if (!has_data)
             '<div style="font-size:11px;color:#64748b;">Insufficient gene-specific data &mdash; using genome-wide Pejaver thresholds.</div>'
@@ -6701,7 +6730,8 @@ shinyServer(function(input, output, session) {
                                   paste0('<span style="color:',sc_col,';font-weight:600;">',r$ScoreCons,'</span>')
                                 } else '<span style="color:#cbd5e1;">—</span>'),
           info_cell("PTM",       if (nchar(as.character(r$PTM))>0) esc(r$PTM) else '<span style="color:#cbd5e1;">—</span>'),
-          info_cell("ClinVar",   paste0('<span style="color:',cv_col,';font-weight:600;">',esc(cv_sig),'</span>'),
+          info_cell("ClinVar",   paste0('<span style="color:',cv_col,';font-weight:600;">',esc(cv_sig),'</span>',
+                                        if (identical(cv_match,"position")) ' <span style="color:#94a3b8;font-size:10px;">(same codon)</span>' else ''),
                                 note=paste0(
                                   {
                                     n_stars <- suppressWarnings(as.integer(r$ClinVar_Stars))
@@ -6719,7 +6749,8 @@ shinyServer(function(input, output, session) {
                                              filled, empty, '</span> ')
                                     } else ""
                                   },
-                                  if(nchar(as.character(r$ClinVar_Trait))>0) paste0(" · ", r$ClinVar_Trait) else ""
+                                  if (nzchar(cv_link)) paste0(" · ", cv_link) else "",
+                                  if(nchar(as.character(r$ClinVar_Trait))>0) paste0(" · ", esc(r$ClinVar_Trait)) else ""
                                 )),
           '</tr>'
         )
