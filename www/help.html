@@ -96,6 +96,7 @@
   <a href="#acmg-scoring">Scoring Engine</a>
   <a href="#acmg-criteria">Criteria Details</a>
   <a href="#clinvar-logic">ClinVar Logic</a>
+  <a href="#gene-calibration">Gene Calibration</a>
   <a href="#geneinfo">GeneInfo Tab</a>
   <a href="#controls">Controls</a>
   <a href="#datasources">Data Sources</a>
@@ -530,6 +531,7 @@
       <li><strong>CCRS constraint:</strong> Variant falls in a constrained coding region (&ge;90th percentile CCRs score).</li>
       <li><strong>UniProt domain:</strong> Variant is in a structurally or functionally critical annotated domain.</li>
       <li><strong>15 aa ClinVar neighborhood (new):</strong> &ge;3 Pathogenic/LP ClinVar variants fall within &plusmn;15 amino acids of the query position AND &ge;75% of all classified variants in that window are pathogenic. This identifies mutational hotspots not captured by named UniProt domains. Uses the already-fetched ClinVar dataset &mdash; no additional API call. The <em>Mutation Density</em> track and <em>Density Dominant</em> column in the annotation table provide complementary visual corroboration of this signal.</li>
+      <li><strong>DOLPHIN Pfam alignment (last resort):</strong> Consulted only when none of the pathways above fire. The variant is aligned to its Pfam domain via the DOLPHIN service (Corcuff et al. 2023, <em>Front. Bioinform.</em> 3:1127341); a hit at a constrained Pfam position fires PM1. Live API call, orthogonal to gnomAD frequency and ClinVar evidence. Enabled by default; disabled only in high-throughput benchmarking to respect the DOLPHIN rate limit.</li>
     </ol>
     <p><strong>Upgrade to PM1_strong (PS-equivalent, +4 pts):</strong></p>
     <ul>
@@ -537,7 +539,7 @@
       <li>UniProt domain hit <em>and</em> neighborhood hotspot (pathways 2+3 combined).</li>
     </ul>
     <p><strong>Not applied when:</strong> gnomAD AF &gt; 1% (BS1/BA1 range).</p>
-    <p><strong>Data sources:</strong> CCRS local file, UniProt features API, ClinVar (neighborhood), ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons).</p>
+    <p><strong>Data sources:</strong> CCRS local file, UniProt features API, ClinVar (neighborhood), ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons), DOLPHIN API (Pfam last-resort pathway).</p>
   </div>
 
   <div class="group-box">
@@ -752,25 +754,56 @@
     <tr>
       <td><strong>Exact</strong></td>
       <td>User&rsquo;s protein change (3-letter and 1-letter) found verbatim in ClinVar variant name</td>
-      <td>&ldquo;Pathogenic&rdquo; (clean)</td>
+      <td>&ldquo;<em>&lt;sig&gt;</em>&rdquo; with the matched record hyperlinked to its ClinVar page</td>
       <td>PS1, PP5, BP6</td>
     </tr>
     <tr>
       <td><strong>Position</strong></td>
-      <td>Different variant at same amino acid position in ClinVar (e.g. query p.Cys29Trp, ClinVar has p.Cys29Ter)</td>
-      <td>&ldquo;Pathogenic&rdquo; + <em>&#9888; diff variant at pos</em></td>
+      <td>Different missense at the same codon in ClinVar (e.g. query p.Leu307Phe, ClinVar has p.Leu307Val)</td>
+      <td>&ldquo;<em>&lt;sig&gt;</em> <span style="color:#94a3b8;">(same codon)</span>&rdquo; + hyperlink to the <em>matched</em> variant; the calibration panel labels it &ldquo;Same-codon variant in ClinVar (PM5)&rdquo; and states the exact variant is not in ClinVar</td>
       <td>PM5 only</td>
     </tr>
     <tr>
       <td><strong>None</strong></td>
-      <td>No ClinVar entry at this position</td>
-      <td>&ldquo;Not in ClinVar&rdquo;</td>
+      <td>No missense ClinVar entry at this codon</td>
+      <td>&ldquo;not found in ClinVar&rdquo;</td>
       <td>None</td>
     </tr>
   </table>
   <div class="tip">
     <strong>Why this matters:</strong> A stop-gain (p.Cys29Ter) and a missense (p.Cys29Trp) have different molecular consequences. PS1 requires the <em>identical</em> amino acid change. VarViz correctly assigns PM5 for position matches and PS1 only for exact amino acid change matches - preventing inflated pathogenicity calls.
   </div>
+</div>
+
+<!-- GENE-SPECIFIC PP3 CALIBRATION -->
+<h2 id="gene-calibration">Gene-Specific PP3 Calibration</h2>
+
+<div class="card">
+  <p>The Pejaver 2022 PP3/BP4 thresholds (REVEL 0.644 / 0.773 / 0.932, CADD 28.1 / 35, AlphaMissense 0.564) are <strong>genome-wide</strong> calibrations. They are mis-calibrated for some genes. Because VarViz already pulls the queried gene&rsquo;s ClinVar and dbNSFP data live, it recomputes each predictor&rsquo;s <strong>Evidence Strength for this gene</strong> at query time and shows where the genome-wide default disagrees &mdash; a capability static-threshold tools lack. The panel appears on each variant card under <strong>&#9878; Gene-Specific Calibration</strong>.</p>
+
+  <h3>What it computes</h3>
+  <p>For the gene, it fetches two ClinVar arms &mdash; Pathogenic/Likely-pathogenic (P/LP) and Benign/Likely-benign (LB/B) &mdash; scores every missense variant in both arms with REVEL / AlphaMissense / CADD (one batched MyVariant.info query), and computes the positive likelihood ratio at each threshold:</p>
+  <ul>
+    <li><strong>LR+ = sensitivity / (1 &minus; specificity)</strong>, positives = the gene&rsquo;s P/LP arm, negatives = its LB/B arm. A Haldane-Anscombe +0.5 continuity correction keeps clean-separation thresholds finite; a 95% CI (Katz log method) is always shown.</li>
+    <li><strong>LR+ <em>is</em> the Evidence Strength (OddsPath; Tavtigian 2018)</strong> &mdash; it is <em>prior-free</em>. Tiers: Supporting &ge; 2.08, Moderate &ge; 4.33, Strong &ge; 18.7, Very strong &ge; 350.</li>
+  </ul>
+
+  <h3>The two outputs, per predictor</h3>
+  <table>
+    <tr><th>Output</th><th>Meaning</th></tr>
+    <tr><td><strong>Validation rows</strong></td><td>At each fixed Pejaver cut-point: the gene&rsquo;s own LR+ (95% CI), the gene tier, and <strong>= / &ne; vs the genome-wide Pejaver</strong> label. A &ne; flags where the global threshold is mis-calibrated for this gene.</td></tr>
+    <tr><td><strong>Gene-optimal</strong></td><td>The threshold that maximises LR+ subject to a <strong>minimum-sensitivity floor</strong> (default 0.90, user-settable). Reported with its LR+, CI, and tier. A permissive floor pushes the optimal threshold lower; raise the floor to demand more stringent gene-specific cut-points.</td></tr>
+  </table>
+
+  <div class="tip">
+    <strong>Confidence gate:</strong> a gene needs <strong>&ge; 20 variants per arm</strong> for a high-confidence result. Below that the numbers and CIs are still shown, flagged <em>&#9888; low confidence (n = P/LP&nbsp;/&nbsp;LB/B per arm)</em> &mdash; small arms give very wide CIs (the whole reason the JCEM MEN1 calibration it is modelled on was unstable at n&nbsp;=&nbsp;15 benign).
+  </div>
+
+  <h3>Circularity guard (leave-one-out)</h3>
+  <p>If the queried variant is itself in the gene&rsquo;s ClinVar arm, it is <strong>dropped before the LR+ is computed</strong> (leave-one-out), so the threshold that reclassifies it was never trained on it. The panel notes when this fires. The variant&rsquo;s own ClinVar assertion is shown on a <em>separate</em> line and is <strong>not</strong> folded into the calibration &mdash; the two are independent evidence streams (no double-count). When the query is a <em>same-codon</em> match (see <a href="#clinvar-logic">ClinVar Logic</a>), that line reads &ldquo;Same-codon variant in ClinVar (PM5)&rdquo; and states the exact variant is not itself in ClinVar.</p>
+
+  <h3>Advisory by default &mdash; opt-in override</h3>
+  <p>The panel is <strong>advisory</strong>: it never changes the ACMG call on its own. To apply the gene-specific tier to the PP3 call for the current session, use the sidebar controls (see <a href="#controls">Controls</a>). A confident result applies on one click; a low-confidence result requires an explicit confirmation. The override is session-only and keyed to the gene &mdash; it clears when a different gene is queried, and it too honours leave-one-out per variant.</p>
 </div>
 
 <!-- GENEINFO TAB -->
@@ -806,6 +839,14 @@
   <li><strong>2 Stars or more</strong>: multiple submitters, no conflicts</li>
 </ul>
 
+<h3>Gene Calibration &amp; PP3 Override</h3>
+<p>Drive the <a href="#gene-calibration">Gene-Specific PP3 Calibration</a> panel:</p>
+<ul>
+  <li><strong>Gene calibration &mdash; min sensitivity</strong>: the sensitivity floor (default 0.90) for the gene-optimal threshold. Higher values keep more true positives and push the optimal threshold lower; lower values allow a more stringent, higher-LR+ threshold.</li>
+  <li><strong>Override PP3 with gene-specific tier</strong>: pick which predictor (REVEL / AM / CADD) the override uses.</li>
+  <li><strong>Apply gene-specific PP3</strong>: replaces the Pejaver PP3 tier with this gene&rsquo;s calibrated tier for the current session. Advisory by default &mdash; nothing changes until you click. A high-confidence gene applies on one click; a low-confidence gene (&lt; 20 per arm) asks for explicit confirmation. The override clears when you query a different gene.</li>
+</ul>
+
 <h3>Frequency Cutoff Method</h3>
 <ul>
   <li><strong>Calculate AF (by prevalence)</strong>: maximum credible AF from disease prevalence, heterogeneity, penetrance (Whiffin et al. (2017) [14]). Adjust via <em>Edit parameters</em>. Default: prevalence 1&nbsp;in&nbsp;2,000; allelic heterogeneity 0.2; penetrance 0.5.</li>
@@ -835,8 +876,9 @@
   <tr><td>Ensembl REST API</td><td><span class="badge api">API</span></td><td>Canonical transcript exon structure for mapping UCSC genomic scores to amino acid coordinates</td></tr>
   <tr><td>ClinGen LDH / eRepo</td><td><span class="badge api">API</span></td><td>Gene–disease validity classifications (Definitive / Strong / Moderate / Limited / Disputed / Refuted) from ClinGen curated expert panels</td></tr>
   <tr><td>GenCC API</td><td><span class="badge api">API</span></td><td>Gene–disease classifications from GenCC consortium submitters (thegencc.org). Queried when ClinGen LDH and eRepo return no results.</td></tr>
-  <tr><td>GENCODE v49</td><td><span class="badge local">LOCAL</span></td><td>Gene &rarr; UniProt ID mapping &amp; GRCh38 coordinates (VarViz.RData, ~0.2 MB)</td></tr>
-  <tr><td>CCRS / CCRStoAAC</td><td><span class="badge local">LOCAL</span></td><td>Constrained coding regions (tabix-indexed BED, ~200 MB) + ScoreCons protein-coordinate conservation</td></tr>
+  <tr><td>DOLPHIN API</td><td><span class="badge api">API</span></td><td>Pfam-domain alignment for the last-resort PM1 pathway (Corcuff et al. 2023). Consulted only when CCRS / UniProt-domain / ClinVar-neighborhood pathways do not fire; disabled in high-throughput benchmarking.</td></tr>
+  <tr><td>GENCODE v49</td><td><span class="badge local">LOCAL</span></td><td>Gene &rarr; UniProt ID mapping, GRCh38 coordinates &amp; GeVIR percentile (<code>gene_data</code>, 19,076 genes; in <code>data/VarViz.RData</code>)</td></tr>
+  <tr><td>CCRS / CCRStoAAC</td><td><span class="badge local">LOCAL</span></td><td>Constrained coding regions + ScoreCons protein-coordinate conservation (<code>ccrs_data</code>, 10.7&nbsp;M rows; in <code>data/VarViz.RData</code>, ~21&nbsp;MB total, built from the CCRS BED via <code>preprocess_ccrs_to_rdata.R</code>)</td></tr>
   <tr><td>ConSurf</td><td><span class="badge user">USER</span></td><td>Conservation grades (1&ndash;9), normalized scores, burial status (uploaded tab-separated grades file)</td></tr>
   <tr><td>Custom variants</td><td><span class="badge user">USER</span></td><td>Pathogenic variant positions for density overlay (uploaded file)</td></tr>
 </table>
@@ -979,7 +1021,7 @@
   <li style="margin-bottom:12px;">Liu,X., Li,C., Mou,C., Dong,Y. and Tu,Y. (2020) dbNSFP v4: a comprehensive database of transcript-specific functional predictions and annotations for human nonsynonymous and splice-site SNVs. <em>Genome Med.</em>, <strong>12</strong>, 103. doi: <a href="https://doi.org/10.1186/s13073-020-00803-9" target="_blank">10.1186/s13073-020-00803-9</a></li>
   <li style="margin-bottom:12px;">Xin,J. <em>et al.</em> (2016) High-performance web services for querying gene and variant annotation. <em>Genome Biol.</em>, <strong>17</strong>, 91. doi: <a href="https://doi.org/10.1186/s13059-016-0953-9" target="_blank">10.1186/s13059-016-0953-9</a> (MyVariant.info)</li>
   <li style="margin-bottom:12px;">Richards,S. <em>et al.</em> (2015) Standards and guidelines for the interpretation of sequence variants: a joint consensus recommendation of the ACMG and AMP. <em>Genet. Med.</em>, <strong>17</strong>, 405&ndash;424. doi: <a href="https://doi.org/10.1038/gim.2015.30" target="_blank">10.1038/gim.2015.30</a></li>
-  <li style="margin-bottom:12px;">Tavtigian,S.V. <em>et al.</em> (2020) Modeling the ACMG/AMP variant classification guidelines as a Bayesian classification framework. <em>Genet. Med.</em>, <strong>22</strong>, 1054&ndash;1060. doi: <a href="https://doi.org/10.1038/s41436-020-0777-z" target="_blank">10.1038/s41436-020-0777-z</a></li>
+  <li style="margin-bottom:12px;">Tavtigian,S.V., Harrison,S.M., Boucher,K.M. and Biesecker,L.G. (2020) Fitting a naturally scaled point system to the ACMG/AMP variant classification guidelines. <em>Hum. Mutat.</em>, <strong>41</strong>, 1734&ndash;1737. doi: <a href="https://doi.org/10.1002/humu.24088" target="_blank">10.1002/humu.24088</a></li>
   <li style="margin-bottom:12px;">Pejaver,V. <em>et al.</em> (2022) Calibration of computational tools for missense variant pathogenicity classification and ClinGen recommendations for PP3/BP4 criteria. <em>Am. J. Hum. Genet.</em>, <strong>109</strong>, 2163&ndash;2177. doi: <a href="https://doi.org/10.1016/j.ajhg.2022.10.013" target="_blank">10.1016/j.ajhg.2022.10.013</a></li>
   <li style="margin-bottom:12px;">Whiffin,N. <em>et al.</em> (2017) Using high-resolution variant frequencies to empower clinical genome interpretation. <em>Genet. Med.</em>, <strong>19</strong>, 1151&ndash;1158. doi: <a href="https://doi.org/10.1038/gim.2017.26" target="_blank">10.1038/gim.2017.26</a></li>
   <li style="margin-bottom:12px;">Jarvik,G.P. and Browning,B.L. (2016) Consideration of cosegregation in the pathogenicity classification of genomic variants. <em>Am. J. Hum. Genet.</em>, <strong>98</strong>, 1077&ndash;1081. doi: <a href="https://doi.org/10.1016/j.ajhg.2016.04.003" target="_blank">10.1016/j.ajhg.2016.04.003</a></li>
@@ -988,6 +1030,14 @@
   <li style="margin-bottom:12px;">Abramovs,N., Brass,A. and Tassabehji,M. (2020) GeVIR is a continuous gene-level metric that uses variant distribution patterns to prioritize disease candidate genes. <em>Nat. Genet.</em>, <strong>52</strong>, 35&ndash;59. doi: <a href="https://doi.org/10.1038/s41588-019-0560-2" target="_blank">10.1038/s41588-019-0560-2</a></li>
   <li style="margin-bottom:12px;">Maj,C. <em>et al.</em> (2023) Genebe.net: implementation and validation of an automatic ACMG variant pathogenicity criteria assignment. <em>Clin. Genet.</em>, <strong>104</strong>, 509&ndash;516. doi: <a href="https://doi.org/10.1111/cge.14516" target="_blank">10.1111/cge.14516</a></li>
   <li style="margin-bottom:12px;">Li,S. <em>et al.</em> (2025) AutoPM3: enhancing variant interpretation via LLM-driven PM3 evidence extraction from scientific literature. <em>Bioinformatics</em>, <strong>41</strong>, btaf382. doi: <a href="https://doi.org/10.1093/bioinformatics/btaf382" target="_blank">10.1093/bioinformatics/btaf382</a></li>
+  <li style="margin-bottom:12px;">Tavtigian,S.V. <em>et al.</em> (2018) Modeling the ACMG/AMP variant classification guidelines as a Bayesian classification framework. <em>Genet. Med.</em>, <strong>20</strong>, 1054&ndash;1060. doi: <a href="https://doi.org/10.1038/gim.2018.14" target="_blank">10.1038/gim.2018.14</a></li>
+  <li style="margin-bottom:12px;">Corcuff,S. <em>et al.</em> (2023) Protein domains provide a new layer of information for classifying human variations in rare diseases. <em>Front. Bioinform.</em>, <strong>3</strong>, 1127341. doi: <a href="https://doi.org/10.3389/fbinf.2023.1127341" target="_blank">10.3389/fbinf.2023.1127341</a> (DOLPHIN)</li>
+  <li style="margin-bottom:12px;">Ioannidis,N.M. <em>et al.</em> (2016) REVEL: an ensemble method for predicting the pathogenicity of rare missense variants. <em>Am. J. Hum. Genet.</em>, <strong>99</strong>, 877&ndash;885. doi: <a href="https://doi.org/10.1016/j.ajhg.2016.08.016" target="_blank">10.1016/j.ajhg.2016.08.016</a></li>
+  <li style="margin-bottom:12px;">Rentzsch,P., Witten,D., Cooper,G.M., Shendure,J. and Kircher,M. (2019) CADD: predicting the deleteriousness of variants throughout the human genome. <em>Nucleic Acids Res.</em>, <strong>47</strong>, D886&ndash;D894. doi: <a href="https://doi.org/10.1093/nar/gky1016" target="_blank">10.1093/nar/gky1016</a></li>
+  <li style="margin-bottom:12px;">Landrum,M.J. <em>et al.</em> (2018) ClinVar: improving access to variant interpretations and supporting evidence. <em>Nucleic Acids Res.</em>, <strong>46</strong>, D1062&ndash;D1067. doi: <a href="https://doi.org/10.1093/nar/gkx1153" target="_blank">10.1093/nar/gkx1153</a></li>
+  <li style="margin-bottom:12px;">Harrison,P.W. <em>et al.</em> (2024) Ensembl 2024. <em>Nucleic Acids Res.</em>, <strong>52</strong>, D891&ndash;D899. doi: <a href="https://doi.org/10.1093/nar/gkad1049" target="_blank">10.1093/nar/gkad1049</a></li>
+  <li style="margin-bottom:12px;">Nassar,L.R. <em>et al.</em> (2023) The UCSC Genome Browser database: 2023 update. <em>Nucleic Acids Res.</em>, <strong>51</strong>, D1188&ndash;D1195. doi: <a href="https://doi.org/10.1093/nar/gkac1072" target="_blank">10.1093/nar/gkac1072</a></li>
+  <li style="margin-bottom:12px;">DiStefano,M.T. <em>et al.</em> (2022) The Gene Curation Coalition: a global effort to harmonize gene&ndash;disease evidence resources. <em>Genet. Med.</em>, <strong>24</strong>, 1732&ndash;1742. doi: <a href="https://doi.org/10.1016/j.gim.2022.04.017" target="_blank">10.1016/j.gim.2022.04.017</a></li>
 </ol>
 </div>
 
