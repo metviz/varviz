@@ -96,6 +96,7 @@
   <a href="#acmg-scoring">Scoring Engine</a>
   <a href="#acmg-criteria">Criteria Details</a>
   <a href="#clinvar-logic">ClinVar Logic</a>
+  <a href="#gene-calibration">Gene Calibration</a>
   <a href="#geneinfo">GeneInfo Tab</a>
   <a href="#controls">Controls</a>
   <a href="#datasources">Data Sources</a>
@@ -752,25 +753,56 @@
     <tr>
       <td><strong>Exact</strong></td>
       <td>User&rsquo;s protein change (3-letter and 1-letter) found verbatim in ClinVar variant name</td>
-      <td>&ldquo;Pathogenic&rdquo; (clean)</td>
+      <td>&ldquo;<em>&lt;sig&gt;</em>&rdquo; with the matched record hyperlinked to its ClinVar page</td>
       <td>PS1, PP5, BP6</td>
     </tr>
     <tr>
       <td><strong>Position</strong></td>
-      <td>Different variant at same amino acid position in ClinVar (e.g. query p.Cys29Trp, ClinVar has p.Cys29Ter)</td>
-      <td>&ldquo;Pathogenic&rdquo; + <em>&#9888; diff variant at pos</em></td>
+      <td>Different missense at the same codon in ClinVar (e.g. query p.Leu307Phe, ClinVar has p.Leu307Val)</td>
+      <td>&ldquo;<em>&lt;sig&gt;</em> <span style="color:#94a3b8;">(same codon)</span>&rdquo; + hyperlink to the <em>matched</em> variant; the calibration panel labels it &ldquo;Same-codon variant in ClinVar (PM5)&rdquo; and states the exact variant is not in ClinVar</td>
       <td>PM5 only</td>
     </tr>
     <tr>
       <td><strong>None</strong></td>
-      <td>No ClinVar entry at this position</td>
-      <td>&ldquo;Not in ClinVar&rdquo;</td>
+      <td>No missense ClinVar entry at this codon</td>
+      <td>&ldquo;not found in ClinVar&rdquo;</td>
       <td>None</td>
     </tr>
   </table>
   <div class="tip">
     <strong>Why this matters:</strong> A stop-gain (p.Cys29Ter) and a missense (p.Cys29Trp) have different molecular consequences. PS1 requires the <em>identical</em> amino acid change. VarViz correctly assigns PM5 for position matches and PS1 only for exact amino acid change matches - preventing inflated pathogenicity calls.
   </div>
+</div>
+
+<!-- GENE-SPECIFIC PP3 CALIBRATION -->
+<h2 id="gene-calibration">Gene-Specific PP3 Calibration</h2>
+
+<div class="card">
+  <p>The Pejaver 2022 PP3/BP4 thresholds (REVEL 0.644 / 0.773 / 0.932, CADD 28.1 / 35, AlphaMissense 0.564) are <strong>genome-wide</strong> calibrations. They are mis-calibrated for some genes. Because VarViz already pulls the queried gene&rsquo;s ClinVar and dbNSFP data live, it recomputes each predictor&rsquo;s <strong>Evidence Strength for this gene</strong> at query time and shows where the genome-wide default disagrees &mdash; a capability static-threshold tools lack. The panel appears on each variant card under <strong>&#9878; Gene-Specific Calibration</strong>.</p>
+
+  <h3>What it computes</h3>
+  <p>For the gene, it fetches two ClinVar arms &mdash; Pathogenic/Likely-pathogenic (P/LP) and Benign/Likely-benign (LB/B) &mdash; scores every missense variant in both arms with REVEL / AlphaMissense / CADD (one batched MyVariant.info query), and computes the positive likelihood ratio at each threshold:</p>
+  <ul>
+    <li><strong>LR+ = sensitivity / (1 &minus; specificity)</strong>, positives = the gene&rsquo;s P/LP arm, negatives = its LB/B arm. A Haldane-Anscombe +0.5 continuity correction keeps clean-separation thresholds finite; a 95% CI (Katz log method) is always shown.</li>
+    <li><strong>LR+ <em>is</em> the Evidence Strength (OddsPath; Tavtigian 2018)</strong> &mdash; it is <em>prior-free</em>. Tiers: Supporting &ge; 2.08, Moderate &ge; 4.33, Strong &ge; 18.7, Very strong &ge; 350.</li>
+  </ul>
+
+  <h3>The two outputs, per predictor</h3>
+  <table>
+    <tr><th>Output</th><th>Meaning</th></tr>
+    <tr><td><strong>Validation rows</strong></td><td>At each fixed Pejaver cut-point: the gene&rsquo;s own LR+ (95% CI), the gene tier, and <strong>= / &ne; vs the genome-wide Pejaver</strong> label. A &ne; flags where the global threshold is mis-calibrated for this gene.</td></tr>
+    <tr><td><strong>Gene-optimal</strong></td><td>The threshold that maximises LR+ subject to a <strong>minimum-sensitivity floor</strong> (default 0.90, user-settable). Reported with its LR+, CI, and tier. A permissive floor pushes the optimal threshold lower; raise the floor to demand more stringent gene-specific cut-points.</td></tr>
+  </table>
+
+  <div class="tip">
+    <strong>Confidence gate:</strong> a gene needs <strong>&ge; 20 variants per arm</strong> for a high-confidence result. Below that the numbers and CIs are still shown, flagged <em>&#9888; low confidence (n = P/LP&nbsp;/&nbsp;LB/B per arm)</em> &mdash; small arms give very wide CIs (the whole reason the JCEM MEN1 calibration it is modelled on was unstable at n&nbsp;=&nbsp;15 benign).
+  </div>
+
+  <h3>Circularity guard (leave-one-out)</h3>
+  <p>If the queried variant is itself in the gene&rsquo;s ClinVar arm, it is <strong>dropped before the LR+ is computed</strong> (leave-one-out), so the threshold that reclassifies it was never trained on it. The panel notes when this fires. The variant&rsquo;s own ClinVar assertion is shown on a <em>separate</em> line and is <strong>not</strong> folded into the calibration &mdash; the two are independent evidence streams (no double-count). When the query is a <em>same-codon</em> match (see <a href="#clinvar-logic">ClinVar Logic</a>), that line reads &ldquo;Same-codon variant in ClinVar (PM5)&rdquo; and states the exact variant is not itself in ClinVar.</p>
+
+  <h3>Advisory by default &mdash; opt-in override</h3>
+  <p>The panel is <strong>advisory</strong>: it never changes the ACMG call on its own. To apply the gene-specific tier to the PP3 call for the current session, use the sidebar controls (see <a href="#controls">Controls</a>). A confident result applies on one click; a low-confidence result requires an explicit confirmation. The override is session-only and keyed to the gene &mdash; it clears when a different gene is queried, and it too honours leave-one-out per variant.</p>
 </div>
 
 <!-- GENEINFO TAB -->
@@ -804,6 +836,14 @@
   <li><strong>Any Star</strong>: all assertions</li>
   <li><strong>1 Star or more</strong>: criteria provided, single submitter</li>
   <li><strong>2 Stars or more</strong>: multiple submitters, no conflicts</li>
+</ul>
+
+<h3>Gene Calibration &amp; PP3 Override</h3>
+<p>Drive the <a href="#gene-calibration">Gene-Specific PP3 Calibration</a> panel:</p>
+<ul>
+  <li><strong>Gene calibration &mdash; min sensitivity</strong>: the sensitivity floor (default 0.90) for the gene-optimal threshold. Higher values keep more true positives and push the optimal threshold lower; lower values allow a more stringent, higher-LR+ threshold.</li>
+  <li><strong>Override PP3 with gene-specific tier</strong>: pick which predictor (REVEL / AM / CADD) the override uses.</li>
+  <li><strong>Apply gene-specific PP3</strong>: replaces the Pejaver PP3 tier with this gene&rsquo;s calibrated tier for the current session. Advisory by default &mdash; nothing changes until you click. A high-confidence gene applies on one click; a low-confidence gene (&lt; 20 per arm) asks for explicit confirmation. The override clears when you query a different gene.</li>
 </ul>
 
 <h3>Frequency Cutoff Method</h3>
