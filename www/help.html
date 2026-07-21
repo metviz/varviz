@@ -875,8 +875,8 @@
   <tr><td>Ensembl REST API</td><td><span class="badge api">API</span></td><td>Canonical transcript exon structure for mapping UCSC genomic scores to amino acid coordinates</td></tr>
   <tr><td>ClinGen LDH / eRepo</td><td><span class="badge api">API</span></td><td>Gene–disease validity classifications (Definitive / Strong / Moderate / Limited / Disputed / Refuted) from ClinGen curated expert panels</td></tr>
   <tr><td>GenCC API</td><td><span class="badge api">API</span></td><td>Gene–disease classifications from GenCC consortium submitters (thegencc.org). Queried when ClinGen LDH and eRepo return no results.</td></tr>
-  <tr><td>GENCODE v49</td><td><span class="badge local">LOCAL</span></td><td>Gene &rarr; UniProt ID mapping &amp; GRCh38 coordinates (VarViz.RData, ~0.2 MB)</td></tr>
-  <tr><td>CCRS / CCRStoAAC</td><td><span class="badge local">LOCAL</span></td><td>Constrained coding regions (tabix-indexed BED, ~200 MB) + ScoreCons protein-coordinate conservation</td></tr>
+  <tr><td>GENCODE v49</td><td><span class="badge local">LOCAL</span></td><td>Gene &rarr; UniProt ID mapping, GRCh38 coordinates &amp; GeVIR percentile (<code>gene_data</code>, 19,076 genes; in <code>data/VarViz.RData</code>)</td></tr>
+  <tr><td>CCRS / CCRStoAAC</td><td><span class="badge local">LOCAL</span></td><td>Constrained coding regions + ScoreCons protein-coordinate conservation (<code>ccrs_data</code>, 10.7&nbsp;M rows; in <code>data/VarViz.RData</code>, ~21&nbsp;MB total, built from the CCRS BED via <code>preprocess_ccrs_to_rdata.R</code>)</td></tr>
   <tr><td>ConSurf</td><td><span class="badge user">USER</span></td><td>Conservation grades (1&ndash;9), normalized scores, burial status (uploaded tab-separated grades file)</td></tr>
   <tr><td>Custom variants</td><td><span class="badge user">USER</span></td><td>Pathogenic variant positions for density overlay (uploaded file)</td></tr>
 </table>
