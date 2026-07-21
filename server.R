@@ -3769,22 +3769,34 @@ classify_acmg <- function(tags_vec) {
   )
 }
 
-# Gated PP3 override, gene-tier x per-variant score gate. Given a calib_override()
-# list (gene/predictor/tier/threshold) and one variant row `r`, returns the
-# tags_vec with any PP3 tag replaced by the gene-specific tier — but ONLY when
-# this row's own score for ovr$predictor clears ovr$threshold. Otherwise
-# tags_vec is returned untouched (row keeps its Pejaver PP3 call).
+# Gated PP3 override with per-variant leave-one-out (§6). Given a calib_override()
+# list (gene/predictor/min_sens) and one variant row `r`, recomputes the gene-optimal
+# threshold+tier for THIS row with the row's own variant dropped from the calibration
+# arm, then replaces any PP3 tag with that gene tier — but ONLY when the row's own
+# score for ovr$predictor clears the (LOO) threshold. Otherwise tags_vec is returned
+# untouched (row keeps its Pejaver PP3 call). Recomputing per row keeps the threshold
+# that reclassifies a variant from ever being trained on that same variant.
+# ponytail: one gene_calibration_live call per row, but arms are cached per gene, so
+# the per-row cost is a cheap pure LOO recompute — not a refetch.
 apply_calib_override <- function(tags_vec, ovr, r) {
   if (is.null(ovr)) return(tags_vec)
   score_col <- c(REVEL = "REVEL_Score", AM = "AM_Score", CADD = "CADD_Score")[ovr$predictor]
   if (is.na(score_col) || !score_col %in% names(r)) return(tags_vec)
   score <- suppressWarnings(as.numeric(r[[score_col]]))
-  if (is.na(score) || is.na(ovr$threshold) || score < ovr$threshold) return(tags_vec)
+  if (is.na(score)) return(tags_vec)
+  # Leave-one-out: drop this row's own variant before recomputing the gene-optimal,
+  # so the threshold/tier applied to it were not trained on it (§6 circularity guard).
+  q_hgvsp <- tryCatch(aa3to1(as.character(r$Variant)), error = function(e) NA_character_)
+  cal <- tryCatch(gene_calibration_live(ovr$gene, query_hgvsp = q_hgvsp,
+                                        min_sens = ovr$min_sens %||% 0.90),
+                  error = function(e) NULL)
+  opt <- if (!is.null(cal)) cal$predictors[[ovr$predictor]]$optimal else NULL
+  if (is.null(opt) || is.na(opt$threshold) || score < opt$threshold) return(tags_vec)
   lvl <- unname(c(Supporting = "1", Moderate = "2", Strong = "3",
-                  `Very strong` = "3")[ovr$tier])
-  # Compute the replacement level FIRST. When the gene-optimal tier is "None" (or any
-  # value with no PP3 mapping) there is nothing to put back, so leave the existing
-  # Pejaver PP3 tag intact — never strip evidence with no replacement.
+                  `Very strong` = "3")[opt$gene_tier])
+  # Compute the replacement level FIRST. When the (LOO) gene-optimal tier is "None"
+  # (or any value with no PP3 mapping) there is nothing to put back, so leave the
+  # existing Pejaver PP3 tag intact — never strip evidence with no replacement.
   if (is.na(lvl)) return(tags_vec)
   tags_vec <- tags_vec[!grepl("^PP3", tags_vec)]
   c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[lvl]))
@@ -5757,7 +5769,8 @@ shinyServer(function(input, output, session) {
   # specific tier (from gene_calibration_live) in the ACMG tag path below.
   # Keyed to gene; clears whenever a different gene is queried so a stale
   # override never leaks onto an unrelated gene's call.
-  calib_override <- reactiveVal(NULL)   # list(gene, predictor, tier) or NULL
+  calib_override <- reactiveVal(NULL)   # list(gene, predictor, min_sens) or NULL
+                                        # threshold/tier are recomputed per row (LOO) in apply_calib_override
 
   observeEvent(input$gene_name, { calib_override(NULL) }, ignoreInit = TRUE)
 
@@ -5770,7 +5783,7 @@ shinyServer(function(input, output, session) {
     req(p, p$optimal)
     if (isTRUE(p$confident)) {
       calib_override(list(gene = as.character(input$gene_name), predictor = pred,
-                          tier = p$optimal$gene_tier, threshold = p$optimal$threshold))
+                          min_sens = input$calib_min_sens %||% 0.90))
     } else {
       showModal(modalDialog(
         title = "Low-confidence gene calibration",
@@ -5790,7 +5803,7 @@ shinyServer(function(input, output, session) {
     p <- cal$predictors[[input$calib_pred]]
     req(p, p$optimal)
     calib_override(list(gene = as.character(input$gene_name), predictor = input$calib_pred,
-                        tier = p$optimal$gene_tier, threshold = p$optimal$threshold))
+                        min_sens = input$calib_min_sens %||% 0.90))
   })
 
   variants <- eventReactive(input$goButton,{
