@@ -1,23 +1,18 @@
 suppressMessages(library(dplyr))
 suppressMessages(library(stringr))
-suppressMessages(library(purrr))
 suppressMessages(library(shiny))
 suppressMessages(library(shinyjs))
 suppressMessages(library(shinycssloaders))
 suppressMessages(library(data.table))
 suppressMessages(library(jsonlite))
-suppressMessages(library(curl))
 suppressMessages(library(grid))
 suppressMessages(library(cowplot))
 suppressMessages(library(ggplot2))
-suppressMessages(library(stringi))
 suppressMessages(library(plotly))
 suppressMessages(library(httr))
 suppressMessages(library(httr2))
-suppressMessages(library(readr))
 suppressMessages(library(wordcloud))
 suppressMessages(library(tm))
-suppressMessages(tryCatch(library(ggrepel), error=function(e) NULL))
 # trackViewer/GenomicRanges/IRanges no longer needed — lollipops drawn natively in ggplot
 theme_set(theme_cowplot(font_size=12))
 
@@ -25,6 +20,16 @@ theme_set(theme_cowplot(font_size=12))
 # Typography tiers (vv_base_font / vv_big / vv_medium / vv_small) live in
 # typography.R so they can be unit-tested without sourcing the full server.
 source("typography.R", local = FALSE)
+
+# DOLPHIN (Pfam-based PM1 pathway, Corcuff et al. 2023). Optional 4th PM1
+# pathway alongside the existing CCRS, UniProt domain, and ClinVar hotspot
+# pathways. Fails open: any network/parse error → no PM1 firing, no impact
+# on the rest of the engine. Adds at most one HTTP call per analysed variant.
+source("analyses/lib/dolphin.R", local = FALSE)
+
+# Gene-specific calibration stats core (OddsPath/LR+, ClinVar hgvsp parsing,
+# gene_calibration assembly). Pure, no network — unit-tested standalone.
+source("gene_calib_stats.R", local = FALSE)
 
 theme_vv <- function() {
   theme(
@@ -78,6 +83,8 @@ api_cache$clingen      <- list()  # gene_name -> ClinGen gene validity (classifi
 api_cache$dbnsfp       <- list()  # gene:variant -> dbNSFP MyVariant.info data
 api_cache$consurf      <- list()  # uniprotID -> ConSurf-DB parsed data.frame
 api_cache$ucsc_cons    <- list()  # gene_name -> data.frame of per-AA conservation scores (PhyloP/PhastCons)
+api_cache$orphadata_prev <- list()  # OMIM id -> Orphadata prevalence display string
+api_cache$gene_calib   <- list()  # gene_name -> scored ClinVar arms for gene calibration
 
 cache_get <- function(cache_name, key) {
   if (key %in% names(api_cache[[cache_name]])) {
@@ -90,6 +97,87 @@ cache_get <- function(cache_name, key) {
 cache_set <- function(cache_name, key, value) {
   api_cache[[cache_name]][[key]] <- value
   invisible(value)
+}
+
+# --- Orphadata prevalence lookup (OMIM -> ORPHAcode -> prevalence) -----------
+# Enriches the UniProt "Involvement in Disease" table. Best-effort only: any
+# failure, timeout, or missing mapping returns "—" so gene-info never blocks.
+# Two-step chain matches api.orphadata.com/rd-cross-referencing + rd-epidemiology.
+fetch_orphadata_prevalence <- function(omim_id) {
+  omim_id <- trimws(gsub("MIM:", "", as.character(omim_id)))
+  if (length(omim_id) == 0 || is.na(omim_id) || omim_id == "" || omim_id == "—")
+    return("—")
+
+  cached <- cache_get("orphadata_prev", omim_id)
+  if (!is.null(cached)) return(cached)
+
+  result <- tryCatch({
+    r1 <- httr::GET(paste0("https://api.orphadata.com/rd-cross-referencing/omims/", omim_id),
+                    httr::timeout(8), httr::accept("application/json"))
+    if (httr::status_code(r1) != 200) return("—")
+    j1 <- jsonlite::fromJSON(httr::content(r1, "text", encoding = "UTF-8"),
+                             simplifyVector = FALSE)
+    results <- j1$data$results
+    if (is.null(results) || length(results) == 0) return("—")
+
+    # Rank candidate ORPHAcodes: exact-OMIM subtype first (carries prevalence),
+    # then any exact-OMIM match, else remainder.
+    rank_one <- function(x) {
+      refs <- vapply(x$ExternalReference, function(e) {
+        if (!is.null(e$Source) && e$Source == "OMIM") as.character(e$Reference)
+        else NA_character_
+      }, character(1))
+      exact   <- any(refs == omim_id, na.rm = TRUE)
+      subtype <- grepl("subtype", tolower(if (is.null(x$Typology)) "" else x$Typology))
+      if (exact && subtype) 1L else if (exact) 2L else 3L
+    }
+    best  <- results[[which.min(vapply(results, rank_one, integer(1)))]]
+    orpha <- best$ORPHAcode
+    if (is.null(orpha)) return("—")
+
+    r2 <- httr::GET(paste0("https://api.orphadata.com/rd-epidemiology/orphacodes/", orpha),
+                    httr::timeout(8), httr::accept("application/json"))
+    if (httr::status_code(r2) != 200) return("—")
+    j2 <- jsonlite::fromJSON(httr::content(r2, "text", encoding = "UTF-8"),
+                             simplifyVector = FALSE)
+    prev <- j2$data$results$Prevalence
+    if (is.null(prev) || length(prev) == 0) return("—")
+
+    # Collapse to one estimate per geography (prefer point prevalence).
+    by_geo <- list(); geo_order <- character(0)
+    for (p in prev) {
+      cls <- if (is.null(p$PrevalenceClass)) "" else p$PrevalenceClass
+      if (cls == "") next
+      geo <- if (is.null(p$PrevalenceGeographic) || p$PrevalenceGeographic == "")
+               "?" else p$PrevalenceGeographic
+      is_point <- !is.null(p$PrevalenceType) && grepl("point", tolower(p$PrevalenceType))
+      if (is.null(by_geo[[geo]])) geo_order <- c(geo_order, geo)
+      if (is.null(by_geo[[geo]]) || (is_point && !isTRUE(by_geo[[geo]]$point)))
+        by_geo[[geo]] <- list(cls = cls, point = is_point)
+    }
+    if (length(by_geo) == 0) return("—")
+    lbl <- function(g) if (g == "United States") "US" else g
+
+    # If both US and Worldwide are present, show only those two; otherwise
+    # (either missing) show whatever geographies exist, US/Worldwide first.
+    if (!is.null(by_geo[["United States"]]) && !is.null(by_geo[["Worldwide"]])) {
+      return(paste0("US: ", by_geo[["United States"]]$cls,
+                    "; Worldwide: ", by_geo[["Worldwide"]]$cls))
+    }
+    prio        <- c("United States", "Worldwide")
+    ordered_geo <- c(intersect(prio, geo_order), setdiff(geo_order, prio))
+    entries <- vapply(ordered_geo,
+                      function(g) paste0(lbl(g), ": ", by_geo[[g]]$cls), character(1))
+    if (length(entries) > 4)
+      entries <- c(entries[1:4], paste0("+", length(entries) - 4, " more"))
+    paste(entries, collapse = "; ")
+  }, error = function(e) {
+    message("[Orphadata] prevalence lookup failed for OMIM ", omim_id, ": ", e$message)
+    "—"
+  })
+
+  cache_set("orphadata_prev", omim_id, result)
+  result
 }
 #curl.cainfo = "/data/cacert.pem"
 
@@ -311,7 +399,8 @@ extract_gene_info_uniprot <- function(uniprotID, gene_name) {
           }, error = function(e) "—")
           
           data.frame(Disease = d_name, Description = d_desc,
-                     MIM = d_mim, Notes = d_note, stringsAsFactors = FALSE)
+                     MIM = d_mim, Prevalence = fetch_orphadata_prevalence(d_mim),
+                     Notes = d_note, stringsAsFactors = FALSE)
         })
         do.call(rbind, disease_rows)
       } else {
@@ -589,7 +678,7 @@ plot_pLDDT <- function(af, highlight = data.frame(), prot_length = NULL) {
       ggplot2::annotate(geom = "text", x = 0.5, y = 0.5, 
                         label = "AlphaFold pLDDT data not available for this protein", 
                         size = 4.5, color = "#94a3b8", fontface = "italic") +
-      labs(y = "AlphaFold pLDDT") +
+      labs(y = "AlphaFold\npLDDT") +
       theme_bw(base_size = vv_medium) + theme_vv() +
       theme(axis.title.x = element_blank(),
             axis.text = element_blank(), axis.ticks = element_blank(),
@@ -611,7 +700,7 @@ plot_pLDDT <- function(af, highlight = data.frame(), prot_length = NULL) {
     geom_bar(aes(fill = Confidence_Level), stat = "identity", width = 1) +
     scale_fill_manual(values = confidence_colors) +
     geom_hline(yintercept = 50, colour = "#BB0000", linetype = "dashed", alpha = 0.7) +
-    labs(x = "", y = "AlphaFold pLDDT") +
+    labs(x = "", y = "AlphaFold\npLDDT") +
     scale_x_continuous(limits = c(-xmax * 0.01, xmax + xmax * 0.01), expand = c(0,0)) +
     theme_minimal(base_size = vv_medium) +
     theme_vv()
@@ -694,7 +783,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
       ggplot2::annotate(geom = "text", x = 0.5, y = 0.5, 
                         label = "AlphaFold Mean Pathogenicity data not available for this protein", 
                         size = 4.5, color = "#94a3b8", fontface = "italic") +
-      labs(y = "AF Mean Pathogenicity") +
+      labs(y = "AF Mean\nPathogenicity") +
       theme_bw(base_size = vv_medium) + theme_vv() +
       theme(axis.title.x = element_blank(),
             axis.text = element_blank(), axis.ticks = element_blank(),
@@ -723,7 +812,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
     ggplot2::annotate(geom = "text", x = xmax * 0.05, y = 0.17, label = "Benign", color = "gray30", size = 3) +
     ggplot2::annotate(geom = "text", x = xmax * 0.05, y = 0.45, label = "Uncertain", color = "gray30", size = 3) +
     ggplot2::annotate(geom = "text", x = xmax * 0.05, y = 0.78, label = "Pathogenic", color = "gray30", size = 3) +
-    labs(x = "", y = "AF Mean Pathogenicity") +
+    labs(x = "", y = "AF Mean\nPathogenicity") +
     scale_x_continuous(limits = c(-xmax * 0.01, xmax + xmax * 0.01), expand = c(0,0)) +
     theme_minimal(base_size = vv_medium) +
     theme(panel.grid.major.x = element_blank(),
@@ -737,18 +826,23 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
 
  #Extract Clinvar data
  # --- ClinVar data via NCBI E-utilities API ----#
- extract_clinvar <- function(gene_name){
-   cached <- cache_get("clinvar", gene_name)
-   if (!is.null(cached)) { message("[ClinVar] Cache hit for: ", gene_name); return(cached) }
+ extract_clinvar <- function(gene_name, clinsig = c("path", "benign")){
+   clinsig <- match.arg(clinsig)
+   ck <- paste0(gene_name, ":", clinsig)
+   cached <- cache_get("clinvar", ck)
+   if (!is.null(cached)) { message("[ClinVar] Cache hit for: ", ck); return(cached) }
    tryCatch({
-     message("[ClinVar] Fetching variants for gene: ", gene_name)
-     
-     # Step 1: Search ClinVar for pathogenic/likely pathogenic variants in this gene
+     message("[ClinVar] Fetching variants for gene: ", gene_name, " (", clinsig, ")")
+
+     # Step 1: Search ClinVar for pathogenic/likely pathogenic (or benign/likely benign) variants in this gene
      # Try multiple search strategies since ClinVar search syntax varies
      ids <- NULL
-     
+
      # Strategy 1: Standard clinical significance filter
-     search_queries <- c(
+     search_queries <- if (clinsig == "benign") c(
+       paste0(gene_name, '[gene] AND ("benign"[clinsig] OR "likely benign"[clinsig]) AND "homo sapiens"[orgn]'),
+       paste0(gene_name, '[gene] AND (benign[clinsig]) AND human[orgn]')
+     ) else c(
        paste0(gene_name, '[gene] AND ("pathogenic"[clinsig] OR "likely pathogenic"[clinsig]) AND "homo sapiens"[orgn]'),
        paste0(gene_name, '[gene] AND (pathogenic[clinsig]) AND human[orgn]'),
        paste0(gene_name, '[gene] AND "clinsig pathogenic"[Properties]'),
@@ -862,11 +956,13 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
          }
          debug_counts$total <- debug_counts$total + 1
          
-         # Skip if not pathogenic/likely pathogenic
-         if (!grepl("pathogenic", clin_sig, ignore.case = TRUE)) {
+         # Skip if not the target arm's clinical significance (path: pathogenic/likely
+         # pathogenic; benign: benign/likely benign)
+         sig_term <- if (clinsig == "benign") "benign" else "pathogenic"
+         if (!grepl(sig_term, clin_sig, ignore.case = TRUE)) {
            debug_counts$skip_not_pathogenic <- debug_counts$skip_not_pathogenic + 1
            if (debug_counts$skip_not_pathogenic <= 3) {
-             message("[ClinVar SKIP] uid=", uid, " not pathogenic: '", clin_sig, "'")
+             message("[ClinVar SKIP] uid=", uid, " not ", sig_term, ": '", clin_sig, "'")
            }
            next
          }
@@ -1076,7 +1172,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
      message("[ClinVar] Extracted ", nrow(result), " variants (",
              sum(result$type == "missense_variant"), " missense, ",
              sum(result$type == "lof_variant"), " LoF)")
-     cache_set("clinvar", gene_name, result)
+     cache_set("clinvar", ck, result)
      return(result)
      
    }, error = function(e) {
@@ -1379,7 +1475,9 @@ parse_gnomad_variants <- function(json_parsed) {
   }
   
   
-  map_df(variants, function(v) {
+  if (length(variants) == 0) return(data.frame())
+
+  do.call(rbind, lapply(variants, function(v) {
     hgvsp_fields <- tryCatch({
       parsed <- parse_hgvsp(v$hgvsp)
       if (length(parsed) != 3) c(NA, NA, NA) else parsed
@@ -1416,8 +1514,8 @@ parse_gnomad_variants <- function(json_parsed) {
       af_fin = pop_af(pops, "fin"),
       stringsAsFactors = FALSE
     )
-  })
-}  
+  }))
+}
 
 
 # ── CCRS: Protein-level constraint from CCRStoAAC (Hasenahuer et al., 2022) ──
@@ -1854,10 +1952,14 @@ fetch_dbnsfp <- function(gene_name, hgvsp) {
   
   for (v in variants_to_try) {
     tryCatch({
-      # Build the q= parameter as a single string, then encode the whole thing
-      q_param <- paste0("dbnsfp.genename:", gene_name, " AND dbnsfp.hgvsp:", trimws(v))
+      # Build the q= parameter as a single string, then encode the whole thing.
+      # Escape Lucene metacharacters so an hgvsp like "p.R213*" is matched as a literal
+      # term, never parsed as a "*" wildcard (which silently returns a wrong record).
+      vv <- trimws(v)
+      q_param <- paste0("dbnsfp.genename:", escape_lucene(gene_name),
+                        " AND dbnsfp.hgvsp:(", escape_lucene(vv), ")")
       url <- paste0("https://myvariant.info/v1/query?",
-                     "q=", URLencode(q_param, reserved = FALSE),
+                     "q=", URLencode(q_param, reserved = TRUE),
                      "&fields=dbnsfp,clinvar,dbsnp,cadd&size=5")
       message("[dbNSFP] Trying: ", gene_name, " ", v, " -> ", url)
       resp <- httr::GET(url, httr::timeout(15))
@@ -1865,17 +1967,25 @@ fetch_dbnsfp <- function(gene_name, hgvsp) {
         message("[dbNSFP] HTTP ", httr::status_code(resp), " for ", v)
         next
       }
-      
+
       json_text <- httr::content(resp, "text", encoding = "UTF-8")
       parsed <- jsonlite::fromJSON(json_text, simplifyVector = FALSE)
-      
+
       hits <- parsed$hits
       if (!is.null(hits) && length(hits) > 0) {
-        result <- hits[[1]]
-        message("[dbNSFP] HIT for ", gene_name, " ", v, " — keys: ", 
-                paste(names(result$dbnsfp)[1:min(8, length(names(result$dbnsfp)))], collapse = ", "))
-        cache_set("dbnsfp", cache_key, result)
-        return(result)
+        # Verify the hit actually carries this hgvsp before trusting it — mirror the
+        # intersect-style re-key check in fetch_dbnsfp_batch. Guards against a stray
+        # wildcard/near-match record being attributed to the queried protein change.
+        for (h in hits) {
+          hit_hgvsps <- h$dbnsfp$hgvsp
+          if (is.list(hit_hgvsps)) hit_hgvsps <- unlist(hit_hgvsps)
+          if (length(hit_hgvsps) > 0 && vv %in% hit_hgvsps) {
+            message("[dbNSFP] HIT for ", gene_name, " ", v, " — keys: ",
+                    paste(names(h$dbnsfp)[1:min(8, length(names(h$dbnsfp)))], collapse = ", "))
+            cache_set("dbnsfp", cache_key, h)
+            return(h)
+          }
+        }
       }
     }, error = function(e) {
       message("[dbNSFP] Error querying ", v, ": ", e$message)
@@ -1886,6 +1996,126 @@ fetch_dbnsfp <- function(gene_name, hgvsp) {
   message("[dbNSFP] No hits for ", gene_name, " ", hgvsp)
   cache_set("dbnsfp", cache_key, NA)  # cache miss to avoid re-querying
   return(NULL)
+}
+
+# Bulk REVEL/AM/CADD for a set of dbNSFP hgvsps for one gene, via one MyVariant.info GET
+# per <=200 hgvsps (Lucene "genename AND hgvsp:(v1 OR v2 OR ...)"), replacing per-variant GETs.
+# Returns data.frame(hgvsp, revel, am, cadd); unmatched hgvsps are omitted.
+#
+# DEVIATION FROM ORIGINAL SPEC (POST /v1/query with scopes="dbnsfp.hgvsp"): live-tested and
+# rejected. That batch/scopes endpoint ignores gene_name entirely — hgvsp notation collides
+# across many unrelated genes (e.g. "p.R130G" hit ITSN1, NADK2, TNFRSF8, RAB41, ... with REVEL
+# ranging 0.04-0.78 across them), and even at size=100 the target gene's row can be pushed out
+# of the page entirely (confirmed: SNCA p.A53T returns ZERO hits at size=100 for that endpoint,
+# since hundreds of other genes share that generic amino-acid notation and rank higher).
+# Also, dbnsfp.revel/alphamissense are {rankscore, score} objects (score = per-transcript list),
+# not plain numbers, so `as.numeric(h$dbnsfp$revel %||% NA)` throws "'list' object cannot be
+# coerced to type 'double'" — confirmed live.
+# Fix: use the GET query endpoint (like fetch_dbnsfp above) with an explicit
+# "dbnsfp.genename:<gene> AND dbnsfp.hgvsp:(<v1> OR <v2> OR ...)" clause, so gene-scoping is
+# enforced server-side instead of hoped-for client-side. Chunk size 200 (not 1000): URL length
+# stress-tested at ~3KB for 200 terms — comfortably under common 8KB proxy/server limits;
+# raise it if profiling shows headroom.
+# Escape Lucene/query_string metacharacters so an hgvsp/gene value is always matched as a
+# literal term, never parsed as a wildcard/prefix/grouping operator (e.g. dbNSFP's "p.R130*"
+# nonsense-variant notation must not become a live "*" wildcard query).
+escape_lucene <- function(x) {
+  gsub('([-+!(){}\\[\\]^"~*?:\\\\&|/])', '\\\\\\1', x, perl = TRUE)
+}
+
+fetch_dbnsfp_batch <- function(gene_name, hgvsps) {
+  empty_df <- function() data.frame(hgvsp=character(), revel=numeric(),
+                                     am=numeric(), cadd=numeric(), stringsAsFactors = FALSE)
+  gene_name <- trimws(gene_name)
+  hgvsps <- unique(trimws(hgvsps[!is.na(hgvsps)]))
+  hgvsps <- hgvsps[nchar(hgvsps) > 0]
+  if (length(hgvsps) == 0 || nchar(gene_name) == 0) return(empty_df())
+
+  chunk_size <- 200
+  chunks <- split(hgvsps, ceiling(seq_along(hgvsps) / chunk_size))
+  rows <- list()
+  seen <- character()
+  for (ch in chunks) {
+    q <- paste0("dbnsfp.genename:", escape_lucene(gene_name),
+                " AND dbnsfp.hgvsp:(", paste(escape_lucene(ch), collapse = " OR "), ")")
+    url <- paste0("https://myvariant.info/v1/query?",
+                  "q=", URLencode(q, reserved = TRUE),
+                  "&fields=", URLencode("dbnsfp.genename,dbnsfp.hgvsp,dbnsfp.revel,dbnsfp.alphamissense,cadd.phred",
+                                        reserved = TRUE),
+                  "&size=1000")  # MyVariant's max page size; gene-scoped result count is always well under it
+    resp <- tryCatch(httr::GET(url, httr::timeout(30)), error = function(e) NULL)
+    if (is.null(resp) || httr::status_code(resp) != 200) next
+    parsed <- tryCatch(
+      jsonlite::fromJSON(httr::content(resp, "text", encoding = "UTF-8"), simplifyVector = FALSE),
+      error = function(e) NULL)
+    if (is.null(parsed)) next  # malformed/non-JSON body on an HTTP-200 (proxy page, truncation, etc) — skip chunk, don't crash
+    if (!is.null(parsed$hits) && length(parsed$hits) >= 1000) {
+      message("[dbNSFP batch] WARNING: hit count reached the size=1000 cap for gene ", gene_name,
+              " — results may be truncated, some requested hgvsps could be silently missing")
+    }
+    for (h in parsed$hits) {
+      hit_genenames <- h$dbnsfp$genename
+      if (is.list(hit_genenames)) hit_genenames <- unlist(hit_genenames)
+      # A dbnsfp block can span >1 gene (readthrough/fusion/overlapping loci); reject the whole
+      # hit unless every gene it names is the one we asked for, so an hgvsp belonging to a
+      # different co-listed gene's transcript can never be attributed to gene_name (required
+      # correctness invariant — do not relax this to "any() matches").
+      if (is.null(hit_genenames) || length(hit_genenames) == 0 ||
+          anyNA(hit_genenames) || !all(hit_genenames == gene_name)) next  # fail closed on empty/NA
+      hit_hgvsps <- h$dbnsfp$hgvsp
+      if (is.list(hit_hgvsps)) hit_hgvsps <- unlist(hit_hgvsps)
+      # Required correctness invariant: re-key off the hit's own hgvsp field via intersect()
+      # rather than trusting the OR-list position, so scores are only attached to hgvsps this
+      # specific hit actually carries. Do not remove in a future refactor.
+      matched <- intersect(ch, hit_hgvsps)  # tie hit back to the caller's requested notation(s)
+      for (hg in matched) {
+        if (hg %in% seen) next  # first matching hit per hgvsp wins
+        seen <- c(seen, hg)
+        rows[[length(rows) + 1]] <- data.frame(
+          hgvsp = hg,
+          revel = safe_extract_num(h$dbnsfp, "revel", "score"),
+          am    = safe_extract_num(h$dbnsfp, "alphamissense", "score"),
+          cadd  = safe_extract_num(h, "cadd", "phred"),
+          stringsAsFactors = FALSE)
+      }
+    }
+    Sys.sleep(0.2)  # rate-limit courtesy, matches existing dbNSFP path
+  }
+  if (length(rows) == 0) return(empty_df())
+  do.call(rbind, rows)
+}
+
+# Live gene-specific calibration: fetch both ClinVar arms, score via dbNSFP batch,
+# join on hgvsp, then assemble. Caches the scored arms per gene; recomputes stats
+# per (query_hgvsp, min_sens) which are cheap.
+gene_calibration_live <- function(gene_name, query_hgvsp = NULL, min_sens = 0.90) {
+  arms <- cache_get("gene_calib", gene_name)
+  if (is.null(arms)) {
+    pv <- extract_clinvar(gene_name)             # P/LP arm (default clinsig="path")
+    bn <- extract_clinvar(gene_name, "benign")   # LB/B arm
+    add_scores <- function(df) {
+      if (is.null(df) || !nrow(df)) return(data.frame(hgvsp=character(), revel=numeric(),
+                                                      am=numeric(), cadd=numeric()))
+      hg <- parse_clinvar_hgvsp(df$name)
+      sc <- fetch_dbnsfp_batch(gene_name, hg)
+      m <- merge(data.frame(hgvsp = hg, stringsAsFactors = FALSE), sc, by = "hgvsp")
+      # Dedup by protein change: >1 ClinVar record can map to the same hgvsp, and the
+      # merge would then emit one scored row per record, inflating N and biasing LR+.
+      # Keep first occurrence so each protein change counts exactly once per arm.
+      m[!duplicated(m$hgvsp), , drop = FALSE]
+    }
+    arms <- list(path = add_scores(pv), benign = add_scores(bn),
+                 n_raw = list(path = if (is.null(pv)) 0 else nrow(pv),
+                              benign = if (is.null(bn)) 0 else nrow(bn)))
+    cache_set("gene_calib", gene_name, arms)
+  }
+  res <- gene_calibration(arms$path, arms$benign,
+                          query_hgvsp = query_hgvsp, min_sens = min_sens)
+  scored <- nrow(arms$path) + nrow(arms$benign)
+  raw    <- arms$n_raw$path + arms$n_raw$benign
+  res$match_rate <- if (raw > 0) scored / raw else 0
+  res$n_raw <- arms$n_raw
+  res
 }
 
 # =============================================================================
@@ -1910,17 +2140,38 @@ fetch_ensembl_exons <- function(gene_symbol) {
   cached <- cache_get("ucsc_cons", cache_key)
   if (!is.null(cached)) return(cached)
 
+  # Ensembl REST is occasionally slow — retry transient timeouts/5xx with
+  # backoff (mirrors the gnomAD path) so one slow response doesn't drop the
+  # whole conservation track. Returns a 200 response or NULL after 3 tries.
+  ens_get <- function(url, what) {
+    for (attempt in 1:3) {
+      resp <- tryCatch(
+        httr::GET(url, httr::timeout(20),
+                  httr::add_headers(Accept = "application/json")),
+        error = function(e) {
+          message("[UCSC Cons] ", what, " attempt ", attempt, " error: ", e$message)
+          NULL
+        }
+      )
+      if (!is.null(resp) && httr::status_code(resp) == 200) return(resp)
+      if (!is.null(resp))
+        message("[UCSC Cons] ", what, " attempt ", attempt,
+                " HTTP ", httr::status_code(resp))
+      if (attempt < 3) Sys.sleep(2 * attempt)
+    }
+    NULL
+  }
+
   tryCatch({
     # Step 1: Get canonical transcript ID
     url_gene <- paste0(
       "https://rest.ensembl.org/lookup/symbol/homo_sapiens/", gene_symbol,
       "?content-type=application/json&expand=1"
     )
-    resp <- httr::GET(url_gene, httr::timeout(20),
-                      httr::add_headers(Accept = "application/json"))
-    if (httr::status_code(resp) != 200) {
+    resp <- ens_get(url_gene, paste0("gene lookup ", gene_symbol))
+    if (is.null(resp)) {
       message("[UCSC Cons] Ensembl lookup failed for ", gene_symbol,
-              " (HTTP ", httr::status_code(resp), ")")
+              " after retries")
       return(NULL)
     }
     gene_json <- jsonlite::fromJSON(
@@ -1962,10 +2213,10 @@ fetch_ensembl_exons <- function(gene_symbol) {
       "https://rest.ensembl.org/lookup/id/", tx_id,
       "?content-type=application/json&expand=1"
     )
-    resp2 <- httr::GET(url_tx, httr::timeout(20),
-                       httr::add_headers(Accept = "application/json"))
-    if (httr::status_code(resp2) != 200) {
-      message("[UCSC Cons] Ensembl transcript lookup failed for ", tx_id)
+    resp2 <- ens_get(url_tx, paste0("transcript lookup ", tx_id))
+    if (is.null(resp2)) {
+      message("[UCSC Cons] Ensembl transcript lookup failed for ", tx_id,
+              " after retries")
       return(NULL)
     }
     tx_json <- jsonlite::fromJSON(
@@ -2773,7 +3024,7 @@ gnomad_freqplot <- function(gene_name, af_cutoff, highlight = data.frame(), prot
     ggplot2::annotate("text", x = prot_length * 0.98, y = af_cutoff, 
              label = paste0("AF cutoff = ", signif(af_cutoff, 3)), 
              hjust = 1, vjust = -0.5, size = 2.5, color = "red") +
-    labs(y = "gnomAD Freq") +
+    labs(y = "gnomAD\nFreq") +
     theme_bw(base_size = vv_medium) +
     theme_vv() +
     theme(axis.title.x = element_blank())
@@ -2818,7 +3069,7 @@ densityplot <- function(gnomad_data,clinvar_data,prot_length,allele_count,highli
   p <- ggplot2::ggplot()
   p <- p + ggplot2::geom_density(data=gnomad_data[gnomad_data$gnomad_allele_count>as.numeric(allele_count),], aes(x=prot_pos),adjust=kde.adjust,fill='blue',alpha = 0.5, color="blue") 
   p <- p + scale_x_continuous(limits = c(-prot_length * 0.01, prot_length + prot_length * 0.01), expand = c(0,0))
-  p <- p + ggplot2::labs(y = "Mutation Density") 
+  p <- p + ggplot2::labs(y = "Mutation\nDensity") 
   p <- p + ggplot2::labs(x = "") 
   p <- p + theme_vv()
   if(!is.null(clinvar_data) && is.data.frame(clinvar_data) && nrow(clinvar_data) > 2 ){
@@ -2842,7 +3093,7 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   p <- ggplot2::ggplot()
   p <- p + ggplot2::ylim(0, 2.1)
   p <- p + scale_x_continuous(limits = c(0, L + L * 0.01), expand = c(0,0))
-  p <- p + ggplot2::labs(y = "ClinVar/PTMs/CCRs")
+  p <- p + ggplot2::labs(y = "ClinVar/PTMs/\nCCRs")
   p <- p + ggplot2::theme(
     axis.title.y = element_text(size = vv_medium, face = "bold"),
     axis.text.y = element_blank(),
@@ -3361,6 +3612,17 @@ pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,fo
 
 
 
+# points -> calibrated posterior P(pathogenic).  §4.1 evidence_strength_review.md
+# Evidence Strength (OddsPath) is prior-free; prior_p enters exactly ONCE, here at
+# the posterior. C = 350^(1/8) = 2.0813 (Tavtigian 2018/2020 very-strong OddsPath = 350).
+# Sanity: 0 pts -> posterior == prior; 6 pts -> 0.90 (LP cutpoint); 10 pts -> ~0.99.
+acmg_posterior <- function(points, prior_p = 0.10, C = 2.0813) {
+  if (length(points) != 1 || !is.finite(points)) return(NA_real_)
+  prior_odds <- prior_p / (1 - prior_p)
+  post_odds  <- prior_odds * C^points     # C^points == combined evidence strength
+  post_odds / (1 + post_odds)
+}
+
 # Define server logic for slider examples
 # ============================================================
 # ACMG Classification Engine
@@ -3507,6 +3769,39 @@ classify_acmg <- function(tags_vec) {
   )
 }
 
+# Gated PP3 override with per-variant leave-one-out (§6). Given a calib_override()
+# list (gene/predictor/min_sens) and one variant row `r`, recomputes the gene-optimal
+# threshold+tier for THIS row with the row's own variant dropped from the calibration
+# arm, then replaces any PP3 tag with that gene tier — but ONLY when the row's own
+# score for ovr$predictor clears the (LOO) threshold. Otherwise tags_vec is returned
+# untouched (row keeps its Pejaver PP3 call). Recomputing per row keeps the threshold
+# that reclassifies a variant from ever being trained on that same variant.
+# ponytail: one gene_calibration_live call per row, but arms are cached per gene, so
+# the per-row cost is a cheap pure LOO recompute — not a refetch.
+apply_calib_override <- function(tags_vec, ovr, r) {
+  if (is.null(ovr)) return(tags_vec)
+  score_col <- c(REVEL = "REVEL_Score", AM = "AM_Score", CADD = "CADD_Score")[ovr$predictor]
+  if (is.na(score_col) || !score_col %in% names(r)) return(tags_vec)
+  score <- suppressWarnings(as.numeric(r[[score_col]]))
+  if (is.na(score)) return(tags_vec)
+  # Leave-one-out: drop this row's own variant before recomputing the gene-optimal,
+  # so the threshold/tier applied to it were not trained on it (§6 circularity guard).
+  q_hgvsp <- tryCatch(aa3to1(as.character(r$Variant)), error = function(e) NA_character_)
+  cal <- tryCatch(gene_calibration_live(ovr$gene, query_hgvsp = q_hgvsp,
+                                        min_sens = ovr$min_sens %||% 0.90),
+                  error = function(e) NULL)
+  opt <- if (!is.null(cal)) cal$predictors[[ovr$predictor]]$optimal else NULL
+  if (is.null(opt) || is.na(opt$threshold) || score < opt$threshold) return(tags_vec)
+  lvl <- unname(c(Supporting = "1", Moderate = "2", Strong = "3",
+                  `Very strong` = "3")[opt$gene_tier])
+  # Compute the replacement level FIRST. When the (LOO) gene-optimal tier is "None"
+  # (or any value with no PP3 mapping) there is nothing to put back, so leave the
+  # existing Pejaver PP3 tag intact — never strip evidence with no replacement.
+  if (is.na(lvl)) return(tags_vec)
+  tags_vec <- tags_vec[!grepl("^PP3", tags_vec)]
+  c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[lvl]))
+}
+
 # ============================================================
 # ACMG Clinical Comment Generator
 # Produces natural-language variant interpretation text from ACMG tags + data
@@ -3612,8 +3907,8 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   if ("PM2" %in% tags) {
     af_txt <- fmt_af(gnomad_af)
     if (!is.null(af_txt) && af_txt != "0%")
-      s(paste0("The variant is observed at an extremely low frequency in the gnomAD v4 dataset (total allele frequency: ", af_txt, ").")) else
-      s("The variant is absent from the gnomAD v4 population database.")
+      s(paste0("The variant is observed at an extremely low frequency in the gnomAD v4 dataset (total allele frequency: ", af_txt, ") (PM2).")) else
+      s("The variant is absent from the gnomAD v4 population database (PM2).")
   } else if ("BA1" %in% tags) {
     af_txt <- fmt_af(gnomad_af)
     s(paste0("The variant is extremely common in the general population (gnomAD AF: ", if (!is.null(af_txt)) af_txt else ">5%", "), meeting the BA1 threshold for standalone Benign classification (Richards 2015)."))
@@ -3671,8 +3966,9 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
       scores <- c(scores, paste0("MetaSVM: ", metasvm_v))
     score_str <- if (length(scores) > 0) paste0(" (", paste(scores, collapse = "; "), ")") else ""
     strength  <- if ("PP3_strong" %in% tags)   " at strong evidence strength" else if ("PP3_moderate" %in% tags) " at moderate evidence strength" else ""
+    pp3_name  <- if ("PP3_strong" %in% tags) " (PP3_Strong)" else if ("PP3_moderate" %in% tags) " (PP3_Moderate)" else " (PP3_Supporting)"
     if (has_pp3)
-      s(paste0("In silico tool predictions suggest damaging effect of the variant on the gene or gene product", strength, score_str, ".")) else
+      s(paste0("In silico tool predictions suggest damaging effect of the variant on the gene or gene product", strength, score_str, pp3_name, ".")) else
       s(paste0("In silico tool predictions suggest the variant is likely tolerated", score_str, " (BP4)."))
     # PS3 proxy note — when AM >= 0.90 + REVEL >= 0.773, note that PP3_strong is used as proxy
     if (isTRUE(ps3_proxy))
@@ -3717,7 +4013,7 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
     alt_str  <- if (length(alt_changes) > 0) paste0(" (", paste(alt_changes, collapse = ", "), ")") else ""
     cite_str <- if (nchar(cite) > 0) paste0(" (", cite, ")") else ""
     s(paste0("Different missense changes at the same codon", alt_str,
-             " have been reported to be associated with ", disease_str, cite_str, "."))
+             " have been reported to be associated with ", disease_str, cite_str, " (PM5)."))
   }
 
   # PM4
@@ -4407,6 +4703,14 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # VarViz's own data is primary (already fetched from ClinVar, gnomAD, CCRS)
     # dbNSFP computational predictions supplement PP3/BP4
     acmg_tags <- character(0)
+    # pm1_pathway_val: which pathway fired PM1 — used by the Pass 2 dual-pass
+    # benchmark (analyses/05_classify_harness.R) to drive ClinVar-blind
+    # classification via strip_clinvar_tags(). One of "" / "ccrs" /
+    # "uniprot_domain" / "clinvar_hotspot". The neighborhood upgrade branch
+    # (PM1 -> PM1_strong via ClinVar 15aa) intentionally preserves the
+    # original pathway — the helper strips PM1 only when pathway is purely
+    # circular ("clinvar_hotspot"); the strong upgrade itself is not undone.
+    pm1_pathway_val <- ""
     
     # ── ACMG Tag Computation ──────────────────────────────────────────────────
     # Based on Richards et al. (2015) + Tavtigian et al. (2018) Bayesian framework
@@ -4515,6 +4819,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # Note: broad topological labels (cytoplasmic loop, extracellular segment) are excluded
     # from Path 3 by domain_is_structural() whitelist. Paths 1 and 2 bypass domain entirely
     # since CCRS is annotation-agnostic.
+    cons_used_for_pm1 <- FALSE  # init outside !bs1_fires so PP3 logic at L4863/4868 always sees it
     if (!bs1_fires) {
       cs_grade_num  <- { cg <- suppressWarnings(as.integer(consurf_grade));  if (length(cg)==0||is.na(cg[1])) NA_integer_ else cg[1] }
       phylop_v      <- { pv <- if (dbnsfp$has_data) dbnsfp$conservation$PhyloP_100V    else NA_real_; if (is.null(pv)||length(pv)==0) NA_real_ else suppressWarnings(as.numeric(pv[1])) }
@@ -4541,17 +4846,47 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         } else {
           acmg_tags <- c(acmg_tags, "PM1")
         }
+        pm1_pathway_val <- "ccrs"
       } else if (ccrs_pct >= 85 && cons_strong) {
         # Path 2: borderline CCRS — conservation required as second line of evidence
         acmg_tags <- c(acmg_tags, "PM1")
+        pm1_pathway_val <- "ccrs"
       } else if (has_domain && cons_strong) {
         # Path 3a: specific domain, conserved — PM1_strong
         # Flag: conservation was used here; suppress duplicate PP3 conservation tier
         acmg_tags <- c(acmg_tags, "PM1_strong")
         cons_used_for_pm1 <- TRUE
+        pm1_pathway_val <- "uniprot_domain"
       } else if (has_domain) {
         # Path 3b: specific domain, not strongly conserved — PM1 supporting
         acmg_tags <- c(acmg_tags, "PM1")
+        pm1_pathway_val <- "uniprot_domain"
+      }
+
+      # Path 4 — DOLPHIN Pfam alignment (Corcuff et al. 2023, Front. Bioinform.
+      # 3:1127341). Last-resort PM1 pathway: only consulted when no other path
+      # fired. Strictly orthogonal to gnomAD allele frequency (the API also
+      # returns Dolphin_AF / GnomAD_AF, which we deliberately ignore) and to
+      # ClinVar-derived clinical evidence. Disabled by setting
+      # options(varviz.dolphin_pm1 = FALSE) — used by the dual-pass benchmark
+      # harness to avoid the 60 req/min DOLPHIN rate limit at 90k-variant scale.
+      if (pm1_pathway_val == "" &&
+          isTRUE(getOption("varviz.dolphin_pm1", TRUE))) {
+        dolphin_hit <- tryCatch(
+          dolphin_pm1_call(gene = gene_name_for_api, p_notation = mut,
+                           timeout_s = 8),
+          error = function(e) {
+            message("[PM1] DOLPHIN call failed for ", gene_name_for_api,
+                    " ", mut, ": ", e$message)
+            FALSE
+          }
+        )
+        if (isTRUE(dolphin_hit)) {
+          acmg_tags <- c(acmg_tags, "PM1")
+          pm1_pathway_val <- "dolphin"
+          message("[PM1] DOLPHIN Pfam alignment fires PM1 for ",
+                  gene_name_for_api, " ", mut)
+        }
       }
     }
 
@@ -4580,6 +4915,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           } else {
             # no domain/CCRS hit but neighborhood is strong — fire PM1
             acmg_tags <- c(acmg_tags, "PM1")
+            pm1_pathway_val <- "clinvar_hotspot"
             message("[PM1] Neighborhood \u00b115aa fires PM1: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
           }
         }
@@ -5069,6 +5405,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       Pop_ExAC = pop_exac,
       # ── ACMG + Comment + JSON ──
       ACMG_Tags = acmg_str,
+      ACMG_PM1_Pathway = pm1_pathway_val,
       Comment = acmg_comment,
       dbNSFP_JSON = as.character(dbnsfp_json),
       # ── Session analysis parameters (same for all variants in run) ──
@@ -5427,7 +5764,49 @@ shinyServer(function(input, output, session) {
     req(!is.null(input$gene_name) && nchar(trimws(input$gene_name)) > 0)
     shinyjs::reset("user_file")
   }, ignoreInit = TRUE)
-  
+
+  # ── Gated opt-in PP3 override (session-only) ─────────────────────────────
+  # calib_override, when set, replaces the Pejaver PP3 tag with the gene-
+  # specific tier (from gene_calibration_live) in the ACMG tag path below.
+  # Keyed to gene; clears whenever a different gene is queried so a stale
+  # override never leaks onto an unrelated gene's call.
+  calib_override <- reactiveVal(NULL)   # list(gene, predictor, min_sens) or NULL
+                                        # threshold/tier are recomputed per row (LOO) in apply_calib_override
+
+  observeEvent(input$gene_name, { calib_override(NULL) }, ignoreInit = TRUE)
+
+  observeEvent(input$calib_apply, {
+    req(input$gene_name, input$calib_pred)
+    cal <- gene_calibration_live(as.character(input$gene_name),
+                                  min_sens = input$calib_min_sens %||% 0.90)
+    pred <- input$calib_pred
+    p <- cal$predictors[[pred]]
+    req(p, p$optimal)
+    if (isTRUE(p$confident)) {
+      calib_override(list(gene = as.character(input$gene_name), predictor = pred,
+                          min_sens = input$calib_min_sens %||% 0.90))
+    } else {
+      showModal(modalDialog(
+        title = "Low-confidence gene calibration",
+        paste0("This gene has n=", p$n_pos, "/", p$n_neg,
+               " per arm (< 20 per arm floor). Apply the gene-specific PP3 tier anyway?"),
+        footer = tagList(modalButton("Cancel"),
+                         actionButton("calib_confirm", "Apply anyway"))
+      ))
+    }
+  })
+
+  observeEvent(input$calib_confirm, {
+    removeModal()
+    req(input$gene_name, input$calib_pred)
+    cal <- gene_calibration_live(as.character(input$gene_name),
+                                  min_sens = input$calib_min_sens %||% 0.90)
+    p <- cal$predictors[[input$calib_pred]]
+    req(p, p$optimal)
+    calib_override(list(gene = as.character(input$gene_name), predictor = input$calib_pred,
+                        min_sens = input$calib_min_sens %||% 0.90))
+  })
+
   variants <- eventReactive(input$goButton,{
     raw <- strsplit(input$variants, "[,]")[[1]]
     raw <- trimws(raw)
@@ -5914,7 +6293,7 @@ shinyServer(function(input, output, session) {
         paste0(
           '<td style="padding:3px 6px; vertical-align:top; border:1px solid #e5e7eb; ',
           'background:#fff; min-width:55px; max-width:110px;">',
-          '<div style="font-size:8px;color:#94a3b8;text-transform:uppercase;',
+          '<div style="font-size:8px;color:#111827;text-transform:uppercase;',
           'letter-spacing:0.3px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">', label, '</div>',
           '<div style="font-size:11px;color:', color, ';', bw, 'white-space:nowrap;">', value, note_html, '</div>',
           '</td>'
@@ -5928,7 +6307,7 @@ shinyServer(function(input, output, session) {
         paste0(
           '<td style="padding:3px 7px; vertical-align:top; border:1px solid #e5e7eb; ',
           'background:#fff; min-width:70px; max-width:150px; word-break:break-word;">',
-          '<div style="font-size:8px;color:#94a3b8;text-transform:uppercase;',
+          '<div style="font-size:8px;color:#111827;text-transform:uppercase;',
           'letter-spacing:0.3px;margin-bottom:1px;white-space:nowrap;">', label, '</div>',
           '<div style="font-size:11px;color:', color, ';', bw, 'line-height:1.3;">', value, note_html, '</div>',
           '</td>'
@@ -5999,33 +6378,45 @@ shinyServer(function(input, output, session) {
         disp <- tag_display(tag)
         col  <- tag_color(tag, is_p)
         pts_str <- if (pts > 0) paste0("+", pts, "pts") else paste0(pts, "pts")
-        # Tooltip: generic criterion description, with GeVIR detail for BP1/PP2
-        tip <- switch(tag,
+        # Tooltip: switch on the BASE tag (strength suffixes stripped) so PP3_strong,
+        # PM1_strong, PP1_moderate etc. still resolve to their description instead of
+        # falling through to the bare tag string.
+        base_tag <- tag_display(tag)
+        tip_body <- switch(base_tag,
           BP1 = if (!is.na(gevir_pct_val))
                   paste0("Missense variant in gene tolerant to missense variation. ",
                          "GeVIR percentile = ", round(gevir_pct_val, 1),
                          " (>75 = tolerant → BP1)")
-                else "Missense variant in gene where only truncating variants cause disease",
+                else "Missense variant in gene where only truncating variants cause disease (BP1)",
           PP2 = if (!is.na(gevir_pct_val))
                   paste0("Missense variant in gene intolerant to missense variation. ",
                          "GeVIR percentile = ", round(gevir_pct_val, 1),
                          " (<25 = intolerant → PP2)")
-                else "Missense variant in gene with high rate of pathogenic missense variants",
-          PS1 = "Same amino acid change as established pathogenic variant (ClinVar)",
-          PM1 = "Variant in functional domain (UniProt); conservation evidence may upgrade strength",
-          PM2 = "Absent or rare in gnomAD at disease-prevalence-adjusted threshold",
-          PM5 = "Novel missense at codon with different established pathogenic change (ClinVar)",
-          PP3 = "Computational evidence of deleteriousness (Pejaver 2022 calibrated thresholds)",
-          PP5 = "Reported as pathogenic in ClinVar with at least 1-star review",
-          BA1 = "Allele frequency >5% in gnomAD — standalone Benign",
-          BS1 = "Allele frequency above disease-prevalence-adjusted threshold",
-          BS2 = "Observed homozygous in gnomAD in healthy individuals",
-          BP3 = "In-frame indel in repetitive region without known function",
-          BP4 = "Multiple computational tools predict benign effect",
-          BP6 = "Reported as benign in ClinVar",
-          BP7 = "Synonymous variant with no predicted splice impact",
+                else "Missense variant in gene with high rate of pathogenic missense variants (PP2)",
+          PS1 = "Same amino acid change as an established pathogenic variant in ClinVar (PS1)",
+          PM1 = "Located in a functional domain / mutational hotspot (UniProt); conservation evidence may upgrade strength (PM1)",
+          PM2 = "Absent or very rare in gnomAD at the disease-prevalence-adjusted (Whiffin) threshold (PM2)",
+          PM5 = "Novel missense at a codon where a DIFFERENT amino-acid change is established pathogenic in ClinVar (PM5)",
+          PP1 = paste0("Cosegregation with disease in affected family members (PP1). ",
+                       "Strength scales with the number of informative meioses: Supporting → Moderate → Strong as more affected relatives are shown to carry the variant and unaffected relatives do not. ",
+                       "Set via the Cosegregation dropdown on this card."),
+          PP3 = paste0("Convergent in-silico evidence of a deleterious effect, scored against Pejaver 2022 gene-agnostic calibrated thresholds: ",
+                       "REVEL ≥ 0.644 / 0.773 / 0.932 → Supporting / Moderate / Strong; CADD ≥ 28.1 / 35; AlphaMissense ≥ 0.564; DANN ≥ 0.96. ",
+                       "Each predictor contributes calibrated (not raw-score) evidence; see the Gene-specific calibration panel for this gene's own LR+ recalibration."),
+          PP5 = "Reported as pathogenic in ClinVar with at least 1-star review (PP5)",
+          BA1 = "Allele frequency >5% in gnomAD — standalone Benign (BA1)",
+          BS1 = "Allele frequency above the disease-prevalence-adjusted threshold (BS1)",
+          BS2 = "Observed homozygous in gnomAD in healthy individuals (BS2)",
+          BP3 = "In-frame indel in a repetitive region without known function (BP3)",
+          BP4 = "Multiple computational tools predict a benign/tolerated effect (BP4)",
+          BP6 = "Reported as benign in ClinVar (BP6)",
+          BP7 = "Synonymous variant with no predicted splice impact (BP7)",
           tag  # fallback: show tag name
         )
+        # Append the applied evidence strength for strength-suffixed tags (e.g. PP3_Strong).
+        str_q <- if (grepl("_strong$", tag)) " — applied at STRONG evidence strength." else
+                 if (grepl("_moderate$", tag)) " — applied at MODERATE evidence strength." else ""
+        tip <- paste0(tip_body, str_q)
         paste0(
           '<div title="', gsub('"', "&quot;", tip), '" ',
           'style="display:inline-flex;flex-direction:column;align-items:center;',
@@ -6047,9 +6438,9 @@ shinyServer(function(input, output, session) {
       }
 
       # ── section header row ────────────────────────────────────────────────
-      sec_hdr <- function(label, bg, icon = "") {
+      sec_hdr <- function(label, bg, icon = "", fg = "#fff") {
         paste0('<tr><td colspan="99" style="padding:5px 10px;background:', bg,
-               ';color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;',
+               ';color:', fg, ';font-size:10px;font-weight:700;text-transform:uppercase;',
                'letter-spacing:0.6px;border:none;white-space:nowrap;">', icon, ' ', label, '</td></tr>')
       }
 
@@ -6118,6 +6509,15 @@ shinyServer(function(input, output, session) {
           NULL
         )
         if (!is.null(dn_tag)) tags_vec <- c(tags_vec, dn_tag)
+        # Gated opt-in PP3 override — only fires once the user has applied it
+        # for this exact gene (see calib_apply/calib_confirm observers above),
+        # AND only for rows whose own score clears the gene-optimal threshold
+        # that produced the tier (apply_calib_override gates on r$<predictor>_Score).
+        # Default (no override, or row below threshold): tags_vec is untouched.
+        ovr <- calib_override()
+        if (!is.null(ovr) && identical(ovr$gene, isolate(as.character(input$gene_name)))) {
+          tags_vec <- apply_calib_override(tags_vec, ovr, r)
+        }
         acmg_res <- classify_acmg(tags_vec)
         pts      <- acmg_res$pts
 
@@ -6146,6 +6546,22 @@ shinyServer(function(input, output, session) {
         # ── ClinVar color ─────────────────────────────────────────────────
         cv_sig  <- as.character(r$ClinVar)
         cv_col  <- if (grepl("pathogenic", tolower(cv_sig)) && !grepl("benign", tolower(cv_sig))) "#ef4444" else if (grepl("benign", tolower(cv_sig)) && !grepl("pathogenic", tolower(cv_sig))) "#10b981" else if (grepl("uncertain|conflicting", tolower(cv_sig))) "#f59e0b" else "#64748b"
+
+        # Matched ClinVar variant — may be a same-codon (PM5) match, not this exact variant.
+        # cv_pch = the matched record's protein change; cv_link hyperlinks it to its ClinVar page.
+        cv_match <- as.character(r$ClinVar_Match)
+        cv_pch   <- { nm <- as.character(r$ClinVar_Name)
+                      m  <- regmatches(nm, regexpr("p\\.[A-Za-z]{3}[0-9]+[A-Za-z]{3}", nm))
+                      if (length(m)) m[1] else "" }
+        cv_vid   <- { v <- regmatches(as.character(r$ClinVar_VCV),
+                                      regexpr("[0-9]+", as.character(r$ClinVar_VCV)))
+                      if (length(v)) v[1] else "" }
+        cv_link  <- if (nzchar(cv_pch)) {
+          if (nzchar(cv_vid))
+            paste0('<a href="https://www.ncbi.nlm.nih.gov/clinvar/variation/', as.integer(cv_vid),
+                   '/" target="_blank" style="color:#0369a1;">', esc(cv_pch), ' &#8599;</a>')
+          else esc(cv_pch)
+        } else ""
 
         # ── Section rows ──────────────────────────────────────────────────
 
@@ -6201,9 +6617,106 @@ shinyServer(function(input, output, session) {
           if (nchar(acmg_res$pts_str) > 0)
             paste0('<br><span style="font-size:10px;color:#93c5fd;letter-spacing:0.2px;">',
                    esc(acmg_res$pts_str), '</span>') else "",
+          local({
+            pp <- acmg_posterior(acmg_res$pts)
+            if (is.finite(pp))
+              paste0('<br><span style="font-size:10px;color:#93c5fd;letter-spacing:0.2px;" ',
+                     'title="calibrated posterior at prior_P=0.10 (OddsPath; Tavtigian 2018)">',
+                     'P(path) &#8776; ', formatC(pp, format = "f", digits = 2), '</span>')
+            else ""
+          }),
           '</span>',
           '</td></tr>'
         )
+
+        # — Gene-specific calibration (advisory only — never mutates acmg_res/PP3) —
+        calib_section <- tryCatch({
+          gene_nm <- isolate(input$gene_name)
+          q_hgvsp <- aa3to1(as.character(r$Variant))   # normalize to dbNSFP-style "p.<Ref1><pos><Alt1>"
+          cal <- gene_calibration_live(gene_name = gene_nm,
+                                       query_hgvsp = q_hgvsp,
+                                       min_sens = input$calib_min_sens %||% 0.90)
+
+          # LR+ 1.0 with no support on any predictor arm means there's no usable
+          # gene-specific ClinVar data — show a note, not three fake placeholder rows.
+          has_data <- any(vapply(cal$predictors,
+                                 function(p) p$n_pos > 0 || p$n_neg > 0, logical(1)))
+
+          pred_rows <- lapply(names(cal$predictors), function(pn) {
+            p <- cal$predictors[[pn]]
+            val <- p$validation
+            # Index the data.frame column-wise, not apply(,1,): apply coerces the mixed-type
+            # frame to a character matrix, so threshold would print via as.character rather
+            # than formatC like the other numeric fields.
+            vrows <- lapply(seq_len(nrow(val)), function(i) {
+              agree <- identical(val$gene_tier[i], val$pejaver_tier[i])
+              paste0('<tr><td>', pn, ' &ge; ', formatC(val$threshold[i], format="f", digits=3), '</td>',
+                     '<td>LR+ ', formatC(val$lr[i], format="f", digits=1),
+                     ' (', formatC(val$lo[i], format="f", digits=1), '&ndash;',
+                     formatC(val$hi[i], format="f", digits=1), ')</td>',
+                     '<td>', val$gene_tier[i], '</td>',
+                     '<td>', if (agree) '=' else '&ne;', ' Pejaver ', val$pejaver_tier[i], '</td></tr>')
+            })
+            opt <- p$optimal
+            opt_row <- if (is.null(opt)) '' else
+              paste0('<tr><td>', pn, ' optimal &ge; ', formatC(opt$threshold, format="f", digits=3), '</td>',
+                     '<td>LR+ ', formatC(as.numeric(opt$lr), format="f", digits=1),
+                     ' (', formatC(as.numeric(opt$lo), format="f", digits=1), '&ndash;',
+                     formatC(as.numeric(opt$hi), format="f", digits=1), ')</td>',
+                     '<td>', opt$gene_tier, '</td><td>max LR+ @ sens floor</td></tr>')
+            conf_flag <- if (isTRUE(p$confident)) '' else
+              paste0('<tr><td colspan="4" style="color:#b45309;font-size:10px;">',
+                     '&#9888; low confidence (n=', p$n_pos, '/', p$n_neg, ' per arm)</td></tr>')
+            paste0(paste0(vrows, collapse = ""), opt_row, conf_flag)
+          })
+
+          loo_note <- if (isTRUE(cal$loo_applied))
+            '<div style="font-size:10px;color:#64748b;">Queried variant removed from its own calibration arm (leave-one-out).</div>' else ''
+
+          n_stars_cal <- suppressWarnings(as.integer(r$ClinVar_Stars))
+          stars_html <- if (!is.na(n_stars_cal) && n_stars_cal >= 0)
+            paste0(paste(rep("⭐", n_stars_cal), collapse = ""),
+                   paste(rep("☆", 4L - n_stars_cal), collapse = "")) else ""
+          # Distinguish an exact ClinVar record for THIS variant from a same-codon (PM5)
+          # match on a different residue change — the latter is not this variant's own entry.
+          clinvar_line <- if (identical(cv_match, "exact")) paste0(
+            '<div style="font-size:11px;margin-top:4px;">',
+            '<strong>This variant in ClinVar:</strong> <span style="color:', cv_col, ';font-weight:600;">',
+            esc(cv_sig), '</span> ', stars_html,
+            if (nzchar(cv_link)) paste0(' (', cv_link, ')') else '',
+            ' <span style="color:#94a3b8;font-size:10px;">(independent of the calibration above &mdash; not double-counted)</span>',
+            '</div>')
+          else if (identical(cv_match, "position") && nzchar(cv_sig)) paste0(
+            '<div style="font-size:11px;margin-top:4px;">',
+            '<strong>Same-codon variant in ClinVar (PM5):</strong> <span style="color:', cv_col, ';font-weight:600;">',
+            esc(cv_sig), '</span> ', stars_html,
+            if (nzchar(cv_link)) paste0(' ', cv_link) else '',
+            ' <span style="color:#94a3b8;font-size:10px;">&mdash; this exact variant is not in ClinVar; a different residue change at the same codon (independent of the calibration above, not double-counted)</span>',
+            '</div>')
+          else paste0(
+            '<div style="font-size:11px;margin-top:4px;color:#64748b;">',
+            '<strong>This variant:</strong> not found in ClinVar.</div>')
+
+          body <- if (!has_data)
+            '<div style="font-size:11px;color:#64748b;">Insufficient gene-specific data &mdash; using genome-wide Pejaver thresholds.</div>'
+          else
+            paste0(
+              '<table style="width:100%;font-size:11px;border-collapse:collapse;">',
+              paste0(pred_rows, collapse = ""),
+              '</table>',
+              loo_note,
+              '<div style="font-size:10px;color:#94a3b8;">match rate ',
+              formatC(100 * (cal$match_rate %||% 0), format = "f", digits = 0),
+              '% of ClinVar variants scored.</div>')
+
+          paste0(
+            sec_hdr("Gene-specific calibration", "#334155", "&#9878;"),
+            '<tr><td colspan="99">',
+            body,
+            clinvar_line,
+            '</td></tr>'
+          )
+        }, error = function(e) "")
 
         # — Row 1: Variant Info (Variant → PTM) —
         row1 <- paste0(
@@ -6230,7 +6743,8 @@ shinyServer(function(input, output, session) {
                                   paste0('<span style="color:',sc_col,';font-weight:600;">',r$ScoreCons,'</span>')
                                 } else '<span style="color:#cbd5e1;">—</span>'),
           info_cell("PTM",       if (nchar(as.character(r$PTM))>0) esc(r$PTM) else '<span style="color:#cbd5e1;">—</span>'),
-          info_cell("ClinVar",   paste0('<span style="color:',cv_col,';font-weight:600;">',esc(cv_sig),'</span>'),
+          info_cell("ClinVar",   paste0('<span style="color:',cv_col,';font-weight:600;">',esc(cv_sig),'</span>',
+                                        if (identical(cv_match,"position")) ' <span style="color:#94a3b8;font-size:10px;">(same codon)</span>' else ''),
                                 note=paste0(
                                   {
                                     n_stars <- suppressWarnings(as.integer(r$ClinVar_Stars))
@@ -6248,14 +6762,15 @@ shinyServer(function(input, output, session) {
                                              filled, empty, '</span> ')
                                     } else ""
                                   },
-                                  if(nchar(as.character(r$ClinVar_Trait))>0) paste0(" · ", r$ClinVar_Trait) else ""
+                                  if (nzchar(cv_link)) paste0(" · ", cv_link) else "",
+                                  if(nchar(as.character(r$ClinVar_Trait))>0) paste0(" · ", esc(r$ClinVar_Trait)) else ""
                                 )),
           '</tr>'
         )
 
         # — Row 2: Pathogenicity —
         row2 <- paste0(
-          sec_hdr("&#9881; Pathogenicity", "#b91c1c"),
+          sec_hdr("&#9881; Pathogenicity", "#e88e8e", fg = "#1f2937"),
           '<tr>',
           sum_cell("SIFT",      score_val(r$SIFT_Score, r$SIFT_V)),
           sum_cell("PP2 HDIV",  score_val(r$PP2_HDIV_Score, r$PP2_HDIV_V)),
@@ -6269,7 +6784,7 @@ shinyServer(function(input, output, session) {
 
         # — Row 3: Ensemble —
         row3 <- paste0(
-          sec_hdr("&#9733; Ensemble", "#6d28d9"),
+          sec_hdr("&#9733; Ensemble", "#c5b0e8", fg = "#1f2937"),
           '<tr>',
           sum_cell("REVEL",     score_val(r$REVEL_Score, r$REVEL_V)),
           sum_cell("MetaSVM",   score_val(r$MetaSVM_Score, r$MetaSVM_V)),
@@ -6298,7 +6813,7 @@ shinyServer(function(input, output, session) {
         gerp_v <- suppressWarnings(as.numeric(r$GERP_RS))
         gerp_col <- if (!is.na(gerp_v) && gerp_v>4.4)"#059669" else if (!is.na(gerp_v) && gerp_v>2)"#0d9488" else "#64748b"
         row4 <- paste0(
-          sec_hdr("&#127795; Conservation", "#047857"),
+          sec_hdr("&#127795; Conservation", "#a1e3cf", fg = "#1f2937"),
           '<tr>',
           sum_cell("PhyloP 100V", {
             v <- suppressWarnings(as.numeric(r$PhyloP_100V))
@@ -6349,7 +6864,7 @@ shinyServer(function(input, output, session) {
         }
         nhom_v <- suppressWarnings(as.integer(r$gnomAD_Nhomalt))
         row5 <- paste0(
-          sec_hdr("&#127758; Population", "#1d4ed8"),
+          sec_hdr("&#127758; Population", "#86b5a7", fg = "#1f2937"),
           '<tr>',
           {
             gv <- suppressWarnings(as.numeric(r$GeVIR_Gene_Pct))
@@ -6548,7 +7063,7 @@ shinyServer(function(input, output, session) {
         )
 
         row6 <- paste0(
-          sec_hdr("&#9670; ACMG Classification", "#b45309"),
+          sec_hdr("&#9670; ACMG Classification", "#ba9973", fg = "#1f2937"),
           '<tr>',
           '<td colspan="99" style="padding:8px 10px;border:1px solid #e5e7eb;background:#fff;">',
           if (nchar(denovo_note) > 0 || nchar(seg_note) > 0 || TRUE)
@@ -6621,7 +7136,7 @@ shinyServer(function(input, output, session) {
           # scrollable body for data rows
           '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">',
           '<table style="border-collapse:collapse;table-layout:auto;width:auto;">',
-          row1, row2, row3, row4, row5, row5b, row6,
+          row1, row2, row3, row4, row5, row5b, row6, calib_section,
           '</table>',
           '</div>',
           '</div>'
@@ -6686,7 +7201,8 @@ shinyServer(function(input, output, session) {
           '<span style="background:#b91c1c;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">Pathogenicity</span> ',
           '<span style="background:#6d28d9;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">Ensemble</span> ',
           '<span style="background:#047857;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">Conservation</span> ',
-          '<span style="background:#1d4ed8;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">Population</span>. ',
+          '<span style="background:#1d4ed8;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">Population</span> ',
+          '<span style="background:#334155;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">Gene-Specific Calibration</span>. ',
           'Clinical review required.',
           '</p>',
           first_two,
@@ -6763,6 +7279,13 @@ shinyServer(function(input, output, session) {
         switch(val, pm3="PM3", pm3_moderate="PM3_moderate", pm3_strong="PM3_strong", "")
       })
 
+      # Gated opt-in PP3 override — mirrors the exact gate applied to the
+      # on-screen card (server.R ~6451-6458) so the exported "Final" columns
+      # match what the user actually saw, instead of silently reverting to
+      # the pre-override Pejaver PP3 call.
+      ovr <- isolate(calib_override())
+      ovr_active <- !is.null(ovr) && identical(ovr$gene, isolate(as.character(input$gene_name)))
+
       # Recompute Final_ACMG_Tags and Final_Classification with PP1
       vtbl$Final_ACMG_Tags <- sapply(seq_len(nrow(vtbl)), function(i) {
         base_tags <- if (nchar(as.character(vtbl$ACMG_Tags[i])) > 0)
@@ -6779,6 +7302,7 @@ shinyServer(function(input, output, session) {
                               vtbl$PTM_ACMG[i] == "PS3_supporting")
                             "PS3_supporting" else ""
         if (nchar(ptm_tag_export) > 0) base_tags <- c(base_tags, ptm_tag_export)
+        if (ovr_active) base_tags <- apply_calib_override(base_tags, ovr, vtbl[i, ])
         paste(base_tags, collapse=", ")
       })
       vtbl$Final_Classification <- sapply(seq_len(nrow(vtbl)), function(i) {
@@ -7000,6 +7524,7 @@ shinyServer(function(input, output, session) {
                '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-weight:600; min-width:140px;">', esc(row$Disease), '</td>',
                '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:13px; max-width:280px;">', esc(row$Description), '</td>',
                '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; white-space:nowrap;">', mim_cell, '</td>',
+               '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:13px; white-space:nowrap;">', esc(row$Prevalence), '</td>',
                '<td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:12px; color:#64748b; max-width:300px;">', esc(row$Notes), '</td>',
                '</tr>')
       }), collapse = "\n")
@@ -7012,6 +7537,7 @@ shinyServer(function(input, output, session) {
         '<th style="padding:10px; text-align:left; color:#003f5c; white-space:nowrap;">Disease (UniProt ID)</th>',
         '<th style="padding:10px; text-align:left; color:#003f5c;">Description</th>',
         '<th style="padding:10px; text-align:left; color:#003f5c; white-space:nowrap;">OMIM</th>',
+        '<th style="padding:10px; text-align:left; color:#003f5c; white-space:nowrap;">Prevalence <span style="font-weight:400;font-size:11px;color:#94a3b8;">(Orphanet)</span></th>',
         '<th style="padding:10px; text-align:left; color:#003f5c;">Clinical Notes</th>',
         '</tr></thead><tbody>', disease_rows_html, '</tbody></table>',
         '</div>')
@@ -7315,7 +7841,7 @@ shinyServer(function(input, output, session) {
       p5 <- ggplot() + ggplot2::annotate(geom = "text", x = 0.5, y = 0.5, 
               label = "gnomAD data not available — API may be temporarily overloaded, try again", 
               size = 4.5, color = "#94a3b8", fontface = "italic") +
-            labs(y = "gnomAD Freq") +
+            labs(y = "gnomAD\nFreq") +
             theme_bw(base_size = vv_medium) + theme_vv() +
             theme(axis.title.x = element_blank(), axis.text = element_blank(), 
                   axis.ticks = element_blank(), panel.grid = element_blank())
@@ -7334,7 +7860,7 @@ shinyServer(function(input, output, session) {
       p4 <- ggplot() + ggplot2::annotate(geom = "text", x = 0.5, y = 0.5, 
               label = "Mutation density data not available — requires gnomAD data", 
               size = 4.5, color = "#94a3b8", fontface = "italic") +
-            labs(y = "Mutation Density") +
+            labs(y = "Mutation\nDensity") +
             theme_bw(base_size = vv_medium) + theme_vv() +
             theme(axis.title.x = element_blank(), axis.text = element_blank(), 
                   axis.ticks = element_blank(), panel.grid = element_blank())
