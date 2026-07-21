@@ -3907,8 +3907,8 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   if ("PM2" %in% tags) {
     af_txt <- fmt_af(gnomad_af)
     if (!is.null(af_txt) && af_txt != "0%")
-      s(paste0("The variant is observed at an extremely low frequency in the gnomAD v4 dataset (total allele frequency: ", af_txt, ").")) else
-      s("The variant is absent from the gnomAD v4 population database.")
+      s(paste0("The variant is observed at an extremely low frequency in the gnomAD v4 dataset (total allele frequency: ", af_txt, ") (PM2).")) else
+      s("The variant is absent from the gnomAD v4 population database (PM2).")
   } else if ("BA1" %in% tags) {
     af_txt <- fmt_af(gnomad_af)
     s(paste0("The variant is extremely common in the general population (gnomAD AF: ", if (!is.null(af_txt)) af_txt else ">5%", "), meeting the BA1 threshold for standalone Benign classification (Richards 2015)."))
@@ -3966,8 +3966,9 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
       scores <- c(scores, paste0("MetaSVM: ", metasvm_v))
     score_str <- if (length(scores) > 0) paste0(" (", paste(scores, collapse = "; "), ")") else ""
     strength  <- if ("PP3_strong" %in% tags)   " at strong evidence strength" else if ("PP3_moderate" %in% tags) " at moderate evidence strength" else ""
+    pp3_name  <- if ("PP3_strong" %in% tags) " (PP3_Strong)" else if ("PP3_moderate" %in% tags) " (PP3_Moderate)" else " (PP3_Supporting)"
     if (has_pp3)
-      s(paste0("In silico tool predictions suggest damaging effect of the variant on the gene or gene product", strength, score_str, ".")) else
+      s(paste0("In silico tool predictions suggest damaging effect of the variant on the gene or gene product", strength, score_str, pp3_name, ".")) else
       s(paste0("In silico tool predictions suggest the variant is likely tolerated", score_str, " (BP4)."))
     # PS3 proxy note — when AM >= 0.90 + REVEL >= 0.773, note that PP3_strong is used as proxy
     if (isTRUE(ps3_proxy))
@@ -4012,7 +4013,7 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
     alt_str  <- if (length(alt_changes) > 0) paste0(" (", paste(alt_changes, collapse = ", "), ")") else ""
     cite_str <- if (nchar(cite) > 0) paste0(" (", cite, ")") else ""
     s(paste0("Different missense changes at the same codon", alt_str,
-             " have been reported to be associated with ", disease_str, cite_str, "."))
+             " have been reported to be associated with ", disease_str, cite_str, " (PM5)."))
   }
 
   # PM4
@@ -6377,33 +6378,45 @@ shinyServer(function(input, output, session) {
         disp <- tag_display(tag)
         col  <- tag_color(tag, is_p)
         pts_str <- if (pts > 0) paste0("+", pts, "pts") else paste0(pts, "pts")
-        # Tooltip: generic criterion description, with GeVIR detail for BP1/PP2
-        tip <- switch(tag,
+        # Tooltip: switch on the BASE tag (strength suffixes stripped) so PP3_strong,
+        # PM1_strong, PP1_moderate etc. still resolve to their description instead of
+        # falling through to the bare tag string.
+        base_tag <- tag_display(tag)
+        tip_body <- switch(base_tag,
           BP1 = if (!is.na(gevir_pct_val))
                   paste0("Missense variant in gene tolerant to missense variation. ",
                          "GeVIR percentile = ", round(gevir_pct_val, 1),
                          " (>75 = tolerant → BP1)")
-                else "Missense variant in gene where only truncating variants cause disease",
+                else "Missense variant in gene where only truncating variants cause disease (BP1)",
           PP2 = if (!is.na(gevir_pct_val))
                   paste0("Missense variant in gene intolerant to missense variation. ",
                          "GeVIR percentile = ", round(gevir_pct_val, 1),
                          " (<25 = intolerant → PP2)")
-                else "Missense variant in gene with high rate of pathogenic missense variants",
-          PS1 = "Same amino acid change as established pathogenic variant (ClinVar)",
-          PM1 = "Variant in functional domain (UniProt); conservation evidence may upgrade strength",
-          PM2 = "Absent or rare in gnomAD at disease-prevalence-adjusted threshold",
-          PM5 = "Novel missense at codon with different established pathogenic change (ClinVar)",
-          PP3 = "Computational evidence of deleteriousness (Pejaver 2022 calibrated thresholds)",
-          PP5 = "Reported as pathogenic in ClinVar with at least 1-star review",
-          BA1 = "Allele frequency >5% in gnomAD — standalone Benign",
-          BS1 = "Allele frequency above disease-prevalence-adjusted threshold",
-          BS2 = "Observed homozygous in gnomAD in healthy individuals",
-          BP3 = "In-frame indel in repetitive region without known function",
-          BP4 = "Multiple computational tools predict benign effect",
-          BP6 = "Reported as benign in ClinVar",
-          BP7 = "Synonymous variant with no predicted splice impact",
+                else "Missense variant in gene with high rate of pathogenic missense variants (PP2)",
+          PS1 = "Same amino acid change as an established pathogenic variant in ClinVar (PS1)",
+          PM1 = "Located in a functional domain / mutational hotspot (UniProt); conservation evidence may upgrade strength (PM1)",
+          PM2 = "Absent or very rare in gnomAD at the disease-prevalence-adjusted (Whiffin) threshold (PM2)",
+          PM5 = "Novel missense at a codon where a DIFFERENT amino-acid change is established pathogenic in ClinVar (PM5)",
+          PP1 = paste0("Cosegregation with disease in affected family members (PP1). ",
+                       "Strength scales with the number of informative meioses: Supporting → Moderate → Strong as more affected relatives are shown to carry the variant and unaffected relatives do not. ",
+                       "Set via the Cosegregation dropdown on this card."),
+          PP3 = paste0("Convergent in-silico evidence of a deleterious effect, scored against Pejaver 2022 gene-agnostic calibrated thresholds: ",
+                       "REVEL ≥ 0.644 / 0.773 / 0.932 → Supporting / Moderate / Strong; CADD ≥ 28.1 / 35; AlphaMissense ≥ 0.564; DANN ≥ 0.96. ",
+                       "Each predictor contributes calibrated (not raw-score) evidence; see the Gene-specific calibration panel for this gene's own LR+ recalibration."),
+          PP5 = "Reported as pathogenic in ClinVar with at least 1-star review (PP5)",
+          BA1 = "Allele frequency >5% in gnomAD — standalone Benign (BA1)",
+          BS1 = "Allele frequency above the disease-prevalence-adjusted threshold (BS1)",
+          BS2 = "Observed homozygous in gnomAD in healthy individuals (BS2)",
+          BP3 = "In-frame indel in a repetitive region without known function (BP3)",
+          BP4 = "Multiple computational tools predict a benign/tolerated effect (BP4)",
+          BP6 = "Reported as benign in ClinVar (BP6)",
+          BP7 = "Synonymous variant with no predicted splice impact (BP7)",
           tag  # fallback: show tag name
         )
+        # Append the applied evidence strength for strength-suffixed tags (e.g. PP3_Strong).
+        str_q <- if (grepl("_strong$", tag)) " — applied at STRONG evidence strength." else
+                 if (grepl("_moderate$", tag)) " — applied at MODERATE evidence strength." else ""
+        tip <- paste0(tip_body, str_q)
         paste0(
           '<div title="', gsub('"', "&quot;", tip), '" ',
           'style="display:inline-flex;flex-direction:column;align-items:center;',
