@@ -531,6 +531,7 @@
       <li><strong>CCRS constraint:</strong> Variant falls in a constrained coding region (&ge;90th percentile CCRs score).</li>
       <li><strong>UniProt domain:</strong> Variant is in a structurally or functionally critical annotated domain.</li>
       <li><strong>15 aa ClinVar neighborhood (new):</strong> &ge;3 Pathogenic/LP ClinVar variants fall within &plusmn;15 amino acids of the query position AND &ge;75% of all classified variants in that window are pathogenic. This identifies mutational hotspots not captured by named UniProt domains. Uses the already-fetched ClinVar dataset &mdash; no additional API call. The <em>Mutation Density</em> track and <em>Density Dominant</em> column in the annotation table provide complementary visual corroboration of this signal.</li>
+      <li><strong>DOLPHIN Pfam alignment (last resort):</strong> Consulted only when none of the pathways above fire. The variant is aligned to its Pfam domain via the DOLPHIN service (Corcuff et al. 2023, <em>Front. Bioinform.</em> 3:1127341); a hit at a constrained Pfam position fires PM1. Live API call, orthogonal to gnomAD frequency and ClinVar evidence. Enabled by default; disabled only in high-throughput benchmarking to respect the DOLPHIN rate limit.</li>
     </ol>
     <p><strong>Upgrade to PM1_strong (PS-equivalent, +4 pts):</strong></p>
     <ul>
@@ -538,7 +539,7 @@
       <li>UniProt domain hit <em>and</em> neighborhood hotspot (pathways 2+3 combined).</li>
     </ul>
     <p><strong>Not applied when:</strong> gnomAD AF &gt; 1% (BS1/BA1 range).</p>
-    <p><strong>Data sources:</strong> CCRS local file, UniProt features API, ClinVar (neighborhood), ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons).</p>
+    <p><strong>Data sources:</strong> CCRS local file, UniProt features API, ClinVar (neighborhood), ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons), DOLPHIN API (Pfam last-resort pathway).</p>
   </div>
 
   <div class="group-box">
@@ -875,6 +876,7 @@
   <tr><td>Ensembl REST API</td><td><span class="badge api">API</span></td><td>Canonical transcript exon structure for mapping UCSC genomic scores to amino acid coordinates</td></tr>
   <tr><td>ClinGen LDH / eRepo</td><td><span class="badge api">API</span></td><td>Gene–disease validity classifications (Definitive / Strong / Moderate / Limited / Disputed / Refuted) from ClinGen curated expert panels</td></tr>
   <tr><td>GenCC API</td><td><span class="badge api">API</span></td><td>Gene–disease classifications from GenCC consortium submitters (thegencc.org). Queried when ClinGen LDH and eRepo return no results.</td></tr>
+  <tr><td>DOLPHIN API</td><td><span class="badge api">API</span></td><td>Pfam-domain alignment for the last-resort PM1 pathway (Corcuff et al. 2023). Consulted only when CCRS / UniProt-domain / ClinVar-neighborhood pathways do not fire; disabled in high-throughput benchmarking.</td></tr>
   <tr><td>GENCODE v49</td><td><span class="badge local">LOCAL</span></td><td>Gene &rarr; UniProt ID mapping, GRCh38 coordinates &amp; GeVIR percentile (<code>gene_data</code>, 19,076 genes; in <code>data/VarViz.RData</code>)</td></tr>
   <tr><td>CCRS / CCRStoAAC</td><td><span class="badge local">LOCAL</span></td><td>Constrained coding regions + ScoreCons protein-coordinate conservation (<code>ccrs_data</code>, 10.7&nbsp;M rows; in <code>data/VarViz.RData</code>, ~21&nbsp;MB total, built from the CCRS BED via <code>preprocess_ccrs_to_rdata.R</code>)</td></tr>
   <tr><td>ConSurf</td><td><span class="badge user">USER</span></td><td>Conservation grades (1&ndash;9), normalized scores, burial status (uploaded tab-separated grades file)</td></tr>
