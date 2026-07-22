@@ -520,7 +520,7 @@
       <tr><td>&#9734;</td><td>No assertion criteria provided</td><td>PS1_supporting</td><td>+1</td></tr>
     </table>
     <p><strong>Rationale:</strong> A 0-star ClinVar assertion without assertion criteria carries far less evidentiary weight than a 4-star expert panel classification. Star-weighting follows GeneBe implementation (Maj et al. (2023) [18]).</p>
-    <p><strong>Exclusions:</strong> Mutually exclusive with PM5 and BP6. If ClinVar significance is only <em>Likely Pathogenic</em>, PS1 is downgraded to PM5 (+2 pts). Suppressed when BA1 or BS1 fires.</p>
+    <p><strong>Exclusions:</strong> Mutually exclusive with PM5 and BP6. If ClinVar significance is only <em>Likely Pathogenic</em>, PS1 is downgraded to PM5, which is itself star-weighted (+2 at &ge;2 stars, +1 below). Suppressed when BA1 or BS1 fires.</p>
     <p><strong>Data source:</strong> NCBI ClinVar via E-utilities.</p>
   </div>
 
@@ -578,8 +578,17 @@
   </div>
 
   <div class="group-box">
-    <div class="group-box-title">PM5 - Moderate Pathogenic &nbsp;<span class="tag pm">PM5</span>&nbsp; +2 pts</div>
+    <div class="group-box-title">PM5 / PM5_supporting - Moderate / Supporting Pathogenic &nbsp;<span class="tag pm">PM5</span>&nbsp; +2 pts &nbsp;|&nbsp; <span class="tag pp">PM5_supporting</span>&nbsp; +1 pt</div>
     <p><strong>Trigger:</strong> A <em>different</em> pathogenic amino acid change exists at the <em>same codon</em> in ClinVar (<code>clinvar_match_type == "position"</code>), or the exact change exists but ClinVar classifies it only as Likely Pathogenic (PS1 downgraded).</p>
+    <p><strong>Strength by ClinVar review status:</strong> like PS1, PM5 is star-weighted &mdash; the reference assertion it rests on is only as good as its review status.</p>
+    <table class="data-table" style="max-width:480px;margin:8px 0;">
+      <tr><th>ClinVar Stars</th><th>Review Status</th><th>PM5 Strength</th><th>Points</th></tr>
+      <tr><td>&#9733;&#9733;&#9733;&#9733; / &#9733;&#9733;&#9733;</td><td>Practice guideline / Expert panel</td><td>PM5 Moderate</td><td>+2</td></tr>
+      <tr><td>&#9733;&#9733;</td><td>Multiple submitters, criteria provided</td><td>PM5 Moderate</td><td>+2</td></tr>
+      <tr><td>&#9733;</td><td>Single submitter, criteria provided</td><td>PM5_supporting</td><td>+1</td></tr>
+      <tr><td>&#9734;</td><td>No assertion criteria provided</td><td>PM5_supporting</td><td>+1</td></tr>
+    </table>
+    <p>The Supporting-to-Moderate span matches the range Franklin/Genoox applies to this criterion.</p>
     <p><strong>Exclusions:</strong> Mutually exclusive with PS1.</p>
   </div>
 
