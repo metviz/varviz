@@ -661,7 +661,8 @@
       <li><strong>PP1 Strong (+4 pts)</strong>: &ge;5 affected relatives (or LOD &ge; 3.5)</li>
     </ul>
     <p><strong>Gated off when:</strong> BA1 or BS1 fires (variant too common to be disease-causing).</p>
-    <p><strong>Citation:</strong> Jarvik and Browning (2016) [15].</p>
+    <p><strong>Combined with PP4:</strong> PP1 and PP4 both implicate the <em>locus</em> rather than the specific variant, so they are not independent evidence. Their combined contribution is capped at <strong>+5.0 points</strong> per ClinGen SVI guidance [29]. That ceiling sits below the +6.0 needed for Likely Pathogenic, so locus evidence alone can never reach LP without variant-level support.</p>
+    <p><strong>Citation:</strong> Jarvik and Browning (2016) [15]; Biesecker <em>et al.</em> (2024) [29].</p>
   </div>
 
   <div class="group-box">
@@ -678,7 +679,8 @@
     <div class="group-box-title">PP4 - Phenotype specificity (per-variant) &nbsp;<span class="tag pp">PP4</span>&nbsp; +1 pt</div>
     <p><strong>Trigger:</strong> The patient's phenotype or family history is highly specific for a disease with a single genetic etiology.</p>
     <p><strong>Input:</strong> Each variant card has its own <em>Phenotype</em> dropdown in the ACMG Classification row. Binary &mdash; either not assessed, or applied at Supporting.</p>
-    <p><strong>Unlike PP1 and PM3, PP4 has no strength tiers.</strong> ACMG/AMP 2015 defines it as Supporting only, so there is no Moderate or Strong variant of this criterion.</p>
+    <p><strong>Unlike PP1 and PM3, PP4 has no strength tiers in VarViz.</strong> ACMG/AMP 2015 defines it as Supporting only. Note that ClinGen SVI [29] has since superseded this, scaling PP4 by the gene's diagnostic yield for the phenotype (roughly +1.0 at 20% yield up to +7.0 at 95%), and recognising PP4_Moderate and PP4_Strong. VarViz applies the conservative ACMG 2015 default of +1.</p>
+    <p><strong>Combined with PP1:</strong> capped at <strong>+5.0 points</strong> together &mdash; see the PP1 entry above. ClinGen further advises that under locus homogeneity with high diagnostic yield, PP4 should be applied and co-segregation (PP1) omitted entirely, since co-segregation is then a foregone conclusion. VarViz does not enforce that interaction; the two dropdowns are independent and it is left to your judgement.</p>
     <p><strong>When not to apply:</strong> Genetically heterogeneous presentations, or non-specific phenotypes that many genes could explain. PP4 requires that the clinical picture is characteristic enough to point at this gene specifically.</p>
     <p><strong>Exported columns:</strong> <code>PP4_Evidence</code> (description), <code>PP4_Applied</code> (tag), included in <code>Final_ACMG_Tags</code> and <code>Final_Classification</code>.</p>
     <p><strong>Data source:</strong> User-provided clinical data.</p>
@@ -1048,6 +1050,7 @@
   <li style="margin-bottom:12px;">Harrison,P.W. <em>et al.</em> (2024) Ensembl 2024. <em>Nucleic Acids Res.</em>, <strong>52</strong>, D891&ndash;D899. doi: <a href="https://doi.org/10.1093/nar/gkad1049" target="_blank">10.1093/nar/gkad1049</a></li>
   <li style="margin-bottom:12px;">Nassar,L.R. <em>et al.</em> (2023) The UCSC Genome Browser database: 2023 update. <em>Nucleic Acids Res.</em>, <strong>51</strong>, D1188&ndash;D1195. doi: <a href="https://doi.org/10.1093/nar/gkac1072" target="_blank">10.1093/nar/gkac1072</a></li>
   <li style="margin-bottom:12px;">DiStefano,M.T. <em>et al.</em> (2022) The Gene Curation Coalition: a global effort to harmonize gene&ndash;disease evidence resources. <em>Genet. Med.</em>, <strong>24</strong>, 1732&ndash;1742. doi: <a href="https://doi.org/10.1016/j.gim.2022.04.017" target="_blank">10.1016/j.gim.2022.04.017</a></li>
+  <li style="margin-bottom:12px;">Biesecker,L.G. <em>et al.</em> (2024) ClinGen guidance for use of the PP1/BS4 co-segregation and PP4 phenotype specificity criteria for sequence variant pathogenicity classification. <em>Am. J. Hum. Genet.</em>, <strong>111</strong>, 24&ndash;38. doi: <a href="https://doi.org/10.1016/j.ajhg.2023.11.009">10.1016/j.ajhg.2023.11.009</a></li>
 </ol>
 </div>
 
