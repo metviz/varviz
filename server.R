@@ -4891,13 +4891,14 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       # harness to avoid the 60 req/min DOLPHIN rate limit at 90k-variant scale.
       if (pm1_pathway_val == "" &&
           isTRUE(getOption("varviz.dolphin_pm1", TRUE))) {
+        # NA = service unreachable (timeout/DNS/TLS); TRUE/FALSE = real verdict.
         dolphin_hit <- tryCatch(
           dolphin_pm1_call(gene = gene_name_for_api, p_notation = mut,
                            timeout_s = 8),
           error = function(e) {
             message("[PM1] DOLPHIN call failed for ", gene_name_for_api,
                     " ", mut, ": ", e$message)
-            FALSE
+            NA
           }
         )
         if (isTRUE(dolphin_hit)) {
@@ -4905,6 +4906,15 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           pm1_pathway_val <- "dolphin"
           message("[PM1] DOLPHIN Pfam alignment fires PM1 for ",
                   gene_name_for_api, " ", mut)
+        } else if (is.na(dolphin_hit)) {
+          message("[PM1] DOLPHIN unreachable for ", gene_name_for_api, " ", mut,
+                  " — PM1 Path 4 not evaluated")
+          # Record that Path 4 was attempted but the service was unreachable,
+          # so a blank pathway is not silently read as "DOLPHIN said no". No
+          # PM1 tag is added, and classification is unaffected — this value
+          # only ever appears where no pathway fired, so it cannot be mistaken
+          # for one that did (strip_clinvar_tags reacts to clinvar_hotspot only).
+          pm1_pathway_val <- "dolphin_unavailable"
         }
       }
     }
