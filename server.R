@@ -3634,6 +3634,10 @@ acmg_posterior <- function(points, prior_p = 0.10, C = 2.0813) {
 #   rule: human-readable rule string, e.g. "1 PS + 2 PM"
 #   pts: integer Bayesian score
 # ============================================================
+# ClinGen SVI ceiling on combined PP1+PP4 locus evidence, in Tavtigian points.
+# Biesecker et al. AJHG 2024;111:24-38 (doi:10.1016/j.ajhg.2023.11.009).
+PP1_PP4_CAP <- 5
+
 classify_acmg <- function(tags_vec) {
   # ── Point weights (Tavtigian 2020) ──────────────────────────────────────
   tag_pts_map <- c(
@@ -3648,6 +3652,20 @@ classify_acmg <- function(tags_vec) {
   )
   tags <- trimws(tags_vec)
   pts  <- sum(tag_pts_map[intersect(tags, names(tag_pts_map))], na.rm = TRUE)
+
+  # ── ClinGen SVI cap on combined locus evidence (Biesecker 2024) ──────────
+  # PP1 (co-segregation) and PP4 (phenotype specificity) both implicate the
+  # LOCUS rather than the specific variant, so they are not independent
+  # evidence and must not be summed without limit: a variant in linkage
+  # disequilibrium with the true causative allele would inherit the full
+  # co-segregation signal. ClinGen caps their combined contribution at +5.0
+  # points (conditional OddsPath 38.9:1) — below the +6.0 needed for Likely
+  # Pathogenic, so locus evidence alone can never reach LP without variant-
+  # level support (PVS1, PS3, PP3, ...). Only the excess is removed; every
+  # other criterion keeps its full weight.
+  locus_pts <- sum(tag_pts_map[intersect(tags, c("PP1","PP1_moderate","PP1_strong",
+                                                 "PP4"))], na.rm = TRUE)
+  if (locus_pts > PP1_PP4_CAP) pts <- pts - (locus_pts - PP1_PP4_CAP)
 
   # ── Tag counts by tier ───────────────────────────────────────────────────
   n_pvs <- sum(grepl("^PVS",        tags))
