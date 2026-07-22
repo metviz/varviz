@@ -3643,6 +3643,7 @@ classify_acmg <- function(tags_vec) {
   tag_pts_map <- c(
     PVS1=8,
     PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
+    PM5_supporting=1,
     PM1_strong=4, PP3_strong=4, PP1_strong=4,
     PM1=2, PM2=2, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
     PP1=1, PP2=1, PP3=1, PP4=1, PP5=1,
@@ -5009,10 +5010,18 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       is_lp        <- grepl("likely pathogenic", clinvar_sig, ignore.case = TRUE) &&
                       !grepl("benign", clinvar_sig, ignore.case = TRUE)
 
+      # ClinVar review status gates how much the reference assertion is worth.
+      # A 0-star "no assertion criteria" submission is not the same evidence as a
+      # 3-star expert-panel review, so both PS1 and PM5 are star-weighted rather
+      # than flat. Populated for exact and position matches alike (see ~4371/4420).
+      stars_n <- suppressWarnings(as.integer(clinvar_stars))
+      # PM5 spans Supporting to Moderate: >=2 stars keeps the full Moderate weight,
+      # anything weaker (1, 0, or unparseable) drops to Supporting.
+      pm5_tag <- if (!is.na(stars_n) && stars_n >= 2) "PM5" else "PM5_supporting"
+
       if (clinvar_match_type == "exact") {
         if (is_path_only) {
           # Same AA change, established Pathogenic → PS1 star-weighted
-          stars_n <- suppressWarnings(as.integer(clinvar_stars))
           ps1_tag <- if (!is.na(stars_n) && stars_n >= 2) "PS1" else
                      if (!is.na(stars_n) && stars_n == 1) "PS1_moderate" else "PS1_supporting"
           acmg_tags <- c(acmg_tags, ps1_tag)
@@ -5020,14 +5029,14 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         } else if (is_lp) {
           # Same AA change but only Likely Pathogenic in ClinVar → downgrade to PM5
           # (LP is not "established" per Richards 2015 PS1 criteria)
-          acmg_tags <- c(acmg_tags, "PM5")
+          acmg_tags <- c(acmg_tags, pm5_tag)
           pm5_fired <- TRUE
         }
       } else if (clinvar_match_type == "position" && !ps1_fired) {
         # Different AA change at same codon, established P or LP → PM5
         # (PS1 requires identical AA change, so this cannot be PS1)
         if (is_path_only || is_lp) {
-          acmg_tags <- c(acmg_tags, "PM5")
+          acmg_tags <- c(acmg_tags, pm5_tag)
           pm5_fired <- TRUE
         }
       }
@@ -6363,22 +6372,24 @@ shinyServer(function(input, output, session) {
         BP1=-1, BP2=-1, BP3=-1, BP4=-1, BP5=-1, BP7=-1
       )
       strength_label <- function(tag) {
-        if (grepl("_strong$", tag))    return("Strong")
-        if (grepl("_moderate$", tag))  return("Moderate")
+        if (grepl("_strong$", tag))     return("Strong")
+        if (grepl("_moderate$", tag))   return("Moderate")
+        if (grepl("_supporting$", tag)) return("Supporting")
         if (tag %in% c("PVS1"))        return("Very Strong")
         if (tag %in% c("PS1","PS2","PS3","PS4","BS1","BS2","BS3","BS4","BP6")) return("Strong")
         if (tag %in% c("PM1","PM2","PM4","PM5","PM6")) return("Moderate")
         if (tag == "PM3_strong")   return("Strong")
         if (tag == "PM3_moderate") return("Moderate")
         if (tag == "PM3")          return("Supporting")
-        if (tag == "PS3_supporting")  return("Supporting")
-        if (tag == "PS1_moderate")   return("Moderate")
-        if (tag == "PS1_supporting")  return("Supporting")
         if (tag %in% c("PP1","PP2","PP3","PP4","PP5","BP1","BP2","BP3","BP4","BP5","BP7")) return("Supporting")
         if (tag == "BA1") return("Stand Alone")
         return("Supporting")
       }
-      tag_display <- function(tag) sub("_strong$","",sub("_moderate$","",tag))
+      # Strip every strength suffix, not just _strong/_moderate: without the
+      # _supporting case, PS1_supporting / PS3_supporting / PM5_supporting render
+      # as raw tag names on the badge AND miss the tooltip switch below, which
+      # keys on the base tag.
+      tag_display <- function(tag) sub("_(strong|moderate|supporting)$", "", tag)
       tag_color <- function(tag, is_path) {
         if (!is_path) return(list(bg="#dcfce7", border="#16a34a", text="#14532d", badge_bg="#16a34a"))
         if (grepl("^PVS",tag)||grepl("_strong$",tag)) return(list(bg="#fee2e2",border="#dc2626",text="#7f1d1d",badge_bg="#dc2626"))
@@ -6437,7 +6448,8 @@ shinyServer(function(input, output, session) {
         )
         # Append the applied evidence strength for strength-suffixed tags (e.g. PP3_Strong).
         str_q <- if (grepl("_strong$", tag)) " — applied at STRONG evidence strength." else
-                 if (grepl("_moderate$", tag)) " — applied at MODERATE evidence strength." else ""
+                 if (grepl("_moderate$", tag)) " — applied at MODERATE evidence strength." else
+                 if (grepl("_supporting$", tag)) " — downgraded to SUPPORTING evidence strength (ClinVar review status below 2 stars)." else ""
         tip <- paste0(tip_body, str_q)
         paste0(
           '<div title="', gsub('"', "&quot;", tip), '" ',
