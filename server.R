@@ -6403,6 +6403,10 @@ shinyServer(function(input, output, session) {
           PP3 = paste0("Convergent in-silico evidence of a deleterious effect, scored against Pejaver 2022 gene-agnostic calibrated thresholds: ",
                        "REVEL ≥ 0.644 / 0.773 / 0.932 → Supporting / Moderate / Strong; CADD ≥ 28.1 / 35; AlphaMissense ≥ 0.564; DANN ≥ 0.96. ",
                        "Each predictor contributes calibrated (not raw-score) evidence; see the Gene-specific calibration panel for this gene's own LR+ recalibration."),
+          PP4 = paste0("Patient's phenotype or family history is highly specific for a disease with a single genetic etiology (PP4). ",
+                       "Applies only when the presentation is characteristic enough that this gene is the expected cause; ",
+                       "not appropriate for genetically heterogeneous or non-specific phenotypes. ",
+                       "Set via the Phenotype dropdown on this card."),
           PP5 = "Reported as pathogenic in ClinVar with at least 1-star review (PP5)",
           BA1 = "Allele frequency >5% in gnomAD — standalone Benign (BA1)",
           BS1 = "Allele frequency above the disease-prevalence-adjusted threshold (BS1)",
@@ -6480,6 +6484,8 @@ shinyServer(function(input, output, session) {
         card_pm3     <- if (!is.null(input[[pm3_input_id]])) input[[pm3_input_id]] else "none"
         dn_input_id  <- paste0("dn_", i)
         card_dn      <- if (!is.null(input[[dn_input_id]])) input[[dn_input_id]] else "not_denovo"
+        pp4_input_id <- paste0("pp4_", i)
+        card_pp4     <- if (!is.null(input[[pp4_input_id]])) input[[pp4_input_id]] else "none"
 
         # ── classify using shared engine + per-card PP1 ───────────────────
         tags_vec <- if (nchar(as.character(r$ACMG_Tags)) > 0)
@@ -6499,6 +6505,8 @@ shinyServer(function(input, output, session) {
           NULL
         )
         if (!is.null(pm3_tag)) tags_vec <- c(tags_vec, pm3_tag)
+        # PP4 is Supporting-only in ACMG/AMP — no strength tiers to switch on.
+        if (identical(card_pp4, "pp4")) tags_vec <- c(tags_vec, "PP4")
         # PTM hit — add PS3_supporting to tags if strong PTM site
         if (nchar(as.character(r$PTM_ACMG)) > 0 && r$PTM_ACMG == "PS3_supporting")
           tags_vec <- c(tags_vec, "PS3_supporting")
@@ -7117,6 +7125,20 @@ shinyServer(function(input, output, session) {
             width    = "320px"
           )),
           '</div>',
+          '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">',
+          '<span style="font-size:11px;font-weight:600;color:#374151;white-space:nowrap;">',
+          '&#9679; Phenotype (PP4):</span>',
+          as.character(selectInput(
+            inputId  = paste0("pp4_", i),
+            label    = NULL,
+            choices  = list(
+              "Not assessed (PP4 N/A)"                                      = "none",
+              "Phenotype/family history highly specific for this gene (PP4 +1)" = "pp4"
+            ),
+            selected = card_pp4,
+            width    = "320px"
+          )),
+          '</div>',
           '<div style="margin-bottom:6px;">', badges_html, '</div>',
           if (nchar(trimws(cmt)) > 0)
             paste0('<div style="font-size:12px;color:#374151;line-height:1.7;',
@@ -7278,6 +7300,19 @@ shinyServer(function(input, output, session) {
         val <- tryCatch(input[[paste0("pm3_", i)]], error = function(e) "none")
         switch(val, pm3="PM3", pm3_moderate="PM3_moderate", pm3_strong="PM3_strong", "")
       })
+      pp4_labels <- c(
+        none = "Not assessed",
+        pp4  = "Phenotype/family history highly specific for this gene (PP4)"
+      )
+      vtbl$PP4_Evidence <- sapply(seq_len(nrow(vtbl)), function(i) {
+        val <- tryCatch(input[[paste0("pp4_", i)]], error = function(e) "none")
+        if (is.null(val) || !val %in% names(pp4_labels)) val <- "none"
+        pp4_labels[[val]]
+      })
+      vtbl$PP4_Applied <- sapply(seq_len(nrow(vtbl)), function(i) {
+        val <- tryCatch(input[[paste0("pp4_", i)]], error = function(e) "none")
+        switch(val, pp4="PP4", "")
+      })
 
       # Gated opt-in PP3 override — mirrors the exact gate applied to the
       # on-screen card (server.R ~6451-6458) so the exported "Final" columns
@@ -7297,6 +7332,8 @@ shinyServer(function(input, output, session) {
         if (nchar(pm3) > 0) base_tags <- c(base_tags, pm3)
         dn <- vtbl$DeNovo_Applied[i]
         if (nchar(dn) > 0) base_tags <- c(base_tags, dn)
+        pp4 <- vtbl$PP4_Applied[i]
+        if (nchar(pp4) > 0) base_tags <- c(base_tags, pp4)
         ptm_tag_export <- if ("PTM_ACMG" %in% colnames(vtbl) &&
                               nchar(as.character(vtbl$PTM_ACMG[i])) > 0 &&
                               vtbl$PTM_ACMG[i] == "PS3_supporting")

@@ -379,7 +379,7 @@
 
 <!-- VARIANT TABLE -->
 <h2 id="variant-table">Variant Annotation Summary</h2>
-<p>A per-variant card rendered below the plot. Each card has six color-coded sections plus an interactive cosegregation selector:</p>
+<p>A per-variant card rendered below the plot. Each card has six color-coded sections plus interactive selectors for user-supplied clinical evidence (de novo, cosegregation, in trans, phenotype):</p>
 <table>
   <tr><th>Section</th><th>Color</th><th>Key Columns</th></tr>
   <tr><td><strong>Variant Info</strong></td><td>Dark teal</td><td>Name, position, rsID, pLDDT, AF Path, density, domain, CCRS, ScoreCons, PTM, ClinVar sig + ⭐ review stars</td></tr>
@@ -387,7 +387,7 @@
   <tr><td><strong>Ensemble</strong></td><td>Purple</td><td>REVEL, MetaSVM, MetaLR, MetaRNN, CADD, DANN, AlphaMissense, DBSCSNV ADA/RF</td></tr>
   <tr><td><strong>Conservation</strong></td><td>Green</td><td>PhyloP 100V, PhyloP 470M, PhastCons, GERP++, ScoreCons</td></tr>
   <tr><td><strong>Population</strong></td><td>Blue</td><td>gnomAD total AF/AC/NHomAlt, AFR, NFE, EAS, SAS, FIN, 1000G, ExAC</td></tr>
-  <tr><td><strong>ACMG Classification</strong></td><td>Orange</td><td>criterion grid (see below), cosegregation selector, classification badge, clinical comment</td></tr>
+  <tr><td><strong>ACMG Classification</strong></td><td>Orange</td><td>criterion grid (see below), de novo / cosegregation / in-trans / phenotype selectors, classification badge, clinical comment</td></tr>
 </table>
 
 <div class="card card-accent" style="margin-top:16px;">
@@ -671,6 +671,16 @@
     <p><strong>Input:</strong> Each variant card has its own <em>De novo</em> dropdown in the ACMG Classification row, independent from other variants in the panel. This allows variant-specific de novo evidence in multi-variant sessions.</p>
     <p><strong>Effect on PM2:</strong> Selecting de novo sets the inheritance mode to monoallelic for that card, using stricter AF thresholds for PM2.</p>
     <p><strong>Exported columns:</strong> <code>DeNovo_Evidence</code>, <code>DeNovo_Applied</code>, included in <code>Final_ACMG_Tags</code> and <code>Final_Classification</code>.</p>
+    <p><strong>Data source:</strong> User-provided clinical data.</p>
+  </div>
+
+  <div class="group-box">
+    <div class="group-box-title">PP4 - Phenotype specificity (per-variant) &nbsp;<span class="tag pp">PP4</span>&nbsp; +1 pt</div>
+    <p><strong>Trigger:</strong> The patient's phenotype or family history is highly specific for a disease with a single genetic etiology.</p>
+    <p><strong>Input:</strong> Each variant card has its own <em>Phenotype</em> dropdown in the ACMG Classification row. Binary &mdash; either not assessed, or applied at Supporting.</p>
+    <p><strong>Unlike PP1 and PM3, PP4 has no strength tiers.</strong> ACMG/AMP 2015 defines it as Supporting only, so there is no Moderate or Strong variant of this criterion.</p>
+    <p><strong>When not to apply:</strong> Genetically heterogeneous presentations, or non-specific phenotypes that many genes could explain. PP4 requires that the clinical picture is characteristic enough to point at this gene specifically.</p>
+    <p><strong>Exported columns:</strong> <code>PP4_Evidence</code> (description), <code>PP4_Applied</code> (tag), included in <code>Final_ACMG_Tags</code> and <code>Final_Classification</code>.</p>
     <p><strong>Data source:</strong> User-provided clinical data.</p>
   </div>
 </div>
