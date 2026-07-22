@@ -75,7 +75,7 @@ license. This file exists for citation/attribution obligations and manuscript re
 
 | Item | Role | Citation | DOI | help? |
 |---|---|---|---|---|
-| DOLPHIN | Pfam-alignment last-resort PM1 pathway | Corcuff S et al. (2023) "Protein domains provide a new layer of information for classifying human variations in rare diseases" *Front. Bioinform.* 3:1127341 | 10.3389/fbinf.2023.1127341 | inline only |
+| DOLPHIN | Pfam-alignment last-resort PM1 pathway | Corcuff M, Garibal M, Desvignes J-P, Guien C, Grattepanche C, Collod-Béroud G, Ménoret E, Salgado D, Béroud C (2023) "Protein domains provide a new layer of information for classifying human variations in rare diseases" *Front. Bioinform.* 3:1127341 | 10.3389/fbinf.2023.1127341 | yes |
 | Genebe | ACMG auto-assignment comparator | Maj C et al. (2023) *Clin. Genet.* 104:509–516 | 10.1111/cge.14516 | yes |
 | AutoPM3 | LLM PM3 evidence extraction | Li S et al. (2025) *Bioinformatics* 41:btaf382 | 10.1093/bioinformatics/btaf382 | yes |
 
@@ -104,6 +104,21 @@ treat as reachability-index gaps, not errors): gkae1010 (UniProt), gkx1153 (Clin
 gkad1049 (Ensembl), gkac1072 (UCSC), NEJMsr1406261 (Rehm/ClinGen), humu.24291 (Thaxton),
 gkae1078 (GENCODE), science.adg7492 (AlphaMissense). Re-confirm at manuscript submission via
 the publisher DOI resolver.
+
+### Addendum (2026-07-22): DOLPHIN citation corrected against the source PDF
+
+The DOLPHIN author list was wrong everywhere it appeared. Verified against the
+paper's own citation block (`fbinf-03-1127341.pdf`):
+
+- First author is **Corcuff M** (Mélanie), not "Corcuff S" — corrected in
+  `docs/CITATIONS.md` and `www/help.html`.
+- The manuscript reference list additionally names "**Lecuit T, Cocco S**", who
+  are **not authors on this paper**. Full list: Corcuff M, Garibal M, Desvignes
+  J-P, Guien C, Grattepanche C, Collod-Béroud G, Ménoret E, Salgado D, Béroud C.
+- Claims checked against the source and confirmed accurate: accuracy 0.82 vs
+  InterVar 0.64 (their Table 1, ACC row); Pfam 33.1, 18,259 domains / 18,101
+  Pfam-A curated, eukaryote-filtered; BP8 proposed as a new benign supporting
+  criterion. Corresponding author: Christophe Béroud, christophe.beroud@inserm.fr.
 
 ### Addendum (2026-07-21, later pass)
 
