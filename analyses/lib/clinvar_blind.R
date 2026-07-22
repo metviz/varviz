@@ -15,7 +15,7 @@
 
 CLINVAR_DIRECT_TAGS <- c(
   "PS1", "PS1_moderate", "PS1_supporting",
-  "PM5",
+  "PM5", "PM5_supporting",
   "PP5", "PP5_moderate", "PP5_supporting",
   "BP6", "BP6_moderate", "BP6_supporting"
 )

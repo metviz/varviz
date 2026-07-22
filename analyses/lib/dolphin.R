@@ -275,5 +275,10 @@ dolphin_pm1_call <- function(gene = NULL, p_notation, ensembl = NULL,
                              timeout_s = 15) {
   resp <- fetch_dolphin(gene = gene, p_notation = p_notation,
                         ensembl = ensembl, timeout_s = timeout_s)
+  # fetch_dolphin returns NULL for transport-level failure (timeout, DNS, TLS)
+  # as distinct from a valid response carrying no PM1. Returning NA rather than
+  # FALSE keeps "service unreachable" separable from "DOLPHIN said no", so a
+  # caller can report the outage instead of silently recording an absent PM1.
+  if (is.null(resp)) return(NA)
   dolphin_fires_pm1(resp)
 }
