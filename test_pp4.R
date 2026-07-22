@@ -8,6 +8,7 @@ src <- readLines("server.R", warn = FALSE)
 beg <- grep("^classify_acmg <- function", src)
 end <- beg - 1 + which(src[beg:length(src)] == "}")[1]
 eval(parse(text = paste(src[beg:end], collapse = "\n")))
+eval(parse(text = src[grep("^PP1_PP4_CAP <- ", src)]))   # constant classify_acmg reads
 
 # PP4 must be worth exactly 1 point (Supporting) and count toward the PP tally.
 base <- classify_acmg(c("PM2"))
@@ -32,5 +33,22 @@ stopifnot(
   any(grepl('identical\\(card_pp4, "pp4"\\)', src)),           # card tag emission
   any(grepl('vtbl\\$PP4_Applied', src)),                       # export column
   any(grepl('pp4 <- vtbl\\$PP4_Applied', src))                 # folded into Final_ACMG_Tags
+)
+
+# ── ClinGen SVI combined PP1+PP4 locus cap (Biesecker 2024) ────────────────
+# The cap is deliberately INERT today: PP1_strong (+4) plus binary PP4 (+1) is
+# exactly +5, so no reachable combination exceeds it. It is a forward guard for
+# whenever PP4 gains Moderate/Strong tiers. These checks pin the boundary and
+# fail loudly if a tier is added without revisiting the cap.
+stopifnot(
+  PP1_PP4_CAP == 5,
+  classify_acmg(c("PP1_strong", "PP4"))$pts == PP1_PP4_CAP,   # at the ceiling
+  # Locus evidence alone must not reach Likely Pathogenic (+6): the cap sits
+  # below the LP threshold by construction, so variant-level evidence is required.
+  classify_acmg(c("PP1_strong", "PP4"))$class != "Likely Pathogenic",
+  classify_acmg(c("PP1_strong", "PP4", "PM2"))$class == "Likely Pathogenic",
+  # Non-locus criteria must keep full weight — only the excess is trimmed.
+  classify_acmg(c("PS1", "PP1_strong", "PP4"))$pts == 4 + PP1_PP4_CAP,
+  any(grepl("locus_pts > PP1_PP4_CAP", src))                  # cap actually applied
 )
 cat("PP4: all checks pass\n")

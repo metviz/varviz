@@ -69,6 +69,7 @@ license. This file exists for citation/attribution obligations and manuscript re
 | Pejaver 2022 | PP3/BP4 predictor calibration | Pejaver V et al. (2022) *Am. J. Hum. Genet.* 109:2163–2177 | 10.1016/j.ajhg.2022.10.013 | yes |
 | Whiffin 2017 | Max credible allele frequency (PM2) | Whiffin N et al. (2017) *Genet. Med.* 19:1151–1158 | 10.1038/gim.2017.26 | yes |
 | Jarvik 2016 | Cosegregation LR (PP1/BS4) | Jarvik GP, Browning BL (2016) *Am. J. Hum. Genet.* 98:1077–1081 | 10.1016/j.ajhg.2016.04.003 | yes |
+| Biesecker 2024 | ClinGen SVI PP1/BS4 + PP4 guidance; source of the +5.0 combined PP1/PP4 locus cap | Biesecker LG et al. (2024) *Am. J. Hum. Genet.* 111:24–38 | 10.1016/j.ajhg.2023.11.009 | yes |
 
 ## 5. VarViz-specific pathways & comparators
 
@@ -103,6 +104,17 @@ treat as reachability-index gaps, not errors): gkae1010 (UniProt), gkx1153 (Clin
 gkad1049 (Ensembl), gkac1072 (UCSC), NEJMsr1406261 (Rehm/ClinGen), humu.24291 (Thaxton),
 gkae1078 (GENCODE), science.adg7492 (AlphaMissense). Re-confirm at manuscript submission via
 the publisher DOI resolver.
+
+### Addendum (2026-07-21, later pass)
+
+- **Biesecker 2024** (ClinGen SVI PP1/BS4 + PP4 guidance, 10.1016/j.ajhg.2023.11.009) added as
+  help.html reference **[29]**, appended at the end of the `<ol>` so existing `[n]` markers keep
+  their positions. It is the source for the +5.0 combined PP1/PP4 locus cap now enforced in
+  `classify_acmg`.
+- Two known divergences from this guidance are **documented in help.html but not implemented**:
+  VarViz applies PP4 as binary +1 (ACMG 2015 default) where ClinGen scales it by diagnostic yield
+  and permits PP4_Moderate/PP4_Strong; and VarViz does not suppress PP1 under locus homogeneity.
+  VarViz's PP1 tiers still follow Jarvik 2016 rather than ClinGen's inheritance-mode-aware Table 3.
 
 Non-DOI sources (NCBI E-utilities, Orphadata/Orphanet) cite the resource directly.
 The dbNSFP-aggregated predictors (SIFT, PolyPhen-2, LRT, FATHMM, PROVEAN, MutationTaster,
