@@ -12,7 +12,7 @@
 
 Interpreting a panel of missense variants in a disease gene requires simultaneously consulting population databases, structural predictors, conservation resources, and clinical repositories. These tools share no common protein-level view and must be queried and collated by hand for each variant.
 
-VarViz addresses this by fetching **nine evidence streams** through live API calls and rendering them as vertically aligned, interactive tracks on a shared amino acid axis, with automated ACMG/AMP classification combining Richards et al. (2015) combinatorial rules, Tavtigian et al. (2020) Bayesian point scoring, and Pejaver et al. (2022) calibrated PP3/BP4 thresholds.
+VarViz addresses this by fetching **nine evidence streams** through live API calls and rendering them as vertically aligned, interactive tracks on a shared amino acid axis, with automated ACMG/AMP classification combining Richards et al. (2015) combinatorial rules, Tavtigian et al. (2020) Bayesian point scoring, and Pejaver et al. (2022) calibrated PP3/BP4 thresholds. Gene-agnostic predictor thresholds can additionally be **recalibrated against the queried gene's own ClinVar variants** at runtime, and every classification reports a **posterior probability of pathogenicity** alongside its point score.
 
 ![VarViz workflow and CASR validation](docs/VarViz_Figure1_AB.png)
 
@@ -47,17 +47,26 @@ No installation required. A modern web browser is sufficient. No user data are s
 - **Richards et al. (2015)** combinatorial rule-based classification (first pass)
 - **Tavtigian et al. (2020)** Bayesian point scoring when no rule matches (≥10 Pathogenic, 6-9 LP, -3 to +5 VUS, -4 to -6 LB, <=-7 Benign)
 - **Pejaver et al. (2022)** calibrated PP3/BP4 thresholds across seven predictors (REVEL, CADD, MetaSVM, MetaLR, MetaRNN, DANN, AlphaMissense) with Supporting/Moderate/Strong tiers
-- **PM1** via three pathways: CCRS ≥90th percentile, UniProt functional domain, or 15-residue ClinVar hotspot neighbourhood
+- **Posterior probability of pathogenicity** reported for every variant, converting the Tavtigian point score to a calibrated probability (prior 0.10, C = 2.0813)
+- **PM1** via four pathways: CCRS ≥90th percentile, UniProt functional domain, 15-residue ClinVar hotspot neighbourhood, or — as a last resort when none of the above fire — Pfam domain alignment via the DOLPHIN API (Corcuff et al., 2023)
 - **PM2** against a prevalence-derived maximum credible allele frequency (Whiffin et al., 2017)
-- **PS1** strength scaled by ClinVar review star count (GeneBe approach)
+- **PS1 and PM5** strength scaled by ClinVar review star count: PS1 spans Supporting/Moderate/Strong, PM5 spans Supporting/Moderate; a 0-star submission is not weighted as a 3-star expert-panel review
 - **PP2/BP1** from ClinGen gene-disease validity or GeVIR percentile
-- **Three evidence-independence guards** prevent double-dipping (PP5 suppressed by PS1; conservation withheld from PP3 when used for PM1_strong; PM1 neighbourhood independent of PM2)
+- **Evidence-independence guards** prevent double-dipping: PP5 suppressed by PS1; conservation withheld from PP3 when used for PM1_strong; PM1 neighbourhood independent of PM2; and PP1+PP4 capped at +5.0 points combined, since both implicate the locus rather than the variant (ClinGen SVI; Biesecker et al., 2024)
+
+### Gene-specific PP3 recalibration (optional)
+Pejaver thresholds are gene-agnostic. VarViz can derive **gene-specific** PP3 thresholds at runtime by scoring the queried gene's own ClinVar pathogenic and benign variants with REVEL, AlphaMissense and CADD, then selecting the threshold that maximises the positive likelihood ratio for that gene.
+
+- Requires **≥20 variants per arm**; below that the panel reports insufficient data rather than an unstable threshold
+- **Leave-one-out** evaluation excludes the variant under assessment from its own calibration set
+- Presented as an **advisory card** by default; applying the recalibrated threshold in place of Pejaver is an explicit, session-scoped opt-in per gene
 
 ### Per-variant clinical inputs
 Each variant card provides real-time dropdowns for:
 - **PP1** cosegregation (Supporting / Moderate / Strong; Jarvik & Browning, 2016)
 - **PS2 / PM6** de novo status (confirmed / assumed)
 - **PM3** compound heterozygosity (Supporting / Moderate / Strong; Li et al., 2025)
+- **PP4** phenotype specificity (Supporting; applied when the phenotype or family history is highly specific for a disease with a single genetic aetiology)
 
 Classification and explanatory comment update immediately on any change.
 
@@ -92,7 +101,7 @@ Click **Edit parameters** to configure:
 Download a ConSurf grades file from [consurfdb.tau.ac.il](https://consurfdb.tau.ac.il) for your protein of interest and upload it using the **ConSurf grades file** browser. The ConSurf conservation track appears automatically.
 
 ### 5. Click Go
-All eight external APIs are queried in parallel. Results appear within 10-30 seconds depending on gene size and network conditions. API responses are cached in-session; re-querying the same gene is instantaneous.
+All nine external APIs are queried in parallel. Results appear within 10-30 seconds depending on gene size and network conditions. API responses are cached in-session; re-querying the same gene is instantaneous.
 
 ### 6. Explore the protein landscape
 - **Hover** any track element for detailed values
@@ -100,7 +109,7 @@ All eight external APIs are queried in parallel. Results appear within 10-30 sec
 - **Toggle tracks** using the Output Tracks checkboxes in the sidebar
 
 ### 7. Enter clinical evidence per variant
-Scroll to the **Variant Summary** tab. Each variant card has dropdowns for cosegregation, de novo status, and compound heterozygosity. The ACMG score, classification tier, and explanatory comment update in real time.
+Scroll to the **Variant Summary** tab. Each variant card has dropdowns for de novo status, cosegregation, compound heterozygosity, and phenotype specificity. The ACMG score, posterior probability, classification tier, and explanatory comment update in real time.
 
 ### 8. Export results
 - **Download the plot**: static PDF/PNG/JPEG of all active tracks
@@ -125,9 +134,9 @@ VarViz is designed as a web application and runs without installation at the lin
 ```r
 # Prerequisites: R >= 4.2, the following packages
 install.packages(c(
-  "shiny", "shinyjs", "plotly", "ggplot2", "cowplot",
-  "httr", "jsonlite", "data.table", "dplyr", "stringr",
-  "BiocManager"
+  "shiny", "shinyjs", "shinycssloaders", "DT", "plotly", "ggplot2", "cowplot",
+  "httr", "httr2", "jsonlite", "data.table", "dplyr", "stringr",
+  "markdown", "tm", "wordcloud"
 ))
 
 # Clone and run
@@ -136,7 +145,7 @@ cd varviz
 Rscript -e "shiny::runApp('.')"
 ```
 
-The app will open at `http://127.0.0.1:XXXX` in your browser. Internet access is required for all eight external API calls.
+The app will open at `http://127.0.0.1:XXXX` in your browser. Internet access is required for all nine external API calls.
 
 ---
 
@@ -151,6 +160,7 @@ The app will open at `http://127.0.0.1:XXXX` in your browser. Internet access is
 | MyVariant.info | dbNSFP v4.4 (15 in silico predictor scores) | Xin et al., 2016; Liu et al., 2020 |
 | UCSC + Ensembl REST | PhyloP 100V, PhyloP 470M, PhastCons per-residue scores | |
 | ClinGen / GenCC APIs | Gene-disease validity classification | Rehm et al., 2015 |
+| DOLPHIN API | Pfam domain alignment for the last-resort PM1 pathway | Corcuff et al., 2023 |
 | GeVIR | Gene-level missense constraint percentile | Abramovs et al., 2020 |
 | CCRS (local) | Constrained coding region scores | Havrilla et al., 2019 |
 
@@ -182,7 +192,7 @@ VarViz is an open-source research tool intended to support variant triaging, hyp
 All ACMG/AMP classifications generated by VarViz are automated and must be reviewed and confirmed by a qualified clinical geneticist or certified variant interpretation laboratory before any clinical action is taken. VarViz has not been validated as a clinical diagnostic tool, has not received regulatory clearance in any jurisdiction, and does not constitute medical advice. Variant classifications should not be communicated to patients or used to guide treatment decisions without independent expert review.
 
 **Classification accuracy**
-The ACMG/AMP engine implements published guidelines (Richards et al., 2015; Tavtigian et al., 2020) but automated application of any classification framework involves assumptions and approximations. Criteria that require clinical judgement (PS2, PS3, PM3, PP1) are only partially automatable; VarViz provides per-variant dropdowns for these inputs but cannot substitute for direct clinical assessment. Classifications may differ from those produced by accredited diagnostic laboratories.
+The ACMG/AMP engine implements published guidelines (Richards et al., 2015; Tavtigian et al., 2020) but automated application of any classification framework involves assumptions and approximations. Criteria that require clinical judgement (PS2, PS3, PM3, PP1, PP4) are only partially automatable; VarViz provides per-variant dropdowns for these inputs but cannot substitute for direct clinical assessment. VarViz applies PP4 at the ACMG/AMP 2015 default of Supporting; ClinGen SVI (Biesecker et al., 2024) has since described a diagnostic-yield-scaled variant of this criterion that VarViz does not implement. Classifications may differ from those produced by accredited diagnostic laboratories.
 
 **Data provenance**
 All variant data are fetched live from third-party public databases (gnomAD, ClinVar, UniProt, AlphaFold, MyVariant.info, UCSC, Ensembl, ClinGen, GeVIR) at the time of analysis. VarViz does not control the content, accuracy, or availability of these resources. Data may change between sessions. gnomAD v4 annotates variants using the MANE Select transcript; variants submitted in p-notation derived from an alternative transcript may differ in residue numbering and may be reported as absent from gnomAD when they are in fact present under a different residue number. Users should verify the transcript underlying their p-notation when a variant is reported as absent.
@@ -191,7 +201,7 @@ All variant data are fetched live from third-party public databases (gnomAD, Cli
 No user-submitted gene or variant data are stored by VarViz between sessions. All analysis is performed client-server within the active session only.
 
 **Third-party API availability**
-VarViz depends on eight external APIs. Service interruptions at any upstream provider will affect the corresponding track or classification criteria. The authors make no guarantee of uninterrupted availability.
+VarViz depends on nine external APIs. Service interruptions at any upstream provider will affect the corresponding track or classification criteria. The authors make no guarantee of uninterrupted availability.
 
 **Liability**
 The authors, contributors, and institutions associated with VarViz accept no responsibility or liability for any loss, harm, or damage arising from the use or misuse of this software or its outputs. The software is provided "as is" without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or non-infringement. In no event shall the authors be liable for any direct, indirect, incidental, special, or consequential damages arising from use of this software.
@@ -210,5 +220,5 @@ Consistent with the ISCB acceptable use policy, we disclose that AI-assisted too
 ## Notes
 
 - gnomAD v4 uses the MANE Select transcript; p-notation from older transcripts may differ in residue numbering
-- Network dependence on eight external APIs means availability may vary with API outages
+- Network dependence on nine external APIs means availability may vary with API outages
 - Bug reports and feature requests are welcome via the GitHub Issues tab
