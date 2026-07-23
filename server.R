@@ -1016,14 +1016,26 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
          prot_pos <- NA
          var_type <- "other"
          
-         # Source for amino acid change: protein_change field, title, or variation_set_name
+         # Source for amino acid change. The title's parenthetical (p.Xxx###Yyy)
+         # is the single canonical change on the RefSeq transcript ClinVar names
+         # (e.g. NM_000162.5(GCK):c.230T>C (p.Leu77Pro)) and is what we store as
+         # `name`. The `protein_change` field is instead a comma-separated list
+         # of the SAME change across every overlapping isoform
+         # ("L76P, L77P, L78P"), so taking its first number picks an arbitrary
+         # isoform's coordinate — e.g. p.Asp78Gly carries "D77G, D78G, D79G" and
+         # would be filed at residue 77, colliding with a real codon-77 query and
+         # mis-firing PS1/PM5. Parse the canonical title first; fall back to
+         # protein_change only when the title carries no p. notation.
          aa_source <- NULL
-         if (!is.null(prot_change) && nchar(prot_change) > 0) {
-           aa_source <- prot_change
-         } else if (grepl("\\(p\\.", var_title)) {
+         if (grepl("\\(p\\.", var_title)) {
            aa_source <- sub(".*\\(p\\.([^)]+)\\).*", "\\1", var_title)
          } else if (grepl("p\\.", var_title)) {
            aa_source <- sub(".*p\\.([^ ,;]+).*", "\\1", var_title)
+         } else if (!is.null(prot_change) && nchar(prot_change) > 0) {
+           # Multi-isoform list — take the first token only, not the whole string,
+           # so the position regex below reads one coordinate rather than the first
+           # of several. This path is a last resort (title had no p. change).
+           aa_source <- trimws(strsplit(prot_change, ",")[[1]][1])
          } else {
            # Try variation_set_name
            vsn <- tryCatch(rec$variation_set_name, error = function(e) NULL)
