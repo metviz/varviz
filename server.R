@@ -6531,7 +6531,8 @@ shinyServer(function(input, output, session) {
         return(list(bg="#f1f5f9",border="#64748b",text="#1e293b",badge_bg="#64748b"))
       }
 
-      make_criterion_card <- function(tag, gevir_pct_val = NA) {
+      make_criterion_card <- function(tag, gevir_pct_val = NA,
+                                       site_ctx = "", ptm_ctx = "") {
         tag  <- trimws(tag)
         pts  <- if (tag %in% names(tag_pts_map)) tag_pts_map[[tag]] else 0
         is_p <- pts > 0
@@ -6555,7 +6556,15 @@ shinyServer(function(input, output, session) {
                          " (<25 = intolerant → PP2)")
                 else "Missense variant in gene with high rate of pathogenic missense variants (PP2)",
           PS1 = "Same amino acid change as an established pathogenic variant in ClinVar (PS1)",
-          PM1 = "Located in a functional domain / mutational hotspot (UniProt); conservation evidence may upgrade strength (PM1)",
+          PS3 = if (grepl("Mutagenesis:", ptm_ctx, fixed = TRUE))
+                  paste0("Published mutagenesis at this residue reports loss of function (",
+                         sub("^.*Mutagenesis: ", "", ptm_ctx),
+                         "); UniProt-curated experimental evidence (PS3)")
+                else "Variant disrupts a UniProt-annotated functional/PTM site with established functional consequence (PS3)",
+          PM1 = if (nchar(site_ctx) > 0)
+                  paste0("This residue IS a UniProt-annotated functional site (", site_ctx,
+                         ") — the criterion's canonical example; conservation evidence may upgrade strength (PM1)")
+                else "Located in a functional domain / mutational hotspot (UniProt); conservation evidence may upgrade strength (PM1)",
           PM2 = "Absent or very rare in gnomAD at the disease-prevalence-adjusted (Whiffin) threshold (PM2)",
           PM5 = "Novel missense at a codon where a DIFFERENT amino-acid change is established pathogenic in ClinVar (PM5)",
           PP1 = paste0("Cosegregation with disease in affected family members (PP1). ",
@@ -7078,14 +7087,18 @@ shinyServer(function(input, output, session) {
           paste0('<div style="margin-bottom:4px;">',
                  '<div style="font-size:9px;font-weight:700;color:#dc2626;text-transform:uppercase;',
                  'letter-spacing:0.5px;margin-bottom:3px;">&#9650; Pathogenic</div>',
-                 paste(sapply(path_tags,  function(t) make_criterion_card(t, gevir_pct_val=r$GeVIR_Gene_Pct)), collapse=""),
+                 paste(sapply(path_tags,  function(t) make_criterion_card(t, gevir_pct_val=r$GeVIR_Gene_Pct,
+                   site_ctx = if ("UniProt_Site" %in% colnames(vtbl)) as.character(r$UniProt_Site) else "",
+                   ptm_ctx  = as.character(r$PTM))), collapse=""),
                  '</div>') else ""
 
         benign_grid <- if (length(benign_tags) > 0)
           paste0('<div>',
                  '<div style="font-size:9px;font-weight:700;color:#16a34a;text-transform:uppercase;',
                  'letter-spacing:0.5px;margin-bottom:3px;">&#9660; Benign</div>',
-                 paste(sapply(benign_tags, function(t) make_criterion_card(t, gevir_pct_val=r$GeVIR_Gene_Pct)), collapse=""),
+                 paste(sapply(benign_tags, function(t) make_criterion_card(t, gevir_pct_val=r$GeVIR_Gene_Pct,
+                   site_ctx = if ("UniProt_Site" %in% colnames(vtbl)) as.character(r$UniProt_Site) else "",
+                   ptm_ctx  = as.character(r$PTM))), collapse=""),
                  '</div>') else ""
 
         badges_html <- if (nchar(path_grid) > 0 || nchar(benign_grid) > 0)
