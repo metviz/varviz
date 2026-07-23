@@ -1,0 +1,16 @@
+gene	old_acc	new_acc	old_len	new_len	mane_prot_len	numbering_aligns	old_AF	old_AM	new_AF	new_AM	verdict	reason
+AKAP7	O43687	Q9P0M2	104	348	348	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+DDIT3	P0DPQ6	P35638	34	169	169	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+ERCC6	P0DP91	Q03468	1061	1493	1493	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+GNAS	O95467	P63092	245	394	394	TRUE	TRUE	FALSE	TRUE	FALSE	APPLY	no AlphaMissense either way; AF + everything else gained
+MIEF1	L0R8F8	Q9NQG6	70	463	463	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+NACA	Q13765	E9PAV3	215	2078	2078	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+NRXN1	P58400	Q9ULB1	472	1477	1507	FALSE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical != MANE length (still the correct protein)
+NRXN2	P58401	Q9P2S2	666	1712	1712	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+RAB34	P0DI83	Q9BZG1	198	259	259	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+RPL36	C0HME6	Q9Y3U8	148	105	105	TRUE	FALSE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+TOR2A	Q8N2E6	Q5JU69	242	321	321	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+ZNF365	Q70YC4	Q70YC5	216	407	407	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+ZNF689	C0HLU2	Q96CS4	46	500	500	TRUE	TRUE	FALSE	TRUE	TRUE	APPLY	full coverage; canonical == MANE (numbering aligns)
+BBC3	Q96PG8	Q9BXH1	261	193	193	TRUE	TRUE	TRUE	TRUE	FALSE	HOLD	new accession drops AlphaMissense the old one served
+TMPO	P42166	P42167	694	454	454	TRUE	TRUE	TRUE	TRUE	FALSE	HOLD	new accession drops AlphaMissense the old one served
