@@ -1,8 +1,9 @@
-# Self-check for the MANE join + numbering-consistency guard.
+# Self-check for the MANE join + accession anchoring + numbering guard.
 # Run: Rscript test_mane_join.R   (after analyses/16_build_mane_join.R)
 #
-# Reads the produced artifact (offline) and checks the join landed and the
-# numbering_ok flag means what the ACMG matching will trust it to mean.
+# Reads the produced artifact (offline) and checks that (a) the join landed,
+# (b) MANE anchoring picks the numbering-correct UniProt accession, and
+# (c) numbering_ok means what the ACMG matching will trust it to mean.
 TSV <- "analyses/derived/gene_mane.tsv"
 if (!file.exists(TSV)) {
   cat("skip: run analyses/16_build_mane_join.R first (", TSV, " missing)\n", sep = "")
@@ -11,43 +12,60 @@ if (!file.exists(TSV)) {
 g <- read.delim(TSV, stringsAsFactors = FALSE)
 row <- function(sym) g[g$gene_name == sym, ][1, ]
 
-# ── Known-good genes: UniProt canonical == MANE protein ───────────────────
+# ── Known-good genes: gene_data accession already IS the MANE entry ────────
 for (sym in c("GCK", "CASR", "SNCA", "TP53")) {
   r <- row(sym)
   stopifnot(
-    !is.na(r$numbering_ok), isTRUE(r$numbering_ok),
-    r$uniprot_len == r$mane_prot_len,
+    isTRUE(r$accession_agrees), r$uniprot_id == r$mane_uniprot_id,
+    isTRUE(r$numbering_ok), r$mane_uniprot_len == r$mane_prot_len,
     grepl("^NM_", r$mane_refseq_nuc), grepl("^NP_", r$mane_refseq_prot)
   )
 }
-# GCK anchors to the exact transcript that carried the isoform-collision bug.
 stopifnot(row("GCK")$mane_refseq_nuc == "NM_000162.5",
-          row("GCK")$uniprot_len == 465)
+          row("GCK")$mane_uniprot_len == 465)
 
-# ── Known divergences must be flagged, not silently trusted ───────────────
-# TTN: UniProt canonical is a shorter titin isoform than MANE.
-# NACA: gene_data holds the short NACA accession (215) vs MANE 2078.
-# KRAS: 189 vs 188 — the 4A/4B C-terminal difference (conservative flag).
-for (sym in c("TTN", "NACA", "KRAS")) {
-  r <- row(sym)
-  stopifnot(!is.na(r$numbering_ok), isFALSE(as.logical(r$numbering_ok)),
-            r$uniprot_len != r$mane_prot_len)
-}
+# ── Anchoring CORRECTS a wrong stored accession ───────────────────────────
+# gene_data held the short NACA isoform (Q13765/215); the MANE transcript ties
+# to E9PAV3/2078, which matches the MANE protein — so anchoring makes NACA safe.
+naca <- row("NACA")
+stopifnot(
+  isFALSE(as.logical(naca$accession_agrees)),
+  naca$uniprot_id == "Q13765", naca$mane_uniprot_id == "E9PAV3",
+  naca$mane_uniprot_len == 2078, naca$mane_prot_len == 2078,
+  isTRUE(naca$numbering_ok)               # fixed once the right accession is used
+)
+# Every correction row must genuinely disagree and name a different accession.
+corr <- g[which(g$accession_agrees == FALSE), ]
+stopifnot(nrow(corr) >= 10,
+          all(corr$uniprot_id != corr$mane_uniprot_id | is.na(corr$uniprot_id)))
+
+# ── Residual mismatch is TRUE isoform divergence, not a wrong accession ────
+# TTN: gene_data accession already agrees, but UniProt canonical (34350) is a
+# shorter titin isoform than MANE (35991) — only alignment fixes this.
+ttn <- row("TTN")
+stopifnot(isTRUE(ttn$accession_agrees),
+          isFALSE(as.logical(ttn$numbering_ok)),
+          ttn$mane_uniprot_len != ttn$mane_prot_len)
+# KRAS: 189 vs 188 (4A/4B). Flagged, conservative — the G12/G13/Q61 hotspots
+# are N-terminal and unaffected, but the length guard still fires.
+kras <- row("KRAS")
+stopifnot(isFALSE(as.logical(kras$numbering_ok)), kras$mane_uniprot_len == 189)
 
 # ── Flag semantics hold across the whole table ────────────────────────────
-both_known <- !is.na(g$uniprot_len) & !is.na(g$mane_prot_len)
-# TRUE/FALSE exactly when both lengths known; NA exactly when one is missing.
+both_known <- !is.na(g$mane_uniprot_len) & !is.na(g$mane_prot_len)
 stopifnot(
   all(!is.na(g$numbering_ok[both_known])),
   all(is.na(g$numbering_ok[!both_known])),
-  # and the flag is the length equality, nothing else
-  all(g$numbering_ok[both_known] == (g$uniprot_len[both_known] == g$mane_prot_len[both_known]))
+  all(g$numbering_ok[both_known] ==
+        (g$mane_uniprot_len[both_known] == g$mane_prot_len[both_known]))
 )
 
-# ── Coverage sanity: the vast majority join to a MANE transcript ──────────
-# read.delim restores written NA (na="") as "", so test emptiness, not is.na.
-cov <- mean(nzchar(g$mane_refseq_nuc) & !is.na(g$mane_refseq_nuc))
-stopifnot(cov > 0.95)
+# ── Coverage: read.delim restores written NA ("") as "", so test emptiness ──
+cov_mane   <- mean(nzchar(g$mane_refseq_nuc) & !is.na(g$mane_refseq_nuc))
+cov_anchor <- mean(nzchar(g$mane_uniprot_id) & !is.na(g$mane_uniprot_id))
+stopifnot(cov_mane > 0.95, cov_anchor > 0.90)
 
-cat(sprintf("mane join: all checks pass (%d genes, %.1f%% MANE-matched, %d flagged)\n",
-            nrow(g), 100 * cov, sum(g$numbering_ok == FALSE, na.rm = TRUE)))
+cat(sprintf("mane join: all checks pass (%d genes, %.1f%% anchored, %d corrected, %d flagged)\n",
+            nrow(g), 100 * cov_anchor,
+            sum(g$accession_agrees == FALSE, na.rm = TRUE),
+            sum(g$numbering_ok == FALSE, na.rm = TRUE)))
