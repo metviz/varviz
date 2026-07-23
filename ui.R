@@ -387,6 +387,10 @@ shinyUI(fluidPage(
                             )
                      ),
                      column(9,
+                            # Warns when the gene's UniProt-canonical numbering
+                            # differs from MANE/RefSeq, so ClinVar-derived and
+                            # user-typed positions may be offset from the plot.
+                            uiOutput("numbering_warning"),
                             tabsetPanel(id = "main_tabs",
                               tabPanel("GeneInfo", br(),
                                        # Top row: Gene summary (left) + Word Cloud (right)
