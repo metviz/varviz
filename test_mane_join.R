@@ -51,6 +51,22 @@ stopifnot(isTRUE(ttn$accession_agrees),
 kras <- row("KRAS")
 stopifnot(isFALSE(as.logical(kras$numbering_ok)), kras$mane_uniprot_len == 189)
 
+# ── A flag explained by a non-canonical MANE isoform ──────────────────────
+# IGFN1: UniProt canonical is 1251, but MANE maps to isoform Q86VF2-5 (3708).
+# mane_isoform_id records which isoform, so review can tell "isoform choice"
+# apart from a genuine sequence disagreement.
+igfn1 <- row("IGFN1")
+stopifnot(isFALSE(as.logical(igfn1$numbering_ok)),
+          igfn1$mane_isoform_id == "Q86VF2-5",
+          igfn1$mane_uniprot_len == 1251, igfn1$mane_prot_len == 3708)
+# The length guard is necessary, not sufficient: an isoform can differ from the
+# canonical by substitution at equal length, so an isoform id may coexist with
+# numbering_ok TRUE. What must hold is the triage split — the vast majority of
+# real flags are isoform-explained, only a handful are genuinely odd.
+n_iso_flag <- sum(g$numbering_ok == FALSE & nzchar(g$mane_isoform_id), na.rm = TRUE)
+n_inv_flag <- sum(g$numbering_ok == FALSE & !nzchar(g$mane_isoform_id), na.rm = TRUE)
+stopifnot(n_iso_flag > 5 * n_inv_flag, n_inv_flag < 20)
+
 # ── Flag semantics hold across the whole table ────────────────────────────
 both_known <- !is.na(g$mane_uniprot_len) & !is.na(g$mane_prot_len)
 stopifnot(
