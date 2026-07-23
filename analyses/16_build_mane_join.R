@@ -90,12 +90,22 @@ if (file.exists(UP_CACHE)) {
 }
 up_len <- setNames(as.integer(upl$uniprot_len), upl$uniprot_id)
 
-# ENST(MANE) -> UniProt accession, matched on the versionless base so a version
-# skew between UniProt's record and the MANE summary can't break the join.
-base_enst <- function(x) sub("\\..*$", "", trimws(sub(";.*$", "", x)))
+# The MANE field looks like "ENST00000335211.9 [Q86VF2-5];" — the ENST, and,
+# when MANE corresponds to a NON-canonical isoform, that isoform id in brackets.
+# Parse both. base_enst matches versionless so a version skew between UniProt's
+# record and the MANE summary can't break the join.
+base_enst    <- function(x) sub("\\..*$", "", trimws(sub("[; ].*$", "", x)))
+mane_isoform <- function(x) {
+  # sub keeps vector length (regmatches drops non-matches); when there is no
+  # [isoform] tag the pattern fails and sub returns the string unchanged, which
+  # we then blank out.
+  iso <- sub("^.*\\[([^]]+)\\].*$", "\\1", x)
+  ifelse(grepl("\\[", x), iso, "")
+}
 have_mane <- nzchar(trimws(upl$mane_enst))
-enst2acc <- setNames(upl$uniprot_id[have_mane], base_enst(upl$mane_enst[have_mane]))
+enst2acc <- setNames(upl$uniprot_id[have_mane],  base_enst(upl$mane_enst[have_mane]))
 enst2len <- setNames(as.integer(upl$uniprot_len[have_mane]), base_enst(upl$mane_enst[have_mane]))
+enst2iso <- setNames(mane_isoform(upl$mane_enst[have_mane]), base_enst(upl$mane_enst[have_mane]))
 
 # ── Join everything onto gene_data ────────────────────────────────────────
 m <- match(gene_data$gene_name, sel$symbol)
@@ -109,6 +119,12 @@ gene_data$mane_prot_len    <- sel$mane_prot_len[m]
 me <- base_enst(gene_data$mane_ensembl)
 gene_data$mane_uniprot_id  <- unname(enst2acc[me])
 gene_data$mane_uniprot_len <- unname(enst2len[me])
+# The UniProt isoform MANE corresponds to, when it is NOT the canonical one.
+# Non-empty here is the reason a numbering flag fires: ClinVar/dbNSFP count on
+# this isoform, but VarViz's AlphaFold / AlphaMissense / feature layers are
+# canonical-only. Empty means MANE maps to the canonical isoform.
+gene_data$mane_isoform_id <- unname(enst2iso[me])
+gene_data$mane_isoform_id[is.na(gene_data$mane_isoform_id)] <- ""
 
 # Existing accession's own canonical length, kept for comparison.
 gene_data$uniprot_len <- unname(up_len[gene_data$uniprot_id])
@@ -129,9 +145,9 @@ gene_data$numbering_ok <- with(gene_data,
 
 # ── Write outputs ─────────────────────────────────────────────────────────
 out_cols <- c("gene_name", "uniprot_id", "uniprot_len",
-              "mane_uniprot_id", "mane_uniprot_len", "accession_agrees",
-              "mane_refseq_nuc", "mane_refseq_prot", "mane_ensembl",
-              "mane_prot_len", "numbering_ok")
+              "mane_uniprot_id", "mane_uniprot_len", "mane_isoform_id",
+              "accession_agrees", "mane_refseq_nuc", "mane_refseq_prot",
+              "mane_ensembl", "mane_prot_len", "numbering_ok")
 write.table(gene_data[, out_cols], file.path(DER, "gene_mane.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE, na = "")
 saveRDS(gene_data, file.path(DER, "gene_data_with_mane.rds"))
@@ -176,10 +192,30 @@ if (n_diff > 0) {
                     cs$mane_uniprot_id[i], cs$mane_uniprot_len[i], cs$mane_prot_len[i]))
 }
 if (n_bad > 0) {
-  message("\n  residual mismatches (MANE-anchored UniProt canonical vs MANE protein):")
-  top <- head(mismatch, 12)
-  for (i in seq_len(nrow(top)))
-    message(sprintf("    %-12s uniprot=%-5s mane=%-5s  d=%+d",
-                    top$gene_name[i], top$mane_uniprot_len[i], top$mane_prot_len[i],
-                    top$mane_uniprot_len[i] - top$mane_prot_len[i]))
+  # Split the flags by cause. Most are "MANE is a non-canonical isoform" — the
+  # numbering divergence is real for VarViz (canonical-only layers) but UniProt
+  # models the MANE sequence as this isoform. The rest, where MANE maps to the
+  # canonical isoform yet lengths still differ, are the genuinely odd cases to
+  # eyeball (version drift, or a real sequence disagreement).
+  bad <- gene_data[which(gene_data$numbering_ok == FALSE), ]
+  n_iso  <- sum(nzchar(bad$mane_isoform_id))
+  n_true <- sum(!nzchar(bad$mane_isoform_id))
+  message(sprintf("\n  of the %d flags: %d are MANE=non-canonical isoform (explained),",
+                  n_bad, n_iso))
+  message(sprintf("                   %d are MANE=canonical but length still differs (investigate)",
+                  n_true))
+  message("\n  sample isoform-explained flags (VarViz uses canonical; MANE uses the isoform):")
+  ex <- head(bad[nzchar(bad$mane_isoform_id), ], 8)
+  for (i in seq_len(nrow(ex)))
+    message(sprintf("    %-12s canonical=%-6s MANE=%-6s (isoform %s)",
+                    ex$gene_name[i], ex$mane_uniprot_len[i], ex$mane_prot_len[i],
+                    ex$mane_isoform_id[i]))
+  if (n_true > 0) {
+    message("\n  flags where MANE maps to canonical yet length differs:")
+    tr <- head(bad[!nzchar(bad$mane_isoform_id), ], 8)
+    for (i in seq_len(nrow(tr)))
+      message(sprintf("    %-12s canonical=%-6s MANE=%-6s  d=%+d",
+                      tr$gene_name[i], tr$mane_uniprot_len[i], tr$mane_prot_len[i],
+                      tr$mane_uniprot_len[i] - tr$mane_prot_len[i]))
+  }
 }
