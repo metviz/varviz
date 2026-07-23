@@ -528,6 +528,7 @@
     <div class="group-box-title">PM1 / PM1_strong - Moderate / Strong Pathogenic &nbsp;<span class="tag pm">PM1</span>&nbsp;<span class="tag ps">PM1_strong</span>&nbsp; +2 / +4 pts</div>
     <p><strong>Trigger (any pathway):</strong></p>
     <ol>
+      <li><strong>UniProt functional residue (new):</strong> The variant position <em>is</em> a curated active site, ligand/metal/cofactor binding site, or other annotated functional site (UniProt feature types <code>act_site</code>, <code>binding</code>, <code>site</code>). Checked first, because &ldquo;the active site of an enzyme&rdquo; is the criterion&rsquo;s own worked example in Richards et al. 2015 and a residue that <em>is</em> the catalytic or contact position is more specific than one merely inside a constrained region. UniProt curates these to single-residue resolution (McGarvey et al. 2019 [30]; curation standard: Famiglietti et al. 2014 [31]). The site label (e.g. <em>Binds Ca(2+)</em>) is named in the generated comment and recorded in the <code>UniProt_Site</code> column.</li>
       <li><strong>CCRS constraint:</strong> Variant falls in a constrained coding region (&ge;90th percentile CCRs score).</li>
       <li><strong>UniProt domain:</strong> Variant is in a structurally or functionally critical annotated domain.</li>
       <li><strong>15 aa ClinVar neighborhood (new):</strong> &ge;3 Pathogenic/LP ClinVar variants fall within &plusmn;15 amino acids of the query position AND &ge;75% of all classified variants in that window are pathogenic. This identifies mutational hotspots not captured by named UniProt domains. Uses the already-fetched ClinVar dataset &mdash; no additional API call. The <em>Mutation Density</em> track and <em>Density Dominant</em> column in the annotation table provide complementary visual corroboration of this signal.</li>
@@ -535,11 +536,11 @@
     </ol>
     <p><strong>Upgrade to PM1_strong (PS-equivalent, +4 pts):</strong></p>
     <ul>
-      <li>UniProt domain hit <em>and</em> strong conservation: ConSurf &ge;8, PhyloP 100V &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8.</li>
-      <li>UniProt domain hit <em>and</em> neighborhood hotspot (pathways 2+3 combined).</li>
+      <li>UniProt functional residue <em>or</em> domain hit, <em>and</em> strong conservation: ConSurf &ge;8, PhyloP 100V &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8.</li>
+      <li>UniProt domain hit <em>and</em> neighborhood hotspot (pathways 3+4 combined).</li>
     </ul>
     <p><strong>Not applied when:</strong> gnomAD AF &gt; 1% (BS1/BA1 range).</p>
-    <p><strong>Data sources:</strong> CCRS local file, UniProt features API, ClinVar (neighborhood), ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons), DOLPHIN API (Pfam last-resort pathway).</p>
+    <p><strong>Data sources:</strong> CCRS local file, UniProt features API (domains, plus <code>act_site</code>/<code>binding</code>/<code>site</code> for the functional-residue pathway), ClinVar (neighborhood), ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons), DOLPHIN API (Pfam last-resort pathway).</p>
   </div>
 
   <div class="group-box">
@@ -568,13 +569,14 @@
   </div>
 
   <div class="group-box">
-    <div class="group-box-title">PS3_supporting - Supporting Pathogenic (PTM site) &nbsp;<span class="tag pp">PS3_sup</span>&nbsp; +1 pt</div>
-    <p><strong>Trigger:</strong> The variant position coincides with a UniProt-annotated post-translational modification site of high functional significance.</p>
+    <div class="group-box-title">PS3_supporting - Supporting Pathogenic (PTM site or published mutagenesis) &nbsp;<span class="tag pp">PS3_sup</span>&nbsp; +1 pt</div>
+    <p><strong>Trigger (either):</strong> the variant position coincides with a UniProt-annotated post-translational modification site of high functional significance, <em>or</em> UniProt records published mutagenesis at that residue reporting loss of function.</p>
+    <p><strong>Mutagenesis (new):</strong> UniProt curates experimental substitutions with their measured outcome (McGarvey et al. 2019 [30]; curation standard: Famiglietti et al. 2014 [31]). Only a reported <em>loss</em> counts &mdash; entries such as &ldquo;Abolishes G protein-coupled receptor signaling&rdquo; or &ldquo;Strongly reduced calcium-induced activity&rdquo; fire the criterion, while &ldquo;No effect on binding&rdquo; and &ldquo;Does not affect calcium sensitivity&rdquo; do not. Because this is genuine experimental evidence, it <strong>stands down the PP3_strong PS3-proxy</strong> described below, so the same functional-evidence slot is never counted twice.</p>
     <p><strong>Strong PTM types</strong> (fire PS3_supporting +1 pt): phosphorylation, ubiquitination, acetylation, disulfide bond, cross-link, SUMOylation.</p>
     <p><strong>Moderate PTM types</strong> (annotated in table, no ACMG point): glycosylation, lipidation, methylation.</p>
     <p><strong>Rationale:</strong> Missense variants that abolish a known phosphorylation, ubiquitination, or disulfide site have well-established functional consequences. UniProt PTM annotations are reviewed and represent experimental evidence. This fires as PS3 at Supporting strength (+1 pt), consistent with ClinGen PS3/BS3 calibration guidance for gene-specific functional evidence.</p>
     <p>The <strong>PTM_ACMG</strong> and <strong>PTM_Strength</strong> columns in the variant annotation table record the classification. PTM sites are also visible as vertical marks in the <em>ClinVar/PTM/CCRS</em> track.</p>
-    <p><strong>Data source:</strong> UniProt REST API features endpoint (types: mod_res, crosslnk, disulfid, lipid, carbohyd).</p>
+    <p><strong>Data source:</strong> UniProt REST API features endpoint (types: mod_res, crosslnk, disulfid, lipid, carbohyd, mutagen).</p>
   </div>
 
   <div class="group-box">
@@ -1059,6 +1061,8 @@
   <li style="margin-bottom:12px;">Nassar,L.R. <em>et al.</em> (2023) The UCSC Genome Browser database: 2023 update. <em>Nucleic Acids Res.</em>, <strong>51</strong>, D1188&ndash;D1195. doi: <a href="https://doi.org/10.1093/nar/gkac1072" target="_blank">10.1093/nar/gkac1072</a></li>
   <li style="margin-bottom:12px;">DiStefano,M.T. <em>et al.</em> (2022) The Gene Curation Coalition: a global effort to harmonize gene&ndash;disease evidence resources. <em>Genet. Med.</em>, <strong>24</strong>, 1732&ndash;1742. doi: <a href="https://doi.org/10.1016/j.gim.2022.04.017" target="_blank">10.1016/j.gim.2022.04.017</a></li>
   <li style="margin-bottom:12px;">Biesecker,L.G. <em>et al.</em> (2024) ClinGen guidance for use of the PP1/BS4 co-segregation and PP4 phenotype specificity criteria for sequence variant pathogenicity classification. <em>Am. J. Hum. Genet.</em>, <strong>111</strong>, 24&ndash;38. doi: <a href="https://doi.org/10.1016/j.ajhg.2023.11.009">10.1016/j.ajhg.2023.11.009</a></li>
+  <li style="margin-bottom:12px;">McGarvey,P.B. <em>et al.</em> (2019) UniProt genomic mapping for deciphering functional effects of missense variants. <em>Hum. Mutat.</em>, <strong>40</strong>, 694&ndash;705. doi: <a href="https://doi.org/10.1002/humu.23738" target="_blank">10.1002/humu.23738</a></li>
+  <li style="margin-bottom:12px;">Famiglietti,M.L. <em>et al.</em> (2014) Genetic variations and diseases in UniProtKB/Swiss-Prot: the ins and outs of expert manual curation. <em>Hum. Mutat.</em>, <strong>35</strong>, 927&ndash;935. doi: <a href="https://doi.org/10.1002/humu.22594" target="_blank">10.1002/humu.22594</a></li>
 </ol>
 </div>
 
