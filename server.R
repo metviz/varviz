@@ -6107,7 +6107,73 @@ shinyServer(function(input, output, session) {
   })
   
   pfam_data <- eventReactive(input$goButton,{ extract_pfam(uniprotID()) })
-  
+
+  # ── Numbering-consistency banner ───────────────────────────────────────────
+  # VarViz numbers everything on the UniProt canonical isoform (AlphaFold,
+  # AlphaMissense, UniProt features all come from AF-<acc>-F1-* / UniProt REST,
+  # which are canonical). ClinVar and dbNSFP number on the MANE/RefSeq transcript.
+  # When gene_data flags numbering_ok == FALSE those two disagree, so a position
+  # a user copies from ClinVar can land on a different residue than the plot and
+  # the site/domain evidence. Warn; do NOT remap (no canonical<->MANE map exists
+  # for the AlphaFold files). Columns come from the MANE join in VarViz.RData;
+  # if an older RData without them is loaded the banner silently no-ops.
+  output$numbering_warning <- renderUI({
+    ga <- tryCatch(gene_attrib(), error = function(e) NULL)
+    if (is.null(ga) || !nrow(ga) || !("numbering_ok" %in% colnames(ga))) return(NULL)
+
+    box <- function(inner) HTML(paste0(
+      '<div style="background:#fef3c7;border:1px solid #f59e0b;border-left:5px solid #f59e0b;',
+      'border-radius:8px;padding:10px 14px;margin:4px 0 14px;font-size:13px;color:#78350f;line-height:1.5;">',
+      inner, '</div>'))
+
+    up_len   <- suppressWarnings(as.integer(ga$mane_uniprot_len[1]))
+    mane_len <- suppressWarnings(as.integer(ga$mane_prot_len[1]))
+    iso      <- if ("mane_isoform_id" %in% colnames(ga))  as.character(ga$mane_isoform_id[1])  else ""
+    refseq   <- if ("mane_refseq_nuc" %in% colnames(ga))  as.character(ga$mane_refseq_nuc[1])  else ""
+    new_acc  <- if ("mane_uniprot_id" %in% colnames(ga))  as.character(ga$mane_uniprot_id[1])  else ""
+    cur_acc  <- as.character(ga$uniprot_id[1])
+    cur_len  <- suppressWarnings(as.integer(ga$uniprot_len[1]))
+    agrees   <- if ("accession_agrees" %in% colnames(ga)) as.logical(ga$accession_agrees[1])   else NA
+
+    # Case 1 (more severe): VarViz is fetching a DIFFERENT UniProt entry than the
+    # one MANE ties to this gene. Every protein-level layer (AlphaFold pLDDT,
+    # AlphaMissense, domains, sites) is then for the wrong isoform/entry. Fires
+    # until the accession swap is applied (accession_agrees becomes TRUE).
+    if (isFALSE(agrees) && nzchar(new_acc)) {
+      return(box(paste0(
+        '<b>&#9888;&#65039; This gene may be mapped to the wrong UniProt entry.</b> ',
+        'VarViz is using <b>', cur_acc, '</b> (',
+        if (!is.na(cur_len)) paste0(cur_len, " aa") else "unknown length",
+        '), but the MANE transcript', if (nzchar(refseq)) paste0(" (", refseq, ")") else "",
+        ' corresponds to <b>', new_acc, '</b> (',
+        if (!is.na(mane_len)) paste0(mane_len, " aa") else "different length",
+        '). AlphaFold, AlphaMissense and the domain/site annotations shown are for ',
+        cur_acc, ', so they may not describe this gene’s canonical protein. ',
+        'Treat protein-level evidence for this gene with caution.')))
+    }
+
+    # Case 2: right entry, but its UniProt canonical numbering differs from MANE.
+    if (!isFALSE(as.logical(ga$numbering_ok[1]))) return(NULL)   # TRUE or NA -> no banner
+    delta <- if (!is.na(up_len) && !is.na(mane_len)) mane_len - up_len else NA
+    detail <- if (nzchar(iso)) {
+      paste0("UniProt maps the MANE transcript to isoform <b>", iso,
+             "</b> (", mane_len, " aa), not the canonical sequence VarViz plots (",
+             up_len, " aa).")
+    } else if (!is.na(delta)) {
+      paste0("The UniProt canonical sequence (", up_len,
+             " aa) and the MANE protein (", mane_len, " aa) differ in length by ",
+             abs(delta), " residue", if (abs(delta) != 1) "s" else "", ".")
+    } else "The UniProt canonical and MANE sequences differ."
+
+    box(paste0(
+      '<b>&#9888;&#65039; Residue numbering may not align for this gene.</b> ', detail,
+      ' Positions from ClinVar or dbNSFP',
+      if (nzchar(refseq)) paste0(" (numbered on ", refseq, ")") else "",
+      ' can be offset from the plot, the domain/site evidence and AlphaMissense, ',
+      'which are on the UniProt canonical numbering. Cross-check the residue before ',
+      'trusting a PM1/PS1/PM5 call on this gene.'))
+  })
+
   # Gene info from UniProt (for GeneInfo tab)
   gene_info_uniprot <- eventReactive(input$goButton, {
     extract_gene_info_uniprot(uniprotID(), input$gene_name)
