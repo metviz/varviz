@@ -1194,7 +1194,11 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
      message("[UniProt Features] Fetching for: ", uniprotID)
      resp <- request("https://rest.uniprot.org/uniprotkb/") %>%
        req_url_path_append(paste0(uniprotID, ".json")) %>%
-       req_url_query(fields = "ft_signal,ft_disulfid,ft_mod_res,ft_act_site,ft_mutagen,ft_lipid,ft_carbohyd,ft_crosslnk,ft_transmem,ft_topo_dom,ft_intramem") %>%
+       # ft_binding / ft_site are residue-level functional annotations (ligand,
+       # metal and cofactor contacts, cleavage and interaction residues). They are
+       # curated to the same standard as ft_act_site — see Famiglietti et al.
+       # Hum Mutat 2019;40:2295-2304 (doi:10.1002/humu.23738) — and feed PM1.
+       req_url_query(fields = "ft_signal,ft_disulfid,ft_mod_res,ft_act_site,ft_binding,ft_site,ft_mutagen,ft_lipid,ft_carbohyd,ft_crosslnk,ft_transmem,ft_topo_dom,ft_intramem") %>%
        req_timeout(20) %>%
        req_error(body = function(resp) paste("Error:", resp_status(resp))) %>%
        req_perform()
@@ -1215,6 +1219,8 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
        "Disulfide bond"    = "disulfid",
        "Modified residue"  = "mod_res",
        "Active site"       = "act_site",
+       "Binding site"      = "binding",
+       "Site"              = "site",
        "Mutagenesis"       = "mutagen",
        "Lipidation"        = "lipid",
        "Glycosylation"     = "carbohyd",
@@ -1234,6 +1240,10 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
        
        # Classify mod_res_group from description
        desc <- if (!is.null(f$description)) f$description else ""
+       # Binding sites carry the ligand in a separate field, not in description.
+       if (ftype == "binding" && nchar(desc) == 0 && !is.null(f$ligand$name)) {
+         desc <- paste("Binds", f$ligand$name)
+       }
        mod_group <- if (ftype == "mod_res") {
          if (grepl("Phospho", desc, ignore.case = TRUE)) "Phosphorylation" else if (grepl("Acetyl", desc, ignore.case = TRUE)) "Acetylation" else if (grepl("Methyl", desc, ignore.case = TRUE)) "Methylation" else if (grepl("Ubiquitin", desc, ignore.case = TRUE)) "Ubiquitination" else if (grepl("Hydroxy", desc, ignore.case = TRUE)) "Hydroxylation" else if (grepl("Glycyl", desc, ignore.case = TRUE)) "Glycylation" else "Other modification"
        } else NA_character_
@@ -1261,6 +1271,8 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
              sum(result$type == "disulfid"), " disulfid, ",
              sum(result$type == "mod_res"), " mod_res, ",
              sum(result$type == "act_site"), " act_site, ",
+             sum(result$type == "binding"), " binding, ",
+             sum(result$type == "site"), " site, ",
              sum(result$type == "mutagen"), " mutagen, ",
              sum(result$type == "transmem"), " transmem, ",
              sum(result$type == "topo_dom"), " topo_dom")
@@ -3524,6 +3536,24 @@ pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,fo
       ggplot2::aes(x=start, y=0.25),
       shape=22, size=1.6, fill="pink", colour="black", stroke=0.4, inherit.aes=FALSE)
   }
+  # Binding and other curated sites feed PM1 alongside act_site, so they are
+  # drawn on the same row rather than left invisible.
+  if (nrow(uniprot_data[uniprot_data$type=="binding",]) > 0) {
+    p <- p + ggplot2::geom_segment(
+      data=uniprot_data[uniprot_data$type=="binding",],
+      ggplot2::aes(x=start, xend=start, y=0.25, yend=0.55),
+      color="black", linewidth=0.3, inherit.aes=FALSE)
+    p <- p + ggplot2::geom_point(
+      data=uniprot_data[uniprot_data$type=="binding",],
+      ggplot2::aes(x=start, y=0.25),
+      shape=24, size=1.6, fill="#38bdf8", colour="black", stroke=0.4, inherit.aes=FALSE)
+  }
+  if (nrow(uniprot_data[uniprot_data$type=="site",]) > 0) {
+    p <- p + ggplot2::geom_point(
+      data=uniprot_data[uniprot_data$type=="site",],
+      ggplot2::aes(x=start, y=0.25),
+      shape=25, size=1.6, fill="#facc15", colour="black", stroke=0.4, inherit.aes=FALSE)
+  }
   if (nrow(uniprot_data[uniprot_data$type=="mutagen",]) > 0) {
     p <- p + ggplot2::geom_point(
       data=uniprot_data[uniprot_data$type=="mutagen",],
@@ -3834,7 +3864,8 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
                                    variant_pos,
                                    clingen_class = "", clingen_disease = "", clingen_moi = "",
                                    ps3_proxy = FALSE, bs3_proxy = FALSE,
-                                   gevir_gene_pct = NA_real_) {
+                                   gevir_gene_pct = NA_real_,
+                                   uniprot_site = "", ptm_note = "") {
 
   safe1 <- function(x, default = "") {
     if (is.null(x) || length(x) == 0) return(default)
@@ -3846,6 +3877,8 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   }
 
   acmg_tags_str <- safe1(acmg_tags_str)
+  uniprot_site  <- safe1(uniprot_site)
+  ptm_note      <- safe1(ptm_note)
   gene          <- safe1(gene, "gene")
   mut           <- safe1(mut)
   gnomad_af     <- safe_num(gnomad_af)
@@ -3942,12 +3975,17 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
     s(paste0("The variant frequency exceeds what is expected for a pathogenic variant (gnomAD AF: ", if (!is.null(af_txt)) af_txt else "elevated", ") (BS1)."))
   }
 
-  # Functional domain
+  # Functional domain. A residue-level UniProt site is more specific than the
+  # enclosing domain, so it is named first when present.
   if ("PM1_strong" %in% tags) {
+    if (nchar(uniprot_site) > 0)
+      s(paste0("The variant alters a UniProt-annotated functional residue (", uniprot_site, ") that is also strongly conserved, supporting PM1 at strong evidence strength.")) else
     if (nchar(domain_clean) > 0)
       s(paste0("The variant is located in a critical and highly conserved functional domain (", domain_clean, "), supporting PM1 at strong evidence strength.")) else
       s("The variant is located in a highly constrained region with strong conservation evidence, supporting PM1 at strong evidence strength.")
   } else if ("PM1" %in% tags) {
+    if (nchar(uniprot_site) > 0)
+      s(paste0("The variant alters a UniProt-annotated functional residue (", uniprot_site, "), the criterion's canonical example of a critical functional position (PM1).")) else
     if (nchar(domain_clean) > 0)
       s(paste0("The variant is located in a known functional domain (", domain_clean, ") (PM1).")) else
       s("The variant falls within a mutational hotspot or constrained genomic region (PM1).")
@@ -4047,9 +4085,13 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   if ("PM6" %in% tags)
     s("The variant is assumed to be de novo in an affected individual; parental testing has not been performed to confirm absence in both parents (PM6).")
 
-  # PS3_supporting: variant disrupts annotated PTM site
-  if ("PS3_supporting" %in% tags)
-    s("The variant position coincides with a UniProt-annotated post-translational modification site (phosphorylation, ubiquitination, disulfide bond, or equivalent). Disruption of such sites provides supporting functional evidence for pathogenicity (PS3_supporting).")
+  # PS3_supporting: variant disrupts an annotated PTM site, or the residue has
+  # published mutagenesis showing loss of function
+  if ("PS3_supporting" %in% tags) {
+    if (grepl("Mutagenesis:", ptm_note, fixed = TRUE))
+      s(paste0("Substitution of this residue has been reported to impair protein function in published mutagenesis experiments curated by UniProt (", sub("^.*Mutagenesis: ", "", ptm_note), "), providing supporting functional evidence for pathogenicity (PS3_supporting).")) else
+      s("The variant position coincides with a UniProt-annotated post-translational modification site (phosphorylation, ubiquitination, disulfide bond, or equivalent). Disruption of such sites provides supporting functional evidence for pathogenicity (PS3_supporting).")
+  }
 
   # BP1
   if ("BP1" %in% tags) {
@@ -4551,7 +4593,62 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         message("[PTM] Position ", pos, ": ", ptm_info, " | ACMG proxy: ", ptm_acmg)
       }
     }
-    
+
+    # --- UniProt residue-level functional sites and mutagenesis at position ---
+    # Two distinct criteria come out of this block:
+    #   act_site / binding / site  -> PM1  (location: the residue itself is
+    #                                       catalytic, ligand-contacting, or
+    #                                       otherwise functionally annotated)
+    #   mutagen with a loss phrase -> PS3_supporting (experiment: substituting
+    #                                       this residue abolished or reduced
+    #                                       function in a published assay)
+    # Curation standard for both: Famiglietti et al. Hum Mutat 2019;40:2295-2304
+    # (doi:10.1002/humu.23738).
+    uniprot_site_desc  <- ""
+    uniprot_mutagen    <- ""
+    if (!is.null(uniprot_data) && is.data.frame(uniprot_data) && nrow(uniprot_data) > 0 &&
+        all(c("type", "start", "end") %in% colnames(uniprot_data)) && !is.na(pos)) {
+      at_pos <- !is.na(uniprot_data$start) & !is.na(uniprot_data$end) &
+                pos >= uniprot_data$start & pos <= uniprot_data$end
+      desc_of <- function(rows) {
+        d <- if ("description" %in% colnames(rows)) rows$description else character(0)
+        d <- unique(d[!is.na(d) & nzchar(d)])
+        if (length(d)) paste(d, collapse = "; ") else paste(unique(rows$type), collapse = "; ")
+      }
+
+      site_rows <- uniprot_data[at_pos & uniprot_data$type %in%
+                                  c("act_site", "binding", "site"), , drop = FALSE]
+      if (nrow(site_rows) > 0) uniprot_site_desc <- desc_of(site_rows)
+
+      # Mutagenesis entries record both outcomes ("Loss of activity" and
+      # "No effect on binding"). Only a reported loss is functional evidence
+      # FOR pathogenicity, so match loss phrasing and exclude the negatives.
+      mut_rows <- uniprot_data[at_pos & uniprot_data$type == "mutagen", , drop = FALSE]
+      if (nrow(mut_rows) > 0 && "description" %in% colnames(mut_rows)) {
+        d  <- mut_rows$description
+        lc <- tolower(ifelse(is.na(d), "", d))
+        damaging <- grepl("loss|abolish|abrogat|impair|reduce|decreas|diminish|inactiv|no longer|prevent|disrupt", lc) &
+                    !grepl("no loss|no effect|no significant|no change|not affect|no reduction|unaffected", lc)
+        if (any(damaging)) uniprot_mutagen <- desc_of(mut_rows[damaging, , drop = FALSE])
+      }
+
+      # Published mutagenesis showing loss of function is functional evidence in
+      # its own right. Route it through the existing PTM_ACMG channel so it
+      # reaches classification and the exported table without a parallel column.
+      if (nchar(uniprot_mutagen) > 0) {
+        ptm_info <- if (nchar(ptm_info) > 0)
+          paste0(ptm_info, "; Mutagenesis: ", uniprot_mutagen) else
+          paste0("Mutagenesis: ", uniprot_mutagen)
+        ptm_acmg     <- "PS3_supporting"
+        ptm_strength <- "Published loss of function on substitution"
+      }
+
+      if (nchar(uniprot_site_desc) > 0 || nchar(uniprot_mutagen) > 0)
+        message("[UniProt] Position ", pos,
+                if (nchar(uniprot_site_desc) > 0) paste0(" | site: ", uniprot_site_desc) else "",
+                if (nchar(uniprot_mutagen)   > 0) paste0(" | mutagenesis: ", uniprot_mutagen) else "")
+    }
+
     # --- Density values at this position ---
     gnomad_dens_val <- density_at_pos(gnomad_density_fn, pos)
     clinvar_dens_val <- density_at_pos(clinvar_density_fn, pos)
@@ -4724,8 +4821,9 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     acmg_tags <- character(0)
     # pm1_pathway_val: which pathway fired PM1 — used by the Pass 2 dual-pass
     # benchmark (analyses/05_classify_harness.R) to drive ClinVar-blind
-    # classification via strip_clinvar_tags(). One of "" / "ccrs" /
-    # "uniprot_domain" / "clinvar_hotspot". The neighborhood upgrade branch
+    # classification via strip_clinvar_tags(). One of "" / "uniprot_site" /
+    # "ccrs" / "uniprot_domain" / "dolphin" / "dolphin_unavailable" /
+    # "clinvar_hotspot". The neighborhood upgrade branch
     # (PM1 -> PM1_strong via ClinVar 15aa) intentionally preserves the
     # original pathway — the helper strips PM1 only when pathway is purely
     # circular ("clinvar_hotspot"); the strong upgrade itself is not undone.
@@ -4857,7 +4955,24 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
                          ccrs_info$percentile > 0) ccrs_info$percentile else 0
 
       cons_used_for_pm1 <- FALSE  # tracks whether conservation already spent on PM1_strong
-      if (ccrs_pct >= 90) {
+      if (nchar(uniprot_site_desc) > 0) {
+        # Path 0 — exact hit on a UniProt residue-level functional site
+        # (computed above, next to the PTM lookup). "Active site of an enzyme"
+        # is the criterion's own worked example (Richards 2015), and UniProt
+        # curates act_site / binding / site at a single-residue resolution the
+        # region-level pathways below cannot reach. Checked first because a
+        # residue that IS the catalytic or ligand-contact position is stronger
+        # evidence than one that merely lies inside a constrained region.
+        # Strong only when conservation corroborates, matching Path 3's bar.
+        if (cons_strong) {
+          acmg_tags <- c(acmg_tags, "PM1_strong")
+          cons_used_for_pm1 <- TRUE
+        } else {
+          acmg_tags <- c(acmg_tags, "PM1")
+        }
+        pm1_pathway_val <- "uniprot_site"
+        message("[PM1] UniProt functional site at residue ", pos, ": ", uniprot_site_desc)
+      } else if (ccrs_pct >= 90) {
         # Path 1: high confidence CCRS — PM1 unconditionally, PM1_strong with conservation
         if (cons_strong) {
           acmg_tags <- c(acmg_tags, "PM1_strong")
@@ -5163,7 +5278,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       am_low  <- isTRUE(!is.na(am_sc) && am_sc <= 0.10)
       revel_dam  <- isTRUE(!is.na(revel_sc) && revel_sc >= 0.773)
       revel_ben  <- isTRUE(!is.na(revel_sc) && revel_sc <= 0.290)
-      if (am_high && revel_dam) {
+      # The proxy exists only because experimental functional data is absent.
+      # When UniProt reports published mutagenesis at this residue, real
+      # PS3_supporting already fires through the PTM_ACMG channel — applying the
+      # proxy on top would count the same functional-evidence slot twice.
+      if (am_high && revel_dam && nchar(uniprot_mutagen) == 0) {
         # Convergent structural + ensemble evidence — PS3_supporting proxy
         # Do not add a new tag; instead upgrade PP3_moderate -> PP3_strong as proxy for PS3_supporting
         # (avoids tag proliferation while reflecting the stronger signal)
@@ -5370,7 +5489,9 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       clingen_moi      = if (!is.null(clingen_validity$moi))      clingen_validity$moi      else "",
       ps3_proxy        = ps3_proxy_fired,
       bs3_proxy        = bs3_proxy_fired,
-      gevir_gene_pct   = gevir_pct
+      gevir_gene_pct   = gevir_pct,
+      uniprot_site     = uniprot_site_desc,
+      ptm_note         = ptm_info
     )
 
     data.frame(
@@ -5403,6 +5524,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       PTM = ptm_info,
       PTM_ACMG = ptm_acmg,
       PTM_Strength = ptm_strength,
+      UniProt_Site = uniprot_site_desc,
       ConSurf_Score = consurf_score_val,
       ConSurf_Grade = consurf_grade,
       ConSurf_Burial = consurf_burial,
@@ -6790,7 +6912,14 @@ shinyServer(function(input, output, session) {
                                   sc_col <- if (!is.na(sc) && sc>=0.7)"#a02560" else if (!is.na(sc) && sc>=0.4)"#f59e0b" else "#10b981"
                                   paste0('<span style="color:',sc_col,';font-weight:600;">',r$ScoreCons,'</span>')
                                 } else '<span style="color:#cbd5e1;">—</span>'),
-          info_cell("PTM",       if (nchar(as.character(r$PTM))>0) esc(r$PTM) else '<span style="color:#cbd5e1;">—</span>'),
+          # One cell for both UniProt residue-level annotations: the PTM/mutagenesis
+          # note (PS3_supporting) and the functional-site label (PM1).
+          info_cell("PTM / Site", {
+            site_txt <- if ("UniProt_Site" %in% colnames(vtbl)) as.character(r$UniProt_Site) else ""
+            bits <- c(if (nchar(as.character(r$PTM)) > 0) esc(r$PTM),
+                      if (nchar(site_txt) > 0) esc(site_txt))
+            if (length(bits)) paste(bits, collapse = "; ") else '<span style="color:#cbd5e1;">—</span>'
+          }),
           info_cell("ClinVar",   paste0('<span style="color:',cv_col,';font-weight:600;">',esc(cv_sig),'</span>',
                                         if (identical(cv_match,"position")) ' <span style="color:#94a3b8;font-size:10px;">(same codon)</span>' else ''),
                                 note=paste0(
@@ -7048,7 +7177,9 @@ shinyServer(function(input, output, session) {
             clingen_disease    = as.character(r$ClinGen_Disease),
             clingen_moi        = as.character(r$ClinGen_MOI),
             ps3_proxy          = isTRUE("PS3_supporting" %in% tags_vec),
-            gevir_gene_pct     = suppressWarnings(as.numeric(r$GeVIR_Gene_Pct))
+            gevir_gene_pct     = suppressWarnings(as.numeric(r$GeVIR_Gene_Pct)),
+            uniprot_site       = if ("UniProt_Site" %in% colnames(vtbl)) as.character(r$UniProt_Site) else "",
+            ptm_note           = as.character(r$PTM)
           ),
           error = function(e) {
             message("[Comment] Live regen error: ", e$message)
