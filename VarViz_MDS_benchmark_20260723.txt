@@ -1,0 +1,14 @@
+
+[bench] MDS vs DOLPHIN PM1 firing on 90,701 variants with a DOLPHIN call:
+  agree 84.7%  (both fire 5145, both no 71672, MDS-only 13742, DOLPHIN-only 142)
+  MDS PM1 fires on 18,887 / 90,701 variants overall (20.8%); augments 6,492 Pass-Blind rows
+
+[bench] VariBench-labelled with classifications: 1108 (P=945, B=163)
+
+===== Panel A (VariBench, dual-pass) =====
+  Pass-Full        AUROC 0.983  Sens 1.000  Spec 0.200  MCC 0.432  VUS 0.072
+  Pass-Blind       AUROC 0.927  Sens 1.000  Spec 0.515  MCC 0.710  VUS 0.289
+  Blind + DOLPHIN  AUROC 0.948  Sens 1.000  Spec 0.515  MCC 0.711  VUS 0.245
+  Blind + MDS      AUROC 0.949  Sens 1.000  Spec 0.515  MCC 0.711  VUS 0.240
+
+written:  analyses/derived/varviz_classifications_mds.tsv 
