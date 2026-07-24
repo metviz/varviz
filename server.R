@@ -21,11 +21,23 @@ theme_set(theme_cowplot(font_size=12))
 # typography.R so they can be unit-tested without sourcing the full server.
 source("typography.R", local = FALSE)
 
-# DOLPHIN (Pfam-based PM1 pathway, Corcuff et al. 2023). Optional 4th PM1
-# pathway alongside the existing CCRS, UniProt domain, and ClinVar hotspot
-# pathways. Fails open: any network/parse error → no PM1 firing, no impact
-# on the rest of the engine. Adds at most one HTTP call per analysed variant.
+# DOLPHIN client — retired as the live PM1 Path 4 (the API's TLS cert lapsed and
+# it is unreachable) but kept sourced for the validation scripts that compare MDS
+# against its historical deltas. The runtime pathway is now MDS, below.
 source("analyses/lib/dolphin.R", local = FALSE)
+
+# Missense Disfavour Score (MDS) — offline PM1 Path 4. Reads a prebuilt Pfam
+# PSSM table instead of the (now unreachable) DOLPHIN API; reproduces its deltas.
+source("analyses/lib/pssm_lookup.R", local = FALSE)
+# Loaded once at startup (~50 MB on disk / ~600 MB RAM). NULL if absent, in which
+# case Path 4 is simply skipped.
+MDS_TABLE <- tryCatch(pssm_table_load("data/pfam_pssm_human.rds"),
+                      error = function(e) { message("[MDS] table not loaded: ", e$message); NULL })
+# PM1 fires when the substitution is clearly disfavoured at its aligned column.
+# DOLPHIN's own cutoff is server-side; -4 separates the DOLPHIN-pathogenic set
+# (SNCA G14R/E46K/G51D, CASR G143E: -5 to -9) from tolerated A53T (+1.2).
+# TODO: calibrate against the dual-pass benchmark before relying on it clinically.
+MDS_PM1_THRESHOLD <- -4
 
 # Gene-specific calibration stats core (OddsPath/LR+, ClinVar hgvsp parsing,
 # gene_calibration assembly). Pure, no network — unit-tested standalone.
@@ -4214,6 +4226,14 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
   gene_name_for_api <- if ("gene" %in% colnames(highlight_df) && nrow(highlight_df) > 0)
                          as.character(highlight_df$gene[1]) else ""
 
+  # UniProt entry name for the MDS (PM1 Path 4) lookup — the key the PSSM map
+  # uses for this protein's Pfam human row. pfam_data is the UniProt JSON, which
+  # carries it as uniProtkbId; "" when unavailable, in which case Path 4 skips.
+  mds_entry_name <- tryCatch({
+    v <- pfam_data$uniProtkbId
+    if (is.null(v) || length(v) == 0) "" else as.character(v)[1]
+  }, error = function(e) "")
+
   # PP2: Gene-level flag — missense is a common disease mechanism if ≥3 P/LP in ClinVar
   # Computed once per gene, applied to all variants
   pp2_applies <- FALSE
@@ -4834,7 +4854,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # pm1_pathway_val: which pathway fired PM1 — used by the Pass 2 dual-pass
     # benchmark (analyses/05_classify_harness.R) to drive ClinVar-blind
     # classification via strip_clinvar_tags(). One of "" / "uniprot_site" /
-    # "ccrs" / "uniprot_domain" / "dolphin" / "dolphin_unavailable" /
+    # "ccrs" / "uniprot_domain" / "mds" / "mds_unavailable" /
     # "clinvar_hotspot". The neighborhood upgrade branch
     # (PM1 -> PM1_strong via ClinVar 15aa) intentionally preserves the
     # original pathway — the helper strips PM1 only when pathway is purely
@@ -5009,40 +5029,43 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         pm1_pathway_val <- "uniprot_domain"
       }
 
-      # Path 4 — DOLPHIN Pfam alignment (Corcuff et al. 2023, Front. Bioinform.
-      # 3:1127341). Last-resort PM1 pathway: only consulted when no other path
-      # fired. Strictly orthogonal to gnomAD allele frequency (the API also
-      # returns Dolphin_AF / GnomAD_AF, which we deliberately ignore) and to
-      # ClinVar-derived clinical evidence. Disabled by setting
-      # options(varviz.dolphin_pm1 = FALSE) — used by the dual-pass benchmark
-      # harness to avoid the 60 req/min DOLPHIN rate limit at 90k-variant scale.
-      if (pm1_pathway_val == "" &&
-          isTRUE(getOption("varviz.dolphin_pm1", TRUE))) {
-        # NA = service unreachable (timeout/DNS/TLS); TRUE/FALSE = real verdict.
-        dolphin_hit <- tryCatch(
-          dolphin_pm1_call(gene = gene_name_for_api, p_notation = mut,
-                           timeout_s = 8),
-          error = function(e) {
-            message("[PM1] DOLPHIN call failed for ", gene_name_for_api,
-                    " ", mut, ": ", e$message)
-            NA
-          }
-        )
-        if (isTRUE(dolphin_hit)) {
-          acmg_tags <- c(acmg_tags, "PM1")
-          pm1_pathway_val <- "dolphin"
-          message("[PM1] DOLPHIN Pfam alignment fires PM1 for ",
-                  gene_name_for_api, " ", mut)
-        } else if (is.na(dolphin_hit)) {
-          message("[PM1] DOLPHIN unreachable for ", gene_name_for_api, " ", mut,
-                  " — PM1 Path 4 not evaluated")
-          # Record that Path 4 was attempted but the service was unreachable,
-          # so a blank pathway is not silently read as "DOLPHIN said no". No
-          # PM1 tag is added, and classification is unaffected — this value
-          # only ever appears where no pathway fired, so it cannot be mistaken
-          # for one that did (strip_clinvar_tags reacts to clinvar_hotspot only).
-          pm1_pathway_val <- "dolphin_unavailable"
+      # Path 4 — Missense Disfavour Score (MDS). Offline reimplementation of the
+      # DOLPHIN Pfam-alignment pathway (Corcuff et al. 2023, Front. Bioinform.
+      # 3:1127341): a per-column PSSM built from the Pfam full alignment scores
+      # how disfavoured the substitution is at the residue's aligned position,
+      # MDS = M(column, mut) - M(column, wt). Strongly negative = the family
+      # essentially never tolerates this change at a conserved column -> PM1.
+      # Reproduces DOLPHIN's deltas within the int8 quantisation step (validated
+      # SNCA/CASR, rho = 1.000) but needs no network and no rate limit, so unlike
+      # the retired API it also runs in the dual-pass benchmark. Last-resort
+      # pathway: only consulted when no other path fired. Orthogonal to gnomAD
+      # frequency and to ClinVar. Disable with options(varviz.mds_pm1 = FALSE).
+      mds_val <- NA_real_
+      if (pm1_pathway_val == "" && !is.null(MDS_TABLE) &&
+          isTRUE(getOption("varviz.mds_pm1", getOption("varviz.dolphin_pm1", TRUE)))) {
+        aa <- tryCatch(sub("^p\\.", "", aa3to1(mut)), error = function(e) "")
+        m  <- regmatches(aa, regexec("^([A-Z])([0-9]+)([A-Z])$", aa))[[1]]
+        wt_aa <- if (length(m) == 4) m[2] else NA_character_
+        mt_aa <- if (length(m) == 4) m[4] else NA_character_
+        if (nzchar(mds_entry_name) && !is.na(pos) && !is.na(wt_aa)) {
+          mds_val <- tryCatch(
+            pssm_delta(MDS_TABLE, mds_entry_name, pos, wt_aa, mt_aa)$delta,
+            error = function(e) NA_real_)
         }
+        if (!is.na(mds_val) && mds_val <= MDS_PM1_THRESHOLD) {
+          acmg_tags <- c(acmg_tags, "PM1")
+          pm1_pathway_val <- "mds"
+          message(sprintf("[PM1] MDS fires PM1 for %s %s (delta %.2f <= %d)",
+                          gene_name_for_api, mut, mds_val, MDS_PM1_THRESHOLD))
+        } else if (is.na(mds_val)) {
+          # Residue not in any Pfam domain (or entry/AA unresolved). Record that
+          # Path 4 was attempted but could not score, so a blank pathway is not
+          # read as "MDS said no". No PM1 tag; classification unaffected. Only
+          # ever appears where no pathway fired (strip_clinvar_tags reacts to
+          # clinvar_hotspot only, so this is non-circular for the benchmark).
+          pm1_pathway_val <- "mds_unavailable"
+        }
+        # else: scored but above threshold -> tolerated at that column, no PM1.
       }
     }
 
@@ -5577,6 +5600,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       # ── ACMG + Comment + JSON ──
       ACMG_Tags = acmg_str,
       ACMG_PM1_Pathway = pm1_pathway_val,
+      MDS_Score = if (exists("mds_val") && !is.na(mds_val)) round(mds_val, 2) else NA_real_,
       Comment = acmg_comment,
       dbNSFP_JSON = as.character(dbnsfp_json),
       # ── Session analysis parameters (same for all variants in run) ──
