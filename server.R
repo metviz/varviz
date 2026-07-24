@@ -5089,7 +5089,12 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           if ("PM1_strong" %in% acmg_tags) {
             # already strong from CCRS/domain+cons — neighborhood corroborates, no change
           } else if ("PM1" %in% acmg_tags) {
-            # domain + neighborhood = upgrade to PM1_strong
+            # An existing moderate PM1 (from the domain, MDS, or CCRS 85-89
+            # pathways) converges with an independent ClinVar hotspot -> upgrade
+            # to PM1_strong. The two signals are orthogonal (family/domain
+            # constraint vs clinical clustering), so this is corroboration, not
+            # double-counting. Pathway is deliberately preserved so the base PM1
+            # keeps its non-circular provenance (e.g. "mds").
             acmg_tags <- acmg_tags[acmg_tags != "PM1"]
             acmg_tags <- c(acmg_tags, "PM1_strong")
             message("[PM1] Neighborhood \u00b115aa upgrade to PM1_strong: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
