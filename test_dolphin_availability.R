@@ -26,14 +26,11 @@ local({
   stopifnot(isTRUE(r))
 })
 
-# ── server.R must record the outage rather than leave the pathway blank ────
-src <- readLines("server.R", warn = FALSE)
-stopifnot(
-  any(grepl('is\\.na\\(dolphin_hit\\)', src)),
-  any(grepl('pm1_pathway_val <- "dolphin_unavailable"', src)),
-  # The error handler must yield NA too, or a thrown error still reads as "no".
-  any(grepl('DOLPHIN call failed', src))
-)
+# The DOLPHIN client above is retained for validation, but the runtime PM1
+# Path 4 is now MDS (the API's cert lapsed). The "attempted but could not score"
+# sentinel moved with it: server.R records "mds_unavailable", covered by
+# test_mds_pm1.R. The dolphin_pm1_call NA-vs-FALSE contract above still matters
+# because the MDS validation scripts compare against that historical behaviour.
 
 # ── Pass-Blind must strip every ClinVar-derived PM5 tier ──────────────────
 # PM5_supporting is ClinVar-derived exactly as PM5 is; omitting it would leak
