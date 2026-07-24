@@ -1,0 +1,23 @@
+
+===== MDS assessment on VariBench =====
+labelled missense:            16,432
+scorable (in a Pfam domain):  8,901 (54.2%)  [4604 path / 4297 benign]
+
+-- score distribution (more negative = more disfavoured) --
+  Pathogenic  median  -4.15   IQR [ -7.09,  -1.84]
+  Benign      median  -0.92   IQR [ -2.27,   0.07]
+
+-- discrimination --
+  AUC = 0.785  (pathogenic vs benign)
+
+-- LR+ by threshold (predict pathogenic if MDS <= t) --
+       t     sens    spec       LR+  %fires  strength
+      -2    73.7%   71.6%       2.6   51.8%  supporting
+      -3    62.2%   82.6%       3.6   40.6%  supporting
+      -4    51.3%   89.7%       5.0   31.5%  moderate
+      -5    41.3%   93.7%       6.5   24.4%  moderate
+      -6    33.1%   95.7%       7.7   19.2%  moderate
+      -8    19.6%   98.2%      11.1   11.0%  moderate
+
+The current server.R threshold is -4. Read the row for it above to see the
+evidence strength it actually delivers on this benchmark.

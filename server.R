@@ -34,9 +34,11 @@ source("analyses/lib/pssm_lookup.R", local = FALSE)
 MDS_TABLE <- tryCatch(pssm_table_load("data/pfam_pssm_human.rds"),
                       error = function(e) { message("[MDS] table not loaded: ", e$message); NULL })
 # PM1 fires when the substitution is clearly disfavoured at its aligned column.
-# DOLPHIN's own cutoff is server-side; -4 separates the DOLPHIN-pathogenic set
-# (SNCA G14R/E46K/G51D, CASR G143E: -5 to -9) from tolerated A53T (+1.2).
-# TODO: calibrate against the dual-pass benchmark before relying on it clinically.
+# Calibrated on VariBench (analyses/21_assess_mds.R): over 8,901 domain-resident
+# missense (4,604 path / 4,297 benign) MDS separates the classes at AUC 0.785,
+# and the -4 cutoff delivers LR+ 5.0 (sens 51%, spec 90%) — Moderate evidence by
+# the ClinGen/Pejaver scale, matching PM1's own Moderate weight. Stricter cutoffs
+# raise LR+ (>=11 at -8) but shed sensitivity; -4 is the balance point.
 MDS_PM1_THRESHOLD <- -4
 
 # Gene-specific calibration stats core (OddsPath/LR+, ClinVar hgvsp parsing,
