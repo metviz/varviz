@@ -98,6 +98,7 @@ api_cache$dbnsfp       <- list()  # gene:variant -> dbNSFP MyVariant.info data
 api_cache$consurf      <- list()  # uniprotID -> ConSurf-DB parsed data.frame
 api_cache$ucsc_cons    <- list()  # gene_name -> data.frame of per-AA conservation scores (PhyloP/PhastCons)
 api_cache$orphadata_prev <- list()  # OMIM id -> Orphadata prevalence display string
+api_cache$clinvar_hotspot <- list() # gene@af_cutoff@L -> logical vector: permutation-significant ClinVar hotspot per residue
 api_cache$gene_calib   <- list()  # gene_name -> scored ClinVar arms for gene calibration
 
 cache_get <- function(cache_name, key) {
@@ -3123,7 +3124,7 @@ densityplot <- function(gnomad_data,clinvar_data,prot_length,allele_count,highli
   return(p)
 }
 
-clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_data,gene_ccrs_data,highlight=data.frame()) 
+clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_data,gene_ccrs_data,highlight=data.frame(),ps_positions=integer(0))
 {
   begin = end = NULL
   L <- pfam_data$sequence$length   # protein length shorthand
@@ -3131,7 +3132,7 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   p <- ggplot2::ggplot()
   p <- p + ggplot2::ylim(0, 2.1)
   p <- p + scale_x_continuous(limits = c(0, L + L * 0.01), expand = c(0,0))
-  p <- p + ggplot2::labs(y = "ClinVar/PTMs/\nCCRs")
+  p <- p + ggplot2::labs(y = "ClinVar/PTMs/\nCCRs/PS")
   p <- p + ggplot2::theme(
     axis.title.y = element_text(size = vv_medium, face = "bold"),
     axis.text.y = element_blank(),
@@ -3146,14 +3147,16 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   # Row bands — labels sit BELOW each band (vjust=1 anchors text top at y=band_bottom-gap)
   lbl_sz  <- vv_small * 0.27
   lbl_col <- "#555555"
-  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=1.7, ymax=1.85, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "Mis", x = label_x, y = 1.69, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
-  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=1.2, ymax=1.35, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "LOF", x = label_x, y = 1.19, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
-  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.7, ymax=0.85, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "PTM", x = label_x, y = 0.69, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
-  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.1, ymax=0.25, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "RS",  x = label_x, y = 0.09, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=1.76, ymax=1.90, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "Mis", x = label_x, y = 1.75, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=1.36, ymax=1.50, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "LOF", x = label_x, y = 1.35, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.96, ymax=1.10, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "PTM", x = label_x, y = 0.95, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.56, ymax=0.70, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "RS",  x = label_x, y = 0.55, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.16, ymax=0.30, fill="#C0C0C0", alpha=0.2)
+  p <- p + ggplot2::annotate(geom = "text", label = "PS",  x = label_x, y = 0.15, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
   # Color scale: ClinVar gold stars + PTM types
   ptm_colors <- c(
     "Phosphorylation"              = "#E69F00",
@@ -3176,20 +3179,23 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
     if( nrow(gene_clinvar_data[gene_clinvar_data$type=="missense_variant",]) > 0){
       mis_data <- gene_clinvar_data[gene_clinvar_data$type=="missense_variant",]
       mis_data$clinvar_goldstar <- as.character(mis_data$clinvar_goldstar)
-      p <- p + ggplot2::geom_segment(data = mis_data,aes(x=prot_pos,xend=prot_pos,y=1.7,yend=1.85,color=clinvar_goldstar),linewidth=0.5) 
+      p <- p + ggplot2::geom_segment(data = mis_data,aes(x=prot_pos,xend=prot_pos,y=1.76,yend=1.90,color=clinvar_goldstar),linewidth=0.5) 
     }
     if( nrow(gene_clinvar_data[gene_clinvar_data$type!="missense_variant",]) > 0){
       lof_data <- gene_clinvar_data[gene_clinvar_data$type!="missense_variant",]
       lof_data$clinvar_goldstar <- as.character(lof_data$clinvar_goldstar)
-      p <- p + ggplot2::geom_segment(data = lof_data,aes(x=prot_pos,xend=prot_pos,y=1.2,yend=1.35,color=clinvar_goldstar),linewidth=0.5) 
+      p <- p + ggplot2::geom_segment(data = lof_data,aes(x=prot_pos,xend=prot_pos,y=1.36,yend=1.50,color=clinvar_goldstar),linewidth=0.5) 
     }
   }
   if(!is.null(gene_ptm_data) && is.data.frame(gene_ptm_data) && nrow(gene_ptm_data) > 0 ){
     gene_ptm_data$final_ptm_group <- as.character(gene_ptm_data$final_ptm_group)
-    p <- p + ggplot2::geom_segment(data=gene_ptm_data,aes(x=location,xend=location,y=0.7,yend=0.85,color=final_ptm_group),linewidth=0.5) 
+    p <- p + ggplot2::geom_segment(data=gene_ptm_data,aes(x=location,xend=location,y=0.96,yend=1.10,color=final_ptm_group),linewidth=0.5) 
   }
   if(!is.null(gene_ccrs_data) && is.data.frame(gene_ccrs_data) && nrow(gene_ccrs_data) > 0 && "prot_pos" %in% colnames(gene_ccrs_data)){
-    p <- p + ggplot2::geom_segment(data=gene_ccrs_data,aes(x=prot_pos,xend=prot_pos,y=0.1,yend=0.25),colour="#ADFF2F",linewidth=0.5) 
+    p <- p + ggplot2::geom_segment(data=gene_ccrs_data,aes(x=prot_pos,xend=prot_pos,y=0.56,yend=0.70),colour="#ADFF2F",linewidth=0.5) 
+  }
+  if (length(ps_positions) > 0) {
+    p <- p + ggplot2::geom_segment(data=data.frame(pos=ps_positions),aes(x=pos,xend=pos,y=0.16,yend=0.30),colour="#2c7fb8",linewidth=0.5) 
   }
   # Variant dashed lines — spans full y range so all rows are marked
   if (!is.null(highlight) && is.data.frame(highlight) && nrow(highlight) > 0 && "prot_pos" %in% colnames(highlight)) {
@@ -4159,9 +4165,86 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
 }
 # ============================================================
 # Build Variant Intersection Table
+# ============================================================
+# Permutation-based ClinVar hotspot (spatial clustering, gnomAD-null)
+# ============================================================
+# Replaces the fixed +/-15 density heuristic for the clinvar_hotspot PM1 pathway.
+# Per residue, tests whether local ClinVar P/LP density (+/-15) exceeds what is
+# expected when the same number of variants are drawn from the observed gnomAD
+# rare-variant positional background (AF < af_cutoff = Max AF). This controls for
+# mutability/coverage and stops the fixed window saturating in densely-curated
+# genes (fires ~100% -> only true peaks). Significant = Bonferroni p < 0.05/L.
+#
+# Cached per (gene, af_cutoff, L). Deterministic (fixed seed; global RNG restored).
+# Returns a logical vector length L (TRUE = significant hotspot) or NULL when data
+# are insufficient, in which case the caller falls back to the +/-15 count rule.
+# Signal stays ClinVar-derived -> pathway remains "clinvar_hotspot", stripped in
+# Pass-Blind exactly as before.
+CLINVAR_HOTSPOT_W    <- 15L
+CLINVAR_HOTSPOT_B    <- 1000L
+CLINVAR_HOTSPOT_SEED <- 42L
+CLINVAR_HOTSPOT_FDR  <- 0.05   # Benjamini-Hochberg q-value cutoff for a significant hotspot
+
+clinvar_hotspot_profile <- function(gene_name, clinvar_data, gnomad_data, L, af_cutoff) {
+  L <- suppressWarnings(as.integer(L))
+  if (is.na(L) || L < 1) return(NULL)
+  af_cut <- if (!is.null(af_cutoff) && !is.na(af_cutoff) && af_cutoff > 0) af_cutoff else 1e-4
+  key <- paste0(gene_name, "@", signif(af_cut, 4), "@L", L)
+  cached <- cache_get("clinvar_hotspot", key)
+  if (!is.null(cached)) return(cached)
+
+  if (is.null(clinvar_data) || !is.data.frame(clinvar_data) || nrow(clinvar_data) == 0 ||
+      !"prot_pos" %in% colnames(clinvar_data) ||
+      !"ClinicalSignificance" %in% colnames(clinvar_data)) return(NULL)
+  sc <- clinvar_data$ClinicalSignificance
+  is_plp <- grepl("pathogenic", sc, ignore.case = TRUE) &
+            !grepl("conflicting|uncertain|benign", sc, ignore.case = TRUE)
+  cv_pos <- clinvar_data$prot_pos[is_plp & !is.na(clinvar_data$prot_pos)]
+  cv_pos <- cv_pos[cv_pos >= 1 & cv_pos <= L]
+  n <- length(cv_pos)
+
+  if (is.null(gnomad_data) || !is.data.frame(gnomad_data) || nrow(gnomad_data) == 0 ||
+      !"prot_pos" %in% colnames(gnomad_data) ||
+      !"gnomad_allele_freq" %in% colnames(gnomad_data)) return(NULL)
+  bg <- gnomad_data$prot_pos[!is.na(gnomad_data$prot_pos) &
+                             !is.na(gnomad_data$gnomad_allele_freq) &
+                             gnomad_data$gnomad_allele_freq < af_cut]
+  bg <- bg[bg >= 1 & bg <= L]
+  if (n < 3 || length(bg) < 10) return(NULL)   # insufficient -> caller falls back to +/-15 count
+
+  ldens <- function(pts) {
+    h  <- tabulate(pmin(pmax(round(pts), 1L), L), nbins = L)
+    cs <- c(0, cumsum(h))
+    lo <- pmax(1L, (1:L) - CLINVAR_HOTSPOT_W); hi <- pmin(L, (1:L) + CLINVAR_HOTSPOT_W)
+    cs[hi + 1L] - cs[lo]
+  }
+  obs <- ldens(cv_pos)
+  old_seed <- if (exists(".Random.seed", envir = .GlobalEnv)) get(".Random.seed", envir = .GlobalEnv) else NULL
+  set.seed(CLINVAR_HOTSPOT_SEED)
+  ge <- integer(L)
+  for (b in seq_len(CLINVAR_HOTSPOT_B)) ge <- ge + (ldens(sample(bg, n, replace = TRUE)) >= obs)
+  if (!is.null(old_seed)) assign(".Random.seed", old_seed, envir = .GlobalEnv) else rm(".Random.seed", envir = .GlobalEnv)
+  pval <- ge / CLINVAR_HOTSPOT_B
+  # Benjamini-Hochberg FDR (q < 0.05) over positions with local ClinVar density
+  # (obs > 0). Bonferroni (0.05/L) was too strict for long proteins — it nearly
+  # eliminated the pathway; BH controls the false-discovery rate while retaining
+  # true peaks.
+  profile <- logical(L)
+  tested <- which(obs > 0)
+  if (length(tested) > 0) {
+    pv <- pval[tested]; m <- length(pv)
+    o  <- order(pv)
+    below <- pv[o] <= (seq_len(m) / m) * CLINVAR_HOTSPOT_FDR
+    kmax  <- if (any(below)) max(which(below)) else 0L
+    if (kmax > 0L) profile[tested] <- pval[tested] <= pv[o][kmax]
+  }
+  cache_set("clinvar_hotspot", key, profile)
+  profile
+}
+
 # For each user-input variant, look up data from all tracks
 # ============================================================
-build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnomad_data, 
+build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnomad_data,
                                  clinvar_data, pfam_data, uniprot_data, ccrs_data,
                                  af_cutoff = NULL, ac_cutoff = NULL,
                                  clinvar_missense = NULL, consurf_data = NULL,
@@ -5085,25 +5168,45 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         n_benign_win <- sum(grepl("benign", win_sig, ignore.case=TRUE) &
                            !grepl("pathogenic|conflicting", win_sig, ignore.case=TRUE), na.rm=TRUE)
         ratio_ok <- n_benign_win == 0 || (n_path_win / (n_path_win + n_benign_win)) >= 0.75
-        if (n_path_win >= 3 && ratio_ok) {
+        # Roles split by the correction each needs:
+        #   Standalone PM1 fire  -> original +/-15 count (recall floor). A dense
+        #     neighborhood earns moderate PM1 regardless of spatial shape.
+        #   PM1 -> PM1_strong    -> permutation-significant PS profile (gnomAD
+        #     null): a focal-hotspot precision gate that fires only where local
+        #     ClinVar P/LP density is significant vs the rare-variant background.
+        #     A diffuse, uniformly-dense neighborhood (e.g. BRCA1) fires PM1 but
+        #     does NOT earn the strong bump. PS falls back to the count only when
+        #     it cannot be computed (sparse gnomAD).
+        count_fires <- n_path_win >= 3
+        L_gene <- suppressWarnings(as.integer(gene_data$mane_prot_len[gene_data$gene_name == gene_name_for_api][1]))
+        if (is.na(L_gene) || L_gene < 1)
+          L_gene <- suppressWarnings(max(c(clinvar_data$prot_pos, gnomad_data$prot_pos, pos), na.rm = TRUE))
+        hs_profile <- clinvar_hotspot_profile(gene_name_for_api, clinvar_data, gnomad_data, L_gene, af_cutoff)
+        ps_fires <- if (!is.null(hs_profile) && pos >= 1 && pos <= length(hs_profile)) {
+          isTRUE(hs_profile[pos])
+        } else {
+          count_fires   # fallback when PS profile unavailable
+        }
+        if (count_fires && ratio_ok) {
           if ("PM1_strong" %in% acmg_tags) {
             # already strong from CCRS/domain+cons — neighborhood corroborates, no change
-          } else if ("PM1" %in% acmg_tags) {
+          } else if ("PM1" %in% acmg_tags && ps_fires) {
             # An existing moderate PM1 (from the domain, MDS, or CCRS 85-89
-            # pathways) converges with an independent ClinVar hotspot -> upgrade
-            # to PM1_strong. The two signals are orthogonal (family/domain
-            # constraint vs clinical clustering), so this is corroboration, not
-            # double-counting. Pathway is deliberately preserved so the base PM1
-            # keeps its non-circular provenance (e.g. "mds").
+            # pathways) converges with a permutation-significant ClinVar focal
+            # hotspot -> upgrade to PM1_strong. The two signals are orthogonal
+            # (family/domain constraint vs clinical clustering), so this is
+            # corroboration, not double-counting. Pathway is deliberately
+            # preserved so the base PM1 keeps its non-circular provenance ("mds").
             acmg_tags <- acmg_tags[acmg_tags != "PM1"]
             acmg_tags <- c(acmg_tags, "PM1_strong")
-            message("[PM1] Neighborhood \u00b115aa upgrade to PM1_strong: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
-          } else {
-            # no domain/CCRS hit but neighborhood is strong — fire PM1
+            message("[PM1] Neighborhood \u00b115aa PS-significant upgrade to PM1_strong: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
+          } else if (!("PM1" %in% acmg_tags)) {
+            # no domain/CCRS hit but neighborhood is dense — fire moderate PM1
             acmg_tags <- c(acmg_tags, "PM1")
             pm1_pathway_val <- "clinvar_hotspot"
             message("[PM1] Neighborhood \u00b115aa fires PM1: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
           }
+          # else: PM1 present but not PS-significant -> stays moderate PM1
         }
       }
     }
@@ -8160,7 +8263,17 @@ shinyServer(function(input, output, session) {
     p2 <- plot_afmps(mean_data(), highlight(), prot_length = pfam_data()$sequence$length) 
     p6 <- plot_pLDDT(af(), highlight(), prot_length = pfam_data()$sequence$length)
     incProgress(0.1, detail = "Building ClinVar/PTM/CCRS track...")
-    p7 <- clinvar_ccrsplot(pfam_data(),uniprot_data(),gene_clinvar_data,gene_ptm_data,gene_ccrs_data(),highlight=highlight())
+    # PS track: permutation-significant ClinVar hotspot positions (gnomAD null).
+    # Cache HIT from the variant-table build (same gene/cutoff/L). Guarded so a
+    # miss/insufficient data simply yields an empty PS row.
+    ps_positions <- tryCatch({
+      L_ps <- suppressWarnings(as.integer(gene_data$mane_prot_len[gene_data$gene_name == input$gene_name][1]))
+      if (is.na(L_ps) || L_ps < 1) L_ps <- pfam_data()$sequence$length
+      cutoff_ps <- tryCatch(data()[[1]], error = function(e) 1e-4)
+      prof_ps <- clinvar_hotspot_profile(input$gene_name, gene_clinvar_data, gene_gnomad_data, L_ps, cutoff_ps)
+      if (!is.null(prof_ps)) which(prof_ps) else integer(0)
+    }, error = function(e) integer(0))
+    p7 <- clinvar_ccrsplot(pfam_data(),uniprot_data(),gene_clinvar_data,gene_ptm_data,gene_ccrs_data(),highlight=highlight(),ps_positions=ps_positions)
     message("[Plot] clinvar_ccrsplot generated with ", nrow(gene_ptm_data), " PTM sites")
     
     incProgress(0.1, detail = "Building gnomAD & density plots...")
