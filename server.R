@@ -5574,8 +5574,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # Detect from variant name: same ref and alt AA (e.g. p.Pro72Pro)
     syn_match <- regmatches(mut, regexec("^p\\.([A-Z][a-z]{0,2})(\\d+)([A-Z][a-z]{0,2})$", mut))[[1]]
     if (length(syn_match) == 4) {
-      ref_aa_bp7 <- toupper(substr(syn_match[2], 1, 1))
-      alt_aa_bp7 <- toupper(substr(syn_match[4], 1, 1))
+      ref_aa_bp7 <- toupper(syn_match[2])   # full AA code, not first char
+      alt_aa_bp7 <- toupper(syn_match[4])   # (Asn/Asp both start "A" — first-char compare mis-fires BP7)
       if (ref_aa_bp7 == alt_aa_bp7) acmg_tags <- c(acmg_tags, "BP7")
     }
 
