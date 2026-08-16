@@ -40,6 +40,11 @@ MDS_TABLE <- tryCatch(pssm_table_load("data/pfam_pssm_human.rds"),
 # the ClinGen/Pejaver scale, matching PM1's own Moderate weight. Stricter cutoffs
 # raise LR+ (>=11 at -8) but shed sensitivity; -4 is the balance point.
 MDS_PM1_THRESHOLD <- -4
+# Optional second MDS tier. LR+ at MDS <= -8 is ~11 on the ClinGen/Pejaver scale
+# — between Moderate (4.3) and Strong (18.7), i.e. Moderate-plus (+3), and the
+# <= -8 tail is ~2.1x enriched for functional (MaveDB DMS) damage vs background.
+# On by default; disable with options(varviz.mds_tiered = FALSE).
+MDS_PM1_STRONG_THRESHOLD <- -8
 
 # Gene-specific calibration stats core (OddsPath/LR+, ClinVar hgvsp parsing,
 # gene_calibration assembly). Pure, no network — unit-tested standalone.
@@ -3706,7 +3711,7 @@ classify_acmg <- function(tags_vec) {
     PVS1=8,
     PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
     PM5_supporting=1,
-    PM1_strong=4, PP3_strong=4, PP1_strong=4,
+    PM1_strong=4, PP3_strong=4, PP1_strong=4, PM1_moderate_plus=3,
     PM1=2, PM2=2, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
     PP1=1, PP2=1, PP3=1, PP4=1, PP5=1,
     BA1=-8,
@@ -5138,7 +5143,17 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
             error = function(e) NA_real_)
         }
         if (!is.na(mds_val) && mds_val <= MDS_PM1_THRESHOLD) {
-          acmg_tags <- c(acmg_tags, "PM1")
+          # Tiered by the substitution's own LR+: <= -4 is Moderate (+2); the
+          # <= -8 tail is Moderate-plus (+3, LR+ ~11 on VariBench, and the tail
+          # is ~2.1x enriched for functional/DMS damage). On by default; the
+          # tier resolves +129 Pass-Blind VUS at no specificity cost. Disable
+          # with options(varviz.mds_tiered = FALSE).
+          mds_tiered <- isTRUE(getOption("varviz.mds_tiered", TRUE))
+          if (mds_tiered && mds_val <= MDS_PM1_STRONG_THRESHOLD) {
+            acmg_tags <- c(acmg_tags, "PM1_moderate_plus")
+          } else {
+            acmg_tags <- c(acmg_tags, "PM1")
+          }
           pm1_pathway_val <- "mds"
           message(sprintf("[PM1] MDS fires PM1 for %s %s (delta %.2f <= %d)",
                           gene_name_for_api, mut, mds_val, MDS_PM1_THRESHOLD))
@@ -5187,20 +5202,23 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         } else {
           count_fires   # fallback when PS profile unavailable
         }
+        # Any PM1-family tag (Moderate, Moderate-plus, Strong) blocks a duplicate
+        # neighborhood fire; PM1_moderate_plus (tiered MDS) counts as PM1.
+        has_pm1_mod <- any(c("PM1", "PM1_moderate_plus") %in% acmg_tags)
         if (count_fires && ratio_ok) {
           if ("PM1_strong" %in% acmg_tags) {
             # already strong from CCRS/domain+cons — neighborhood corroborates, no change
-          } else if ("PM1" %in% acmg_tags && ps_fires) {
+          } else if (has_pm1_mod && ps_fires) {
             # An existing moderate PM1 (from the domain, MDS, or CCRS 85-89
             # pathways) converges with a permutation-significant ClinVar focal
             # hotspot -> upgrade to PM1_strong. The two signals are orthogonal
             # (family/domain constraint vs clinical clustering), so this is
             # corroboration, not double-counting. Pathway is deliberately
             # preserved so the base PM1 keeps its non-circular provenance ("mds").
-            acmg_tags <- acmg_tags[acmg_tags != "PM1"]
+            acmg_tags <- acmg_tags[!acmg_tags %in% c("PM1", "PM1_moderate_plus")]
             acmg_tags <- c(acmg_tags, "PM1_strong")
             message("[PM1] Neighborhood \u00b115aa PS-significant upgrade to PM1_strong: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
-          } else if (!("PM1" %in% acmg_tags)) {
+          } else if (!has_pm1_mod) {
             # no domain/CCRS hit but neighborhood is dense — fire moderate PM1
             acmg_tags <- c(acmg_tags, "PM1")
             pm1_pathway_val <- "clinvar_hotspot"
