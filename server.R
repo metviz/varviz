@@ -44,7 +44,10 @@ MDS_PM1_THRESHOLD <- -4
 # — between Moderate (4.3) and Strong (18.7), i.e. Moderate-plus (+3), and the
 # <= -8 tail is ~2.1x enriched for functional (MaveDB DMS) damage vs background.
 # On by default; disable with options(varviz.mds_tiered = FALSE).
-MDS_PM1_STRONG_THRESHOLD <- -8
+# Three LR-calibrated tiers, validated on 33,216 genome-wide ClinVar 2-star
+# missense (18,570 P / 14,646 B): LR+ 5.4 (-4), 11.2 (-8), 39.0 (-12).
+MDS_PM1_MODPLUS_THRESHOLD <- -8    # PM1_moderate_plus (+3), LR+ ~11
+MDS_PM1_STRONG_THRESHOLD  <- -12   # PM1_strong (+4), LR+ ~39
 
 # Gene-specific calibration stats core (OddsPath/LR+, ClinVar hgvsp parsing,
 # gene_calibration assembly). Pure, no network — unit-tested standalone.
@@ -5150,9 +5153,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           # with options(varviz.mds_tiered = FALSE).
           mds_tiered <- isTRUE(getOption("varviz.mds_tiered", TRUE))
           if (mds_tiered && mds_val <= MDS_PM1_STRONG_THRESHOLD) {
-            acmg_tags <- c(acmg_tags, "PM1_moderate_plus")
+            acmg_tags <- c(acmg_tags, "PM1_strong")          # <= -12, LR+ ~39
+          } else if (mds_tiered && mds_val <= MDS_PM1_MODPLUS_THRESHOLD) {
+            acmg_tags <- c(acmg_tags, "PM1_moderate_plus")   # <= -8, LR+ ~11
           } else {
-            acmg_tags <- c(acmg_tags, "PM1")
+            acmg_tags <- c(acmg_tags, "PM1")                 # <= -4, LR+ ~5
           }
           pm1_pathway_val <- "mds"
           message(sprintf("[PM1] MDS fires PM1 for %s %s (delta %.2f <= %d)",
