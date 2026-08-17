@@ -29,6 +29,14 @@ docs/cover-letter-*.md
 analyses/manuscript_*
 analyses/compose_fig1_casr.py
 analyses/10_compose_supp_s2.R
+# Local backups / large binaries / tooling — never commit
+backup/
+*.bundle
+tectonic
+data/*.bak.*
+.claude/
+.codegraph/
+.serena/
 varviz-research.md
 varviz-humanized-research.md
 clinvar_debug_raw.json
