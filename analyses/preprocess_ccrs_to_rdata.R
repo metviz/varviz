@@ -26,6 +26,9 @@ if (length(args) < 2) {
 ccrs_file  <- args[1]
 rdata_file <- args[2]
 
+if (!file.exists(ccrs_file))  stop("CCRS input not found: ", ccrs_file)
+if (!file.exists(rdata_file)) stop("RData target not found: ", rdata_file)
+
 cat("=== VarViz CCRS Preprocessing ===\n\n")
 
 # ── Step 1: Read the full CCRStoAAC output ──
@@ -117,16 +120,27 @@ cat("\n")
 cat("[5/5] Adding ccrs_data to VarViz.RData ...\n")
 cat("      Loading existing:", rdata_file, "\n")
 
-# Load existing RData — this brings in gene_data (and any other objects)
-existing_objects <- load(rdata_file)
+# Load existing RData into an isolated env so nothing here (rdata_file, ccrs_slim…)
+# can be silently clobbered by an object of the same name inside the file.
+existing_env <- new.env()
+existing_objects <- load(rdata_file, envir = existing_env)
 cat("      Existing objects:", paste(existing_objects, collapse = ", "), "\n")
 
 # Rename for clarity in the RData
-ccrs_data <- ccrs_slim
-
-# Save everything back — existing objects + ccrs_data
+assign("ccrs_data", ccrs_slim, envir = existing_env)
 all_objects <- c(existing_objects, "ccrs_data")
-save(list = all_objects, file = rdata_file, compress = "xz")
+
+# Back up the primary data file, then write atomically (temp -> rename) so a
+# killed/disk-full save can never leave VarViz.RData truncated.
+bak <- sprintf("%s.bak.%s", rdata_file, format(Sys.time(), "%Y%m%d_%H%M%S"))
+if (!file.copy(rdata_file, bak)) stop("backup failed; aborting before overwrite: ", rdata_file)
+cat("      Backup:", bak, "\n")
+tmp <- paste0(rdata_file, ".tmp")
+save(list = all_objects, file = tmp, envir = existing_env, compress = "xz")
+if (!file.rename(tmp, rdata_file)) {
+  unlink(tmp)
+  stop("atomic rename failed; original preserved (backup at ", bak, ")")
+}
 
 cat("      Saved objects:", paste(all_objects, collapse = ", "), "\n")
 
