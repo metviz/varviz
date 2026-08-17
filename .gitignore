@@ -25,6 +25,10 @@ data/*.tbi
 docs/
 docs/plans/
 docs/cover-letter-*.md
+# Manuscript-document generation / editing scripts (keep local, never push)
+analyses/manuscript_*
+analyses/compose_fig1_casr.py
+analyses/10_compose_supp_s2.R
 varviz-research.md
 varviz-humanized-research.md
 clinvar_debug_raw.json
