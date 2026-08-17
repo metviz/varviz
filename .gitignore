@@ -22,6 +22,7 @@ data/*.tbi
 # and cover-letter responses. Keep local; do not commit to any public remote.
 *.docx
 *.pdf
+docs/
 docs/plans/
 docs/cover-letter-*.md
 varviz-research.md
