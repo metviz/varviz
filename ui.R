@@ -371,7 +371,7 @@ shinyUI(fluidPage(
                                          choices = list("Any Star","1 Star or more","2 Stars or more"),
                                          selected = "1 Star or more"),
                             numericInput("calib_min_sens",
-                                         label = "Gene calibration — min sensitivity",
+                                         label = "Gene calibration: min sensitivity",
                                          value = 0.90, min = 0.50, max = 1.00, step = 0.05),
                             # Opt-in override: replaces Pejaver PP3 with the gene-specific
                             # tier for this session only. Advisory by default — nothing
