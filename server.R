@@ -3825,7 +3825,7 @@ classify_acmg <- function(tags_vec) {
 
   # Format tag summary string, e.g. "PM1↑ PM2 PP2 PP3"
   tag_summary <- if (length(tags) > 0) {
-    paste(sub("_strong$","\u2b06", sub("_moderate$","\u2191", tags)), collapse=" ")
+    paste(sub("_strong$","\u2b06", sub("_moderate_plus$","\u21e7", sub("_moderate$","\u2191", tags))), collapse=" ")
   } else "—"
 
   # Build per-tag breakdown string: e.g. "PM1_strong(+4) + PM2(+2) + PP2(+1) + PP3(+1)"
@@ -3835,7 +3835,7 @@ classify_acmg <- function(tags_vec) {
   for (t in tags) {
     v <- tag_pts_map[t]
     if (!is.na(v) && v != 0) {
-      lbl <- sub("_strong$","⬆", sub("_moderate$","↑", t))
+      lbl <- sub("_strong$","⬆", sub("_moderate_plus$","⇧", sub("_moderate$","↑", t)))
       if (v > 0) path_parts  <- c(path_parts,  paste0(lbl, "(+", v, ")")) else       benign_parts <- c(benign_parts, paste0(lbl, "(", v, ")"))
     }
   }
@@ -5122,9 +5122,10 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         pm1_pathway_val <- "uniprot_domain"
       }
 
-      # Path 4 — Missense Disfavour Score (MDS). Offline reimplementation of the
-      # DOLPHIN Pfam-alignment pathway (Corcuff et al. 2023, Front. Bioinform.
-      # 3:1127341): a per-column PSSM built from the Pfam full alignment scores
+      # Path 4 — Missense Disfavour Score (MDS). An offline domain-level PSSM that
+      # follows the domain-constraint idea of DOLPHIN (Corcuff et al. 2023, Front.
+      # Bioinform. 3:1127341) but improves on it: a per-column PSSM built from the
+      # Pfam full alignment scores
       # how disfavoured the substitution is at the residue's aligned position,
       # MDS = M(column, mut) - M(column, wt). Strongly negative = the family
       # essentially never tolerates this change at a conserved column -> PM1.
@@ -6723,7 +6724,7 @@ shinyServer(function(input, output, session) {
       acmg_badge <- function(tag) {
         tag <- trimws(tag)
         tc <- if (grepl("_strong$", tag) && grepl("^P", tag)) "#9b1c1c" else if (grepl("_moderate$", tag) && grepl("^P", tag)) "#dc2626" else if (grepl("^PS", tag)) "#dc2626" else if (grepl("^PM", tag)) "#ef4444" else if (grepl("^PP", tag)) "#f97316" else if (grepl("^BS", tag)) "#065f46" else if (grepl("^BP", tag)) "#059669" else if (tag == "BA1") "#1d4ed8" else "#64748b"
-        disp <- sub("_strong$", "\u2b06", sub("_moderate$", "\u2191", tag))
+        disp <- sub("_strong$", "\u2b06", sub("_moderate_plus$", "\u21e7", sub("_moderate$", "\u2191", tag)))
         paste0('<span title="', tag, '" style="display:inline-block;background:', tc, '22;color:', tc,
                ';padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px;',
                'margin:2px 2px;white-space:nowrap;border:1px solid ', tc, '44;">', disp, '</span>')
@@ -6732,7 +6733,7 @@ shinyServer(function(input, output, session) {
       # ── VarSome-style criterion grid ─────────────────────────────────────
       tag_pts_map <- c(
         PVS1=8, PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
-        PM1_strong=4, PP3_strong=4, PP1_strong=4,
+        PM1_strong=4, PP3_strong=4, PP1_strong=4, PM1_moderate_plus=3,
         PM1=2, PM2=2, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
         PP1=1, PP2=1, PP3=1, PP4=1, PP5=1,
         BA1=-8, BS1=-4, BS2=-4, BS3=-4, BS4=-4, BP6=-4,
@@ -6740,6 +6741,7 @@ shinyServer(function(input, output, session) {
       )
       strength_label <- function(tag) {
         if (grepl("_strong$", tag))     return("Strong")
+        if (grepl("_moderate_plus$", tag)) return("Moderate+")
         if (grepl("_moderate$", tag))   return("Moderate")
         if (grepl("_supporting$", tag)) return("Supporting")
         if (tag %in% c("PVS1"))        return("Very Strong")
@@ -6756,7 +6758,7 @@ shinyServer(function(input, output, session) {
       # _supporting case, PS1_supporting / PS3_supporting / PM5_supporting render
       # as raw tag names on the badge AND miss the tooltip switch below, which
       # keys on the base tag.
-      tag_display <- function(tag) sub("_(strong|moderate|supporting)$", "", tag)
+      tag_display <- function(tag) sub("_(strong|moderate_plus|moderate|supporting)$", "", tag)
       tag_color <- function(tag, is_path) {
         if (!is_path) return(list(bg="#dcfce7", border="#16a34a", text="#14532d", badge_bg="#16a34a"))
         if (grepl("^PVS",tag)||grepl("_strong$",tag)) return(list(bg="#fee2e2",border="#dc2626",text="#7f1d1d",badge_bg="#dc2626"))
@@ -6798,7 +6800,7 @@ shinyServer(function(input, output, session) {
                 else "Variant disrupts a UniProt-annotated functional/PTM site with established functional consequence (PS3)",
           PM1 = if (nchar(site_ctx) > 0)
                   paste0("This residue IS a UniProt-annotated functional site (", site_ctx,
-                         ") — the criterion's canonical example; conservation evidence may upgrade strength (PM1)")
+                         "), the criterion's canonical example; conservation evidence may upgrade strength (PM1)")
                 else "Located in a functional domain / mutational hotspot (UniProt); conservation evidence may upgrade strength (PM1)",
           PM2 = "Absent or very rare in gnomAD at the disease-prevalence-adjusted (Whiffin) threshold (PM2)",
           PM5 = "Novel missense at a codon where a DIFFERENT amino-acid change is established pathogenic in ClinVar (PM5)",
@@ -6813,7 +6815,7 @@ shinyServer(function(input, output, session) {
                        "not appropriate for genetically heterogeneous or non-specific phenotypes. ",
                        "Set via the Phenotype dropdown on this card."),
           PP5 = "Reported as pathogenic in ClinVar with at least 1-star review (PP5)",
-          BA1 = "Allele frequency >5% in gnomAD — standalone Benign (BA1)",
+          BA1 = "Allele frequency >5% in gnomAD, standalone Benign (BA1)",
           BS1 = "Allele frequency above the disease-prevalence-adjusted threshold (BS1)",
           BS2 = "Observed homozygous in gnomAD in healthy individuals (BS2)",
           BP3 = "In-frame indel in a repetitive region without known function (BP3)",
@@ -6822,10 +6824,19 @@ shinyServer(function(input, output, session) {
           BP7 = "Synonymous variant with no predicted splice impact (BP7)",
           tag  # fallback: show tag name
         )
+        # PM1_moderate_plus is emitted only by the Missense Disfavour Score (Path 4),
+        # so give it an MDS-specific tooltip instead of the generic PM1 domain text.
+        if (grepl("_moderate_plus$", tag))
+          tip_body <- paste0("Missense Disfavour Score (MDS, PM1 Path 4): the substitution is strongly ",
+                             "disfavoured at its aligned Pfam column (MDS ≤ −8, moderate-plus tier, LR+ ≈ 11). ",
+                             "MDS = M(column,mut) − M(column,wt) over the Pfam family alignment; the ≤ −8 tail ",
+                             "is likelihood-ratio-calibrated on 33,216 genome-wide 2★ ClinVar missense. ",
+                             "See the MDS_Score column for the value.")
         # Append the applied evidence strength for strength-suffixed tags (e.g. PP3_Strong).
-        str_q <- if (grepl("_strong$", tag)) " — applied at STRONG evidence strength." else
-                 if (grepl("_moderate$", tag)) " — applied at MODERATE evidence strength." else
-                 if (grepl("_supporting$", tag)) " — downgraded to SUPPORTING evidence strength (ClinVar review status below 2 stars)." else ""
+        str_q <- if (grepl("_strong$", tag)) ". Applied at STRONG evidence strength." else
+                 if (grepl("_moderate_plus$", tag)) ". Applied at MODERATE-PLUS evidence strength (+3)." else
+                 if (grepl("_moderate$", tag)) ". Applied at MODERATE evidence strength." else
+                 if (grepl("_supporting$", tag)) ". Downgraded to SUPPORTING evidence strength (ClinVar review status below 2 stars)." else ""
         tip <- paste0(tip_body, str_q)
         paste0(
           '<div title="', gsub('"', "&quot;", tip), '" ',
@@ -7633,7 +7644,7 @@ shinyServer(function(input, output, session) {
           'Cross-referencing input variants with all tracks + dbNSFP scores (MyVariant.info). ',
           'ACMG evidence tags per ',
           '<strong>Richards et al. (2015)</strong> + <strong>Tavtigian et al. (2018)</strong> + <strong>Pejaver et al. (2022)</strong>. ',
-          'PP3_strong/PM1_strong shown with ⬆/↑. ',
+          'Strength tiers shown with arrows: ↑ moderate, ⇧ moderate-plus (MDS ≤ −8), ⬆ strong (e.g. PM1_strong, PP3_strong). ',
           'Score verdicts: ',
           '<span style="color:#ef4444;font-weight:700;">dam</span>=damaging &nbsp;',
           '<span style="color:#f59e0b;font-weight:700;">amb</span>=ambiguous &nbsp;',

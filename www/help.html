@@ -182,7 +182,7 @@
 <!-- API ROW 2 -->
 <g class="teal"><rect x="30"  y="218" width="140" height="52" rx="8" stroke-width="0.8"/>
   <text class="th" x="100" y="237" text-anchor="middle" dominant-baseline="central">MyVariant.info</text>
-  <text class="ts" x="100" y="254" text-anchor="middle" dominant-baseline="central">dbNSFP v4 — 15 scores</text></g>
+  <text class="ts" x="100" y="254" text-anchor="middle" dominant-baseline="central">dbNSFP v4: 15 scores</text></g>
 <g class="teal"><rect x="182" y="218" width="140" height="52" rx="8" stroke-width="0.8"/>
   <text class="th" x="252" y="237" text-anchor="middle" dominant-baseline="central">UCSC / Ensembl</text>
   <text class="ts" x="252" y="254" text-anchor="middle" dominant-baseline="central">PhyloP, PhastCons</text></g>
@@ -473,13 +473,14 @@
     <tr><th>Tag(s)</th><th>Category</th><th>Points</th></tr>
     <tr><td><span class="tag pvs">PVS1</span></td><td>Very Strong Pathogenic</td><td style="color:#7c3aed;font-weight:700;">+8</td></tr>
     <tr><td><span class="tag ps">PS1&ndash;4</span> &nbsp;<span class="tag pm">PM1_strong</span> &nbsp;<span class="tag pp">PP3_strong</span></td><td>Strong Pathogenic (or PS-equivalent)</td><td style="color:#b91c1c;font-weight:700;">+4 each</td></tr>
+    <tr><td><span class="tag pm">PM1_moderate_plus</span></td><td>Moderate-plus (MDS &le; &minus;8 tier, LR+ &asymp; 11)</td><td style="color:#dc2626;font-weight:700;">+3</td></tr>
     <tr><td><span class="tag pm">PM1&ndash;6</span> &nbsp;<span class="tag pp">PP3_moderate</span></td><td>Moderate Pathogenic (or PM-equivalent)</td><td style="color:#dc2626;font-weight:700;">+2 each</td></tr>
     <tr><td><span class="tag pp">PP1&ndash;5</span></td><td>Supporting Pathogenic</td><td style="color:#f97316;font-weight:700;">+1 each</td></tr>
     <tr><td><span class="tag ba">BA1</span></td><td>Stand-alone Benign</td><td style="color:#1e293b;font-weight:700;">&minus;8</td></tr>
     <tr><td><span class="tag bs">BS1&ndash;4</span> &nbsp;<span class="tag bp">BP6</span></td><td>Strong Benign (or BS-equivalent)</td><td style="color:#047857;font-weight:700;">&minus;4 each</td></tr>
     <tr><td><span class="tag bp">BP1&ndash;5</span> &nbsp;<span class="tag bp">BP7</span></td><td>Supporting Benign</td><td style="color:#10b981;font-weight:700;">&minus;1 each</td></tr>
   </table>
-  <p style="margin-top:10px; font-size:13.5px;"><strong>PM1_strong</strong> = PM1 upgraded to PS-equivalent when in a structural domain + strong conservation hit. <strong>PP3_strong</strong> = REVEL &ge; 0.932 only.</p>
+  <p style="margin-top:10px; font-size:13.5px;"><strong>PM1_strong</strong> = PM1 upgraded to PS-equivalent when in a structural domain + strong conservation hit, or when the Missense Disfavour Score reaches its strong tier (MDS &le; &minus;12, LR+ &asymp; 39). <strong>PM1_moderate_plus</strong> = the intermediate MDS tier (MDS &le; &minus;8, LR+ &asymp; 11), scored at +3. <strong>PP3_strong</strong> = REVEL &ge; 0.932 only.</p>
 </div>
 
 <div class="card">
@@ -525,19 +526,28 @@
   </div>
 
   <div class="group-box">
-    <div class="group-box-title">PM1 / PM1_strong - Moderate / Strong Pathogenic &nbsp;<span class="tag pm">PM1</span>&nbsp;<span class="tag ps">PM1_strong</span>&nbsp; +2 / +4 pts</div>
+    <div class="group-box-title">PM1 - Moderate / Moderate-plus / Strong Pathogenic &nbsp;<span class="tag pm">PM1</span>&nbsp;<span class="tag pm">PM1_moderate_plus</span>&nbsp;<span class="tag ps">PM1_strong</span>&nbsp; +2 / +3 / +4 pts</div>
     <p><strong>Trigger (any pathway):</strong></p>
     <ol>
       <li><strong>UniProt functional residue (new):</strong> The variant position <em>is</em> a curated active site, ligand/metal/cofactor binding site, or other annotated functional site (UniProt feature types <code>act_site</code>, <code>binding</code>, <code>site</code>). Checked first, because &ldquo;the active site of an enzyme&rdquo; is the criterion&rsquo;s own worked example in Richards et al. 2015 and a residue that <em>is</em> the catalytic or contact position is more specific than one merely inside a constrained region. UniProt curates these to single-residue resolution (McGarvey et al. 2019 [30]; curation standard: Famiglietti et al. 2014 [31]). The site label (e.g. <em>Binds Ca(2+)</em>) is named in the generated comment and recorded in the <code>UniProt_Site</code> column.</li>
       <li><strong>CCRS constraint:</strong> Variant falls in a constrained coding region (&ge;90th percentile CCRs score).</li>
       <li><strong>UniProt domain:</strong> Variant is in a structurally or functionally critical annotated domain.</li>
-      <li><strong>15 aa ClinVar neighborhood (new):</strong> &ge;3 Pathogenic/LP ClinVar variants fall within &plusmn;15 amino acids of the query position AND &ge;75% of all classified variants in that window are pathogenic. This identifies mutational hotspots not captured by named UniProt domains. Uses the already-fetched ClinVar dataset &mdash; no additional API call. The <em>Mutation Density</em> track and <em>Density Dominant</em> column in the annotation table provide complementary visual corroboration of this signal.</li>
-      <li><strong>Missense Disfavour Score &mdash; MDS (last resort):</strong> Consulted only when none of the pathways above fire. A position-specific scoring matrix built offline from the full Pfam alignment (method of Corcuff et al. 2023, <em>Front. Bioinform.</em> 3:1127341, reimplemented) scores how disfavoured the substitution is at the residue&rsquo;s aligned column: <code>MDS = M(column, mut) &minus; M(column, wt)</code>. A strongly negative score (&le; &minus;4) &mdash; the amino-acid change is essentially never seen at a conserved column across the protein family &mdash; fires PM1. Reproduces the deltas of the original DOLPHIN service within the quantisation step (&rho; = 1.000 on the SNCA/CASR validation set) but runs from a local 6,534-family table with no network call or rate limit, so it also applies during high-throughput benchmarking. Covers the ~45% of proteome residues that lie inside a Pfam domain. Orthogonal to gnomAD frequency and ClinVar. The score is reported in the <code>MDS_Score</code> column. Disable with <code>options(varviz.mds_pm1 = FALSE)</code>.</li>
+      <li><strong>15 aa ClinVar neighborhood (new):</strong> &ge;3 Pathogenic/LP ClinVar variants fall within &plusmn;15 amino acids of the query position AND &ge;75% of all classified variants in that window are pathogenic. This identifies mutational hotspots not captured by named UniProt domains. Uses the already-fetched ClinVar dataset; no additional API call. The <em>Mutation Density</em> track and <em>Density Dominant</em> column in the annotation table provide complementary visual corroboration of this signal.</li>
+      <li><strong>Missense Disfavour Score: MDS (Path 4):</strong> Consulted only when none of the pathways above fire. A domain-level position-specific scoring matrix built offline from the full Pfam alignment (Mistry et al. 2021) scores how disfavoured the substitution is at the residue&rsquo;s aligned column: <code>MDS = M(column, mut) &minus; M(column, wt)</code>. A strongly negative score means the amino-acid change is rarely seen at that conserved column across the protein family. MDS follows the domain-constraint idea of DOLPHIN (Corcuff et al. 2023, <em>Front. Bioinform.</em> 3:1127341) but improves on it with a domain-level PSSM that runs fully offline from a local 6,534-family table (no network call, no rate limit), so it also applies during high-throughput benchmarking. It reproduces DOLPHIN&rsquo;s deltas within the quantisation step (&rho; = 1.000 on the SNCA/CASR validation set) and covers the ~45% of proteome residues that lie inside a Pfam domain.
+        <p style="margin:6px 0 2px 0;"><strong>Likelihood-ratio-tiered PM1</strong> (calibrated on 33,216 genome-wide 2&#9733; ClinVar missense; VariBench AUC 0.785; on by default, disable with <code>options(varviz.mds_tiered = FALSE)</code>):</p>
+        <ul style="margin-top:2px;">
+          <li>MDS &le; &minus;4 &rarr; <span class="tag pm">PM1</span> Moderate (+2), LR+ &asymp; 5.4</li>
+          <li>MDS &le; &minus;8 &rarr; <span class="tag pm">PM1_moderate_plus</span> Moderate-plus (+3), LR+ &asymp; 11</li>
+          <li>MDS &le; &minus;12 &rarr; <span class="tag ps">PM1_strong</span> Strong / PS-equivalent (+4), LR+ &asymp; 39</li>
+        </ul>
+        Orthogonal to gnomAD frequency and ClinVar. The score is reported in the <code>MDS_Score</code> column. Disable the whole pathway with <code>options(varviz.mds_pm1 = FALSE)</code>.</li>
     </ol>
     <p><strong>Upgrade to PM1_strong (PS-equivalent, +4 pts):</strong></p>
     <ul>
       <li>UniProt functional residue <em>or</em> domain hit, <em>and</em> strong conservation: ConSurf &ge;8, PhyloP 100V &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8.</li>
       <li>UniProt domain hit <em>and</em> neighborhood hotspot (pathways 3+4 combined).</li>
+      <li>MDS reaches its strong tier (&le; &minus;12, LR+ &asymp; 39); see Path 4 above.</li>
+      <li>A moderate PM1 (any pathway, including MDS <span class="tag pm">PM1_moderate_plus</span>) converges with a permutation-significant &plusmn;15 aa ClinVar focal hotspot.</li>
     </ul>
     <p><strong>Not applied when:</strong> gnomAD AF &gt; 1% (BS1/BA1 range).</p>
     <p><strong>Data sources:</strong> CCRS local file, UniProt features API (domains, plus <code>act_site</code>/<code>binding</code>/<code>site</code> for the functional-residue pathway), ClinVar (neighborhood), ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons), local Pfam PSSM table (MDS, last-resort pathway).</p>
@@ -551,7 +561,7 @@
 
   <div class="group-box">
     <div class="group-box-title">PM3 / PM3_moderate / PM3_strong - Pathogenic (user input) &nbsp;<span class="tag pm">PM3</span>&nbsp;<span class="tag pm">PM3_mod</span>&nbsp;<span class="tag ps">PM3_str</span>&nbsp; +1 / +2 / +4 pts</div>
-    <p><strong>Trigger:</strong> User-specified compound heterozygosity evidence from clinical records or literature. Appears as a per-variant dropdown in the ACMG Classification row, labeled <em>In trans (PM3 &mdash; AR genes)</em>. Only applicable to autosomal recessive genes.</p>
+    <p><strong>Trigger:</strong> User-specified compound heterozygosity evidence from clinical records or literature. Appears as a per-variant dropdown in the ACMG Classification row, labeled <em>In trans (PM3: AR genes)</em>. Only applicable to autosomal recessive genes.</p>
     <table class="data-table" style="max-width:520px;margin:8px 0;">
       <tr><th>Selection</th><th>Evidence</th><th>Points</th></tr>
       <tr><td>1 compound het observation</td><td>PM3 Supporting</td><td>+1</td></tr>
@@ -571,7 +581,7 @@
   <div class="group-box">
     <div class="group-box-title">PS3_supporting - Supporting Pathogenic (PTM site or published mutagenesis) &nbsp;<span class="tag pp">PS3_sup</span>&nbsp; +1 pt</div>
     <p><strong>Trigger (either):</strong> the variant position coincides with a UniProt-annotated post-translational modification site of high functional significance, <em>or</em> UniProt records published mutagenesis at that residue reporting loss of function.</p>
-    <p><strong>Mutagenesis (new):</strong> UniProt curates experimental substitutions with their measured outcome (McGarvey et al. 2019 [30]; curation standard: Famiglietti et al. 2014 [31]). Only a reported <em>loss</em> counts &mdash; entries such as &ldquo;Abolishes G protein-coupled receptor signaling&rdquo; or &ldquo;Strongly reduced calcium-induced activity&rdquo; fire the criterion, while &ldquo;No effect on binding&rdquo; and &ldquo;Does not affect calcium sensitivity&rdquo; do not. Because this is genuine experimental evidence, it <strong>stands down the PP3_strong PS3-proxy</strong> described below, so the same functional-evidence slot is never counted twice.</p>
+    <p><strong>Mutagenesis (new):</strong> UniProt curates experimental substitutions with their measured outcome (McGarvey et al. 2019 [30]; curation standard: Famiglietti et al. 2014 [31]). Only a reported <em>loss</em> counts; entries such as &ldquo;Abolishes G protein-coupled receptor signaling&rdquo; or &ldquo;Strongly reduced calcium-induced activity&rdquo; fire the criterion, while &ldquo;No effect on binding&rdquo; and &ldquo;Does not affect calcium sensitivity&rdquo; do not. Because this is genuine experimental evidence, it <strong>stands down the PP3_strong PS3-proxy</strong> described below, so the same functional-evidence slot is never counted twice.</p>
     <p><strong>Strong PTM types</strong> (fire PS3_supporting +1 pt): phosphorylation, ubiquitination, acetylation, disulfide bond, cross-link, SUMOylation.</p>
     <p><strong>Moderate PTM types</strong> (annotated in table, no ACMG point): glycosylation, lipidation, methylation.</p>
     <p><strong>Rationale:</strong> Missense variants that abolish a known phosphorylation, ubiquitination, or disulfide site have well-established functional consequences. UniProt PTM annotations are reviewed and represent experimental evidence. This fires as PS3 at Supporting strength (+1 pt), consistent with ClinGen PS3/BS3 calibration guidance for gene-specific functional evidence.</p>
@@ -582,7 +592,7 @@
   <div class="group-box">
     <div class="group-box-title">PM5 / PM5_supporting - Moderate / Supporting Pathogenic &nbsp;<span class="tag pm">PM5</span>&nbsp; +2 pts &nbsp;|&nbsp; <span class="tag pp">PM5_supporting</span>&nbsp; +1 pt</div>
     <p><strong>Trigger:</strong> A <em>different</em> pathogenic amino acid change exists at the <em>same codon</em> in ClinVar (<code>clinvar_match_type == "position"</code>), or the exact change exists but ClinVar classifies it only as Likely Pathogenic (PS1 downgraded).</p>
-    <p><strong>Strength by ClinVar review status:</strong> like PS1, PM5 is star-weighted &mdash; the reference assertion it rests on is only as good as its review status.</p>
+    <p><strong>Strength by ClinVar review status:</strong> like PS1, PM5 is star-weighted; the reference assertion it rests on is only as good as its review status.</p>
     <table class="data-table" style="max-width:480px;margin:8px 0;">
       <tr><th>ClinVar Stars</th><th>Review Status</th><th>PM5 Strength</th><th>Points</th></tr>
       <tr><td>&#9733;&#9733;&#9733;&#9733; / &#9733;&#9733;&#9733;</td><td>Practice guideline / Expert panel</td><td>PM5 Moderate</td><td>+2</td></tr>
@@ -599,7 +609,7 @@
     <ol>
       <li>ClinVar contains &ge;3 Pathogenic/Likely Pathogenic missense variants for this gene.</li>
       <li>ClinGen Gene-Disease Validity is <strong>Definitive</strong> or <strong>Strong</strong>.</li>
-      <li><strong>GeVIR percentile &lt;25</strong> &mdash; the gene is highly intolerant to missense variation across 141,456 gnomAD individuals (Abramovs et al. (2020) [17]), indicating missense changes are a common disease mechanism independent of ClinVar ascertainment.</li>
+      <li><strong>GeVIR percentile &lt;25</strong>: the gene is highly intolerant to missense variation across 141,456 gnomAD individuals (Abramovs et al. (2020) [17]), indicating missense changes are a common disease mechanism independent of ClinVar ascertainment.</li>
     </ol>
     <p><strong>Gated off when:</strong> gnomAD AF &gt; BS1 threshold (BS1 firing suppresses PP2).</p>
     <p><strong>Data source:</strong> ClinVar API, ClinGen LDH/eRepo, GeVIR gene ranking table (gevirank.org).</p>
@@ -677,7 +687,7 @@
 
   <div class="group-box">
     <div class="group-box-title">PS2 / PM6 - De novo (per-variant) &nbsp;<span class="tag ps">PS2</span>&nbsp;<span class="tag pm">PM6</span>&nbsp; +4 / +2 pts</div>
-    <p><strong>PS2 (+4 pts, Strong):</strong> Confirmed de novo &mdash; both parents tested, variant absent in both, in an affected individual with no relevant family history.</p>
+    <p><strong>PS2 (+4 pts, Strong):</strong> Confirmed de novo; both parents tested, variant absent in both, in an affected individual with no relevant family history.</p>
     <p><strong>PM6 (+2 pts, Moderate):</strong> Assumed de novo in an affected individual, without parental confirmation.</p>
     <p><strong>Input:</strong> Each variant card has its own <em>De novo</em> dropdown in the ACMG Classification row, independent from other variants in the panel. This allows variant-specific de novo evidence in multi-variant sessions.</p>
     <p><strong>Effect on PM2:</strong> Selecting de novo sets the inheritance mode to monoallelic for that card, using stricter AF thresholds for PM2.</p>
@@ -688,9 +698,9 @@
   <div class="group-box">
     <div class="group-box-title">PP4 - Phenotype specificity (per-variant) &nbsp;<span class="tag pp">PP4</span>&nbsp; +1 pt</div>
     <p><strong>Trigger:</strong> The patient's phenotype or family history is highly specific for a disease with a single genetic etiology.</p>
-    <p><strong>Input:</strong> Each variant card has its own <em>Phenotype</em> dropdown in the ACMG Classification row. Binary &mdash; either not assessed, or applied at Supporting.</p>
+    <p><strong>Input:</strong> Each variant card has its own <em>Phenotype</em> dropdown in the ACMG Classification row. Binary: either not assessed, or applied at Supporting.</p>
     <p><strong>Unlike PP1 and PM3, PP4 has no strength tiers in VarViz.</strong> ACMG/AMP 2015 defines it as Supporting only. Note that ClinGen SVI [29] has since superseded this, scaling PP4 by the gene's diagnostic yield for the phenotype (roughly +1.0 at 20% yield up to +7.0 at 95%), and recognising PP4_Moderate and PP4_Strong. VarViz applies the conservative ACMG 2015 default of +1.</p>
-    <p><strong>Combined with PP1:</strong> capped at <strong>+5.0 points</strong> together &mdash; see the PP1 entry above. ClinGen further advises that under locus homogeneity with high diagnostic yield, PP4 should be applied and co-segregation (PP1) omitted entirely, since co-segregation is then a foregone conclusion. VarViz does not enforce that interaction; the two dropdowns are independent and it is left to your judgement.</p>
+    <p><strong>Combined with PP1:</strong> capped at <strong>+5.0 points</strong> together; see the PP1 entry above. ClinGen further advises that under locus homogeneity with high diagnostic yield, PP4 should be applied and co-segregation (PP1) omitted entirely, since co-segregation is then a foregone conclusion. VarViz does not enforce that interaction; the two dropdowns are independent and it is left to your judgement.</p>
     <p><strong>When not to apply:</strong> Genetically heterogeneous presentations, or non-specific phenotypes that many genes could explain. PP4 requires that the clinical picture is characteristic enough to point at this gene specifically.</p>
     <p><strong>Exported columns:</strong> <code>PP4_Evidence</code> (description), <code>PP4_Applied</code> (tag), included in <code>Final_ACMG_Tags</code> and <code>Final_Classification</code>.</p>
     <p><strong>Data source:</strong> User-provided clinical data.</p>
@@ -720,10 +730,10 @@
 
   <div class="group-box">
     <div class="group-box-title">BP1 - Supporting Benign &nbsp;<span class="tag bp">BP1</span>&nbsp; &minus;1 pt</div>
-    <p><strong>Trigger:</strong> Missense variant in a gene where population genetics evidence indicates missense variation is <em>tolerated</em> &mdash; <strong>GeVIR percentile &gt;75</strong> (gene accumulates missense variants freely in gnomAD).</p>
+    <p><strong>Trigger:</strong> Missense variant in a gene where population genetics evidence indicates missense variation is <em>tolerated</em>; <strong>GeVIR percentile &gt;75</strong> (gene accumulates missense variants freely in gnomAD).</p>
     <p>This operationalizes the ACMG/AMP definition of BP1 ("missense variant in a gene for which primarily truncating variants are known to cause disease") using gene-level missense constraint data rather than a curated list, avoiding circular use of ClinVar evidence.</p>
     <p><strong>Suppressed when:</strong> BA1 or BS1 fires (frequency evidence supersedes mechanism evidence); PS1 or PP5 fires (ClinVar pathogenic at this exact position contradicts BP1); ClinGen Gene-Disease Validity is Definitive or Strong for this gene.</p>
-    <p><strong>Data source:</strong> GeVIR gene ranking table (Abramovs et al., 2020 [17]) &mdash; <a href="https://www.gevirank.org" target="_blank">gevirank.org</a>.</p>
+    <p><strong>Data source:</strong> GeVIR gene ranking table (Abramovs et al., 2020 [17]): <a href="https://www.gevirank.org" target="_blank">gevirank.org</a>.</p>
     <p><strong>Hover tooltip:</strong> All ACMG criterion cards show the GeVIR percentile on mouse hover, including the exact score used for PP2 and BP1 decisions.</p>
   </div>
 
@@ -801,13 +811,13 @@
 <h2 id="gene-calibration">Gene-Specific PP3 Calibration</h2>
 
 <div class="card">
-  <p>The Pejaver 2022 PP3/BP4 thresholds (REVEL 0.644 / 0.773 / 0.932, CADD 28.1 / 35, AlphaMissense 0.564) are <strong>genome-wide</strong> calibrations. They are mis-calibrated for some genes. Because VarViz already pulls the queried gene&rsquo;s ClinVar and dbNSFP data live, it recomputes each predictor&rsquo;s <strong>Evidence Strength for this gene</strong> at query time and shows where the genome-wide default disagrees &mdash; a capability static-threshold tools lack. The panel appears on each variant card under <strong>&#9878; Gene-Specific Calibration</strong>.</p>
+  <p>The Pejaver 2022 PP3/BP4 thresholds (REVEL 0.644 / 0.773 / 0.932, CADD 28.1 / 35, AlphaMissense 0.564) are <strong>genome-wide</strong> calibrations. They are mis-calibrated for some genes. Because VarViz already pulls the queried gene&rsquo;s ClinVar and dbNSFP data live, it recomputes each predictor&rsquo;s <strong>Evidence Strength for this gene</strong> at query time and shows where the genome-wide default disagrees; a capability static-threshold tools lack. The panel appears on each variant card under <strong>&#9878; Gene-Specific Calibration</strong>.</p>
 
   <h3>What it computes</h3>
-  <p>For the gene, it fetches two ClinVar arms &mdash; Pathogenic/Likely-pathogenic (P/LP) and Benign/Likely-benign (LB/B) &mdash; scores every missense variant in both arms with REVEL / AlphaMissense / CADD (one batched MyVariant.info query), and computes the positive likelihood ratio at each threshold:</p>
+  <p>For the gene, it fetches two ClinVar arms: Pathogenic/Likely-pathogenic (P/LP) and Benign/Likely-benign (LB/B); it scores every missense variant in both arms with REVEL / AlphaMissense / CADD (one batched MyVariant.info query), and computes the positive likelihood ratio at each threshold:</p>
   <ul>
     <li><strong>LR+ = sensitivity / (1 &minus; specificity)</strong>, positives = the gene&rsquo;s P/LP arm, negatives = its LB/B arm. A Haldane-Anscombe +0.5 continuity correction keeps clean-separation thresholds finite; a 95% CI (Katz log method) is always shown.</li>
-    <li><strong>LR+ <em>is</em> the Evidence Strength (OddsPath; Tavtigian 2018)</strong> &mdash; it is <em>prior-free</em>. Tiers: Supporting &ge; 2.08, Moderate &ge; 4.33, Strong &ge; 18.7, Very strong &ge; 350.</li>
+    <li><strong>LR+ <em>is</em> the Evidence Strength (OddsPath; Tavtigian 2018)</strong>: it is <em>prior-free</em>. Tiers: Supporting &ge; 2.08, Moderate &ge; 4.33, Strong &ge; 18.7, Very strong &ge; 350.</li>
   </ul>
 
   <h3>The two outputs, per predictor</h3>
@@ -818,14 +828,14 @@
   </table>
 
   <div class="tip">
-    <strong>Confidence gate:</strong> a gene needs <strong>&ge; 20 variants per arm</strong> for a high-confidence result. Below that the numbers and CIs are still shown, flagged <em>&#9888; low confidence (n = P/LP&nbsp;/&nbsp;LB/B per arm)</em> &mdash; small arms give very wide CIs (the whole reason the JCEM MEN1 calibration it is modelled on was unstable at n&nbsp;=&nbsp;15 benign).
+    <strong>Confidence gate:</strong> a gene needs <strong>&ge; 20 variants per arm</strong> for a high-confidence result. Below that the numbers and CIs are still shown, flagged <em>&#9888; low confidence (n = P/LP&nbsp;/&nbsp;LB/B per arm)</em>. Small arms give very wide CIs (the whole reason the JCEM MEN1 calibration it is modelled on was unstable at n&nbsp;=&nbsp;15 benign).
   </div>
 
   <h3>Circularity guard (leave-one-out)</h3>
-  <p>If the queried variant is itself in the gene&rsquo;s ClinVar arm, it is <strong>dropped before the LR+ is computed</strong> (leave-one-out), so the threshold that reclassifies it was never trained on it. The panel notes when this fires. The variant&rsquo;s own ClinVar assertion is shown on a <em>separate</em> line and is <strong>not</strong> folded into the calibration &mdash; the two are independent evidence streams (no double-count). When the query is a <em>same-codon</em> match (see <a href="#clinvar-logic">ClinVar Logic</a>), that line reads &ldquo;Same-codon variant in ClinVar (PM5)&rdquo; and states the exact variant is not itself in ClinVar.</p>
+  <p>If the queried variant is itself in the gene&rsquo;s ClinVar arm, it is <strong>dropped before the LR+ is computed</strong> (leave-one-out), so the threshold that reclassifies it was never trained on it. The panel notes when this fires. The variant&rsquo;s own ClinVar assertion is shown on a <em>separate</em> line and is <strong>not</strong> folded into the calibration; the two are independent evidence streams (no double-count). When the query is a <em>same-codon</em> match (see <a href="#clinvar-logic">ClinVar Logic</a>), that line reads &ldquo;Same-codon variant in ClinVar (PM5)&rdquo; and states the exact variant is not itself in ClinVar.</p>
 
-  <h3>Advisory by default &mdash; opt-in override</h3>
-  <p>The panel is <strong>advisory</strong>: it never changes the ACMG call on its own. To apply the gene-specific tier to the PP3 call for the current session, use the sidebar controls (see <a href="#controls">Controls</a>). A confident result applies on one click; a low-confidence result requires an explicit confirmation. The override is session-only and keyed to the gene &mdash; it clears when a different gene is queried, and it too honours leave-one-out per variant.</p>
+  <h3>Advisory by default: opt-in override</h3>
+  <p>The panel is <strong>advisory</strong>: it never changes the ACMG call on its own. To apply the gene-specific tier to the PP3 call for the current session, use the sidebar controls (see <a href="#controls">Controls</a>). A confident result applies on one click; a low-confidence result requires an explicit confirmation. The override is session-only and keyed to the gene; it clears when a different gene is queried, and it too honours leave-one-out per variant.</p>
 </div>
 
 <!-- GENEINFO TAB -->
@@ -864,9 +874,9 @@
 <h3>Gene Calibration &amp; PP3 Override</h3>
 <p>Drive the <a href="#gene-calibration">Gene-Specific PP3 Calibration</a> panel:</p>
 <ul>
-  <li><strong>Gene calibration &mdash; min sensitivity</strong>: the sensitivity floor (default 0.90) for the gene-optimal threshold. Higher values keep more true positives and push the optimal threshold lower; lower values allow a more stringent, higher-LR+ threshold.</li>
+  <li><strong>Gene calibration: min sensitivity</strong>: the sensitivity floor (default 0.90) for the gene-optimal threshold. Higher values keep more true positives and push the optimal threshold lower; lower values allow a more stringent, higher-LR+ threshold.</li>
   <li><strong>Override PP3 with gene-specific tier</strong>: pick which predictor (REVEL / AM / CADD) the override uses.</li>
-  <li><strong>Apply gene-specific PP3</strong>: replaces the Pejaver PP3 tier with this gene&rsquo;s calibrated tier for the current session. Advisory by default &mdash; nothing changes until you click. A high-confidence gene applies on one click; a low-confidence gene (&lt; 20 per arm) asks for explicit confirmation. The override clears when you query a different gene.</li>
+  <li><strong>Apply gene-specific PP3</strong>: replaces the Pejaver PP3 tier with this gene&rsquo;s calibrated tier for the current session. Advisory by default: nothing changes until you click. A high-confidence gene applies on one click; a low-confidence gene (&lt; 20 per arm) asks for explicit confirmation. The override clears when you query a different gene.</li>
 </ul>
 
 <h3>Frequency Cutoff Method</h3>
@@ -1048,12 +1058,13 @@
   <li style="margin-bottom:12px;">Whiffin,N. <em>et al.</em> (2017) Using high-resolution variant frequencies to empower clinical genome interpretation. <em>Genet. Med.</em>, <strong>19</strong>, 1151&ndash;1158. doi: <a href="https://doi.org/10.1038/gim.2017.26" target="_blank">10.1038/gim.2017.26</a></li>
   <li style="margin-bottom:12px;">Jarvik,G.P. and Browning,B.L. (2016) Consideration of cosegregation in the pathogenicity classification of genomic variants. <em>Am. J. Hum. Genet.</em>, <strong>98</strong>, 1077&ndash;1081. doi: <a href="https://doi.org/10.1016/j.ajhg.2016.04.003" target="_blank">10.1016/j.ajhg.2016.04.003</a></li>
   <li style="margin-bottom:12px;">Thaxton,C. <em>et al.</em> (2022) Utilizing ClinGen gene-disease validity and dosage sensitivity curations to inform variant classification. <em>Hum. Mutat.</em>, <strong>43</strong>, 1031&ndash;1040. doi: <a href="https://doi.org/10.1002/humu.24291" target="_blank">10.1002/humu.24291</a></li>
-  <li style="margin-bottom:12px;">Rehm,H.L. <em>et al.</em> (2015) ClinGen &mdash; the Clinical Genome Resource. <em>N. Engl. J. Med.</em>, <strong>372</strong>, 2235&ndash;2242. doi: <a href="https://doi.org/10.1056/NEJMsr1406261" target="_blank">10.1056/NEJMsr1406261</a></li>
-  <li style="margin-bottom:12px;">Abramovs,N., Brass,A. and Tassabehji,M. (2020) GeVIR is a continuous gene-level metric that uses variant distribution patterns to prioritize disease candidate genes. <em>Nat. Genet.</em>, <strong>52</strong>, 35&ndash;59. doi: <a href="https://doi.org/10.1038/s41588-019-0560-2" target="_blank">10.1038/s41588-019-0560-2</a></li>
+  <li style="margin-bottom:12px;">Rehm,H.L. <em>et al.</em> (2015) ClinGen: the Clinical Genome Resource. <em>N. Engl. J. Med.</em>, <strong>372</strong>, 2235&ndash;2242. doi: <a href="https://doi.org/10.1056/NEJMsr1406261" target="_blank">10.1056/NEJMsr1406261</a></li>
+  <li style="margin-bottom:12px;">Abramovs,N., Brass,A. and Tassabehji,M. (2020) GeVIR is a continuous gene-level metric that uses variant distribution patterns to prioritize disease candidate genes. <em>Nat. Genet.</em>, <strong>52</strong>, 35&ndash;39. doi: <a href="https://doi.org/10.1038/s41588-019-0560-2" target="_blank">10.1038/s41588-019-0560-2</a></li>
   <li style="margin-bottom:12px;">Maj,C. <em>et al.</em> (2023) Genebe.net: implementation and validation of an automatic ACMG variant pathogenicity criteria assignment. <em>Clin. Genet.</em>, <strong>104</strong>, 509&ndash;516. doi: <a href="https://doi.org/10.1111/cge.14516" target="_blank">10.1111/cge.14516</a></li>
   <li style="margin-bottom:12px;">Li,S. <em>et al.</em> (2025) AutoPM3: enhancing variant interpretation via LLM-driven PM3 evidence extraction from scientific literature. <em>Bioinformatics</em>, <strong>41</strong>, btaf382. doi: <a href="https://doi.org/10.1093/bioinformatics/btaf382" target="_blank">10.1093/bioinformatics/btaf382</a></li>
   <li style="margin-bottom:12px;">Tavtigian,S.V. <em>et al.</em> (2018) Modeling the ACMG/AMP variant classification guidelines as a Bayesian classification framework. <em>Genet. Med.</em>, <strong>20</strong>, 1054&ndash;1060. doi: <a href="https://doi.org/10.1038/gim.2018.14" target="_blank">10.1038/gim.2018.14</a></li>
   <li style="margin-bottom:12px;">Corcuff,M. <em>et al.</em> (2023) Protein domains provide a new layer of information for classifying human variations in rare diseases. <em>Front. Bioinform.</em>, <strong>3</strong>, 1127341. doi: <a href="https://doi.org/10.3389/fbinf.2023.1127341" target="_blank">10.3389/fbinf.2023.1127341</a> (DOLPHIN)</li>
+  <li style="margin-bottom:12px;">Mistry,J., Chuguransky,S., Williams,L. <em>et al.</em> (2021) Pfam: The protein families database in 2021. <em>Nucleic Acids Res.</em>, <strong>49</strong>, D412&ndash;D419. doi: <a href="https://doi.org/10.1093/nar/gkaa913" target="_blank">10.1093/nar/gkaa913</a> (MDS Pfam alignments)</li>
   <li style="margin-bottom:12px;">Ioannidis,N.M. <em>et al.</em> (2016) REVEL: an ensemble method for predicting the pathogenicity of rare missense variants. <em>Am. J. Hum. Genet.</em>, <strong>99</strong>, 877&ndash;885. doi: <a href="https://doi.org/10.1016/j.ajhg.2016.08.016" target="_blank">10.1016/j.ajhg.2016.08.016</a></li>
   <li style="margin-bottom:12px;">Rentzsch,P., Witten,D., Cooper,G.M., Shendure,J. and Kircher,M. (2019) CADD: predicting the deleteriousness of variants throughout the human genome. <em>Nucleic Acids Res.</em>, <strong>47</strong>, D886&ndash;D894. doi: <a href="https://doi.org/10.1093/nar/gky1016" target="_blank">10.1093/nar/gky1016</a></li>
   <li style="margin-bottom:12px;">Landrum,M.J. <em>et al.</em> (2018) ClinVar: improving access to variant interpretations and supporting evidence. <em>Nucleic Acids Res.</em>, <strong>46</strong>, D1062&ndash;D1067. doi: <a href="https://doi.org/10.1093/nar/gkx1153" target="_blank">10.1093/nar/gkx1153</a></li>
@@ -1100,8 +1111,8 @@
 </div>
 
 <div class="card">
-  <h3>What does PM1_strong mean?</h3>
-  <p>PM1_strong is a PS-equivalent upgrade (+4 pts instead of +2). It fires when the variant is in a structurally critical UniProt domain <em>and</em> at least one strong conservation signal is present (ConSurf &ge;8, PhyloP &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8). Domain location + evolutionary conservation together provide near-PS-level evidence.</p>
+  <h3>What are the PM1 tiers (PM1 / PM1_moderate_plus / PM1_strong)?</h3>
+  <p>PM1 is scored at three strengths. <strong>PM1</strong> (+2, Moderate) is the standard fire. <strong>PM1_moderate_plus</strong> (+3) is an intermediate tier reached only via the Missense Disfavour Score at MDS &le; &minus;8 (LR+ &asymp; 11). <strong>PM1_strong</strong> (+4, PS-equivalent) fires when the variant is in a structurally critical UniProt domain <em>and</em> at least one strong conservation signal is present (ConSurf &ge;8, PhyloP &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8); when MDS reaches its strong tier (&le; &minus;12, LR+ &asymp; 39); or when a moderate PM1 converges with a permutation-significant &plusmn;15 aa ClinVar hotspot. The MDS tiers are likelihood-ratio-calibrated on 33,216 genome-wide 2&#9733; ClinVar missense and are on by default (<code>options(varviz.mds_tiered = FALSE)</code> to disable).</p>
 </div>
 
 <div class="card">
