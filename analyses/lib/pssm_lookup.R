@@ -15,12 +15,29 @@
 # Load once and keep in the app (it is ~50 MB / 600 MB in RAM).
 pssm_table_load <- function(path = "analyses/derived/pfam_pssm_human.rds") {
   stopifnot(file.exists(path))
-  readRDS(path)
+  t <- readRDS(path)
+  # Shrink the in-memory footprint (~640 MB -> ~280 MB) so it fits a 1 GB cloud
+  # instance without OOM. The rds stores each int8 score matrix as R `integer`
+  # (4 bytes/cell); re-pack as `raw` (1 byte). Values are in [-127, 127], so
+  # store q+127 in [0, 254]; .pssm_dequant reads raw as already-offset. The map's
+  # repeated character keys (id ~52k entries, family ~6.5k) become factors.
+  if (length(t$pssm) && is.integer(t$pssm[[1L]])) {
+    t$pssm <- lapply(t$pssm, function(m) {
+      r <- as.raw(as.integer(m) + 127L)
+      dim(r) <- dim(m); dimnames(r) <- dimnames(m); r
+    })
+  }
+  if (is.character(t$map$id))     t$map$id     <- as.factor(t$map$id)
+  if (is.character(t$map$family)) t$map$family <- as.factor(t$map$family)
+  t
 }
 
 # int8 -> log-odds. The quant bounds live in the table so this stays in sync.
+# Accepts either the raw-packed value (already q+127, from pssm_table_load) or a
+# plain integer/numeric q (needs the +127 offset), so tests can call it directly.
 .pssm_dequant <- function(q, tbl) {
-  (as.numeric(q) + 127) / 254 * (tbl$quant[["max"]] - tbl$quant[["min"]]) + tbl$quant[["min"]]
+  base <- if (is.raw(q)) as.numeric(q) else as.numeric(q) + 127
+  base / 254 * (tbl$quant[["max"]] - tbl$quant[["min"]]) + tbl$quant[["min"]]
 }
 
 # All (family, column) a residue maps to. A residue can sit in more than one
@@ -42,7 +59,7 @@ pssm_delta <- function(tbl, entry_name, residue, wt, mut) {
   if (!nrow(sites)) return(list(delta = NA_real_, family = NA, column = NA))
   best <- list(delta = Inf, family = NA, column = NA)
   for (i in seq_len(nrow(sites))) {
-    fam <- sites$family[i]; col <- sites$column[i]
+    fam <- as.character(sites$family[i]); col <- sites$column[i]
     M <- tbl$pssm[[fam]]
     if (is.null(M) || col > nrow(M)) next
     d <- .pssm_dequant(M[col, mut], tbl) - .pssm_dequant(M[col, wt], tbl)
