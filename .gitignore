@@ -58,3 +58,4 @@ server.R.bak.*
 
 # Lazy-load stores (large, regeneratable via analyses/26_build_varviz_sqlite.R)
 data/*.sqlite
+data/pfam_pssm_human_deploy.rds
