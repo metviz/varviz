@@ -78,6 +78,43 @@ current_directory <- getwd()
 load("data/VarViz.RData")
 gene_list <- sort(gene_data$gene_name)  # safety sort; run presort_gene_data.R once to pre-sort in RData
 
+# CCRS lazy store. The full ccrs_data table is ~431 MB in RAM (10.7M rows) but is
+# only ever queried one gene at a time, so on the cloud we ship it as an indexed
+# SQLite (data/ccrs.sqlite, built by analyses/26_build_varviz_sqlite.R) and load
+# only the queried gene's rows. When the store is present we drop the in-memory
+# table to reclaim the RAM; when it is absent (local dev / tests) ccrs_data from
+# VarViz.RData is used instead. All CCRS access goes through ccrs_slice() below.
+CCRS_DB <- tryCatch({
+  if (file.exists("data/ccrs.sqlite")) {
+    suppressMessages({ library(DBI); library(RSQLite) })
+    DBI::dbConnect(RSQLite::SQLite(), "data/ccrs.sqlite", flags = RSQLite::SQLITE_RO)
+  } else NULL
+}, error = function(e) { message("[CCRS] sqlite open failed: ", e$message); NULL })
+if (!is.null(CCRS_DB) && exists("ccrs_data")) rm(ccrs_data)  # reclaim ~431 MB
+
+# One gene's CCRS rows, from the SQLite store if present else the in-memory table.
+# Returns the same columns either way (ensembl_gene_name, uniprotAcc, aac_pos,
+# aac_weighted_pct, ...), so all downstream code is backend-agnostic.
+ccrs_slice <- function(gene_symbol, uniprot_id = NULL) {
+  if (!is.null(CCRS_DB)) {
+    r <- DBI::dbGetQuery(CCRS_DB, "SELECT * FROM ccrs WHERE ensembl_gene_name = :g",
+                         params = list(g = gene_symbol))
+    if (nrow(r) == 0 && !is.null(uniprot_id))
+      r <- DBI::dbGetQuery(CCRS_DB,
+             "SELECT * FROM ccrs WHERE uniprotAcc = :a OR uniprotAcc = :a1",
+             params = list(a = uniprot_id, a1 = paste0(uniprot_id, "-1")))
+    return(r)
+  }
+  if (exists("ccrs_data")) {
+    r <- ccrs_data[ccrs_data$ensembl_gene_name == gene_symbol, ]
+    if (nrow(r) == 0 && !is.null(uniprot_id))
+      r <- ccrs_data[ccrs_data$uniprotAcc == uniprot_id |
+                     ccrs_data$uniprotAcc == paste0(uniprot_id, "-1"), ]
+    return(r)
+  }
+  data.frame()
+}
+
 # GeVIR percentiles — merged into gene_data by add_gevir_to_rdata.R
 # GeVIR_pct: low = missense intolerant (supports PP2), high = missense tolerant (supports BP1)
 # Falls back to NA gracefully if column absent (old RData without GeVIR merge)
@@ -1582,21 +1619,15 @@ extract_ccrs <- function(gene_symbol, uniprot_id = NULL) {
                            stringsAsFactors = FALSE)
   
   # Check if ccrs_data is loaded from VarViz.RData
-  if (!exists("ccrs_data", envir = .GlobalEnv) && !exists("ccrs_data")) {
-    message("[CCRS] ccrs_data not found — was VarViz.RData built with preprocess_ccrs_to_rdata.R?")
+  if (is.null(CCRS_DB) && !exists("ccrs_data")) {
+    message("[CCRS] no ccrs source — need data/ccrs.sqlite or ccrs_data in VarViz.RData")
     return(empty_ccrs)
   }
-  
+
   tryCatch({
-    # Lookup by gene name (primary)
-    result <- ccrs_data[ccrs_data$ensembl_gene_name == gene_symbol, ]
-    
-    # Fallback: try UniProt ID if gene name returns nothing
-    if (nrow(result) == 0 && !is.null(uniprot_id)) {
-      result <- ccrs_data[ccrs_data$uniprotAcc == uniprot_id | 
-                          ccrs_data$uniprotAcc == paste0(uniprot_id, "-1"), ]
-    }
-    
+    # One gene's rows, from the SQLite store or the in-memory table (backend-agnostic).
+    result <- ccrs_slice(gene_symbol, uniprot_id)
+
     if (nrow(result) == 0) {
       message("[CCRS] No CCRStoAAC data for gene: ", gene_symbol)
       return(empty_ccrs)
@@ -1644,12 +1675,10 @@ lookup_ccrs_at_position <- function(gene_symbol, position) {
   full_data <- cache_get("ccrs", full_key)
   
   if (is.null(full_data)) {
-    # If full data not cached, try loading it
-    if (exists("ccrs_data")) {
-      full_data <- ccrs_data[ccrs_data$ensembl_gene_name == gene_symbol, ]
-      if (nrow(full_data) > 0) {
-        cache_set("ccrs", full_key, full_data)
-      }
+    # If full data not cached, load this gene's slice (SQLite store or in-memory).
+    full_data <- ccrs_slice(gene_symbol)
+    if (!is.null(full_data) && nrow(full_data) > 0) {
+      cache_set("ccrs", full_key, full_data)
     }
   }
   
