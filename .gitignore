@@ -55,3 +55,6 @@ analyses/tmp/
 # Regeneratable from https://alphafold.ebi.ac.uk/files/AF-<UID>-F1-aa-substitutions.csv
 [A-Z][0-9]*-F1-aa-substitutions.csv
 server.R.bak.*
+
+# Lazy-load stores (large, regeneratable via analyses/26_build_varviz_sqlite.R)
+data/*.sqlite
