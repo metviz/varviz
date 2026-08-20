@@ -63,3 +63,13 @@ joined to the VariBench-labelled subset of `variant_universe.tsv`.
   strong-upgrade of site/CCRS/domain (DMS-flat, overstates). The DMS enrichment
   at the strict tail is non-monotone, so the Strong tier is anchored on the
   genome-wide ClinVar LR (spec 0.999 at ≤ −12), not on DMS.
+- **Deployment / data storage** (engineering only; does not affect any result).
+  The CCRS track (~10.7 M rows) and the Pfam PSSM (~11.4 M residues) are the two
+  large reference tables. To keep the cloud instance within memory, the deploy
+  build (`26_build_varviz_sqlite.R`) serves CCRS from an indexed SQLite store
+  (`data/ccrs.sqlite`, queried one gene at a time via `server.R::ccrs_slice()`)
+  and ships the PSSM as a pre-baked raw/int8 + factor `.rds` that loads in ~1 s.
+  Storage format is invisible to the science: the same tables computed the same
+  way (Pipeline above), only lazily loaded. `data/*.sqlite` and the pre-baked rds
+  are git-ignored, regeneratable from the canonical `data/pfam_pssm_human.rds`
+  and `VarViz.RData` by that script.
