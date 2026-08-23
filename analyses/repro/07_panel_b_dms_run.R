@@ -27,7 +27,9 @@ source("analyses/lib/metric_suite.R")
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
 CLASS_SUMMARY  <- Sys.getenv("VARVIZ_RUN", "analyses/ps_mds_corroborate/summary.tsv")
-CHECKPOINT_DIR <- "analyses/classifications"
+# Derive from the run being analysed. Hardcoding a third path means a missing
+# summary.tsv silently falls back to some other run's checkpoints.
+CHECKPOINT_DIR <- file.path(dirname(CLASS_SUMMARY), "classifications")
 UNIVERSE       <- "analyses/derived/variant_universe.tsv"
 FIG_OUT        <- "analyses/repro/out/fig_panel_b_dms.pdf"
 HTML_OUT       <- "analyses/repro/out/rep_panel_b.html"

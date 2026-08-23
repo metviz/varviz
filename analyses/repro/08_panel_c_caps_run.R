@@ -28,7 +28,9 @@ source("analyses/lib/caps_compute.R")
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
 CLASS_SUMMARY  <- Sys.getenv("VARVIZ_RUN", "analyses/ps_mds_corroborate/summary.tsv")
-CHECKPOINT_DIR <- "analyses/classifications"
+# Derive from the run being analysed. Hardcoding a third path means a missing
+# summary.tsv silently falls back to some other run's checkpoints.
+CHECKPOINT_DIR <- file.path(dirname(CLASS_SUMMARY), "classifications")
 GNOMAD_IN      <- "analyses/derived/variant_universe_gnomad.tsv"
 FIG_OUT        <- "analyses/repro/out/fig_panel_c_caps.pdf"
 HTML_OUT       <- "analyses/repro/out/rep_panel_c.html"
