@@ -59,3 +59,12 @@ server.R.bak.*
 # Lazy-load stores (large, regeneratable via analyses/26_build_varviz_sqlite.R)
 data/*.sqlite
 data/pfam_pssm_human_deploy.rds
+
+# Benchmark run outputs, out-of-band API caches, and raw archives.
+# Large and regeneratable; the harness + server.R that produce them are tracked.
+# Trailing slashes so analyses/ps_*_harness.R stays tracked.
+analyses/ps_*/
+analyses/cache/
+analyses/raw_archive/
+analyses/repro/out/
+*.bak.20*

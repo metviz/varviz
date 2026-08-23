@@ -20,14 +20,35 @@ CLINVAR_DIRECT_TAGS <- c(
   "BP6", "BP6_moderate", "BP6_supporting"
 )
 
+PM1_TAGS_ALL <- c("PM1", "PM1_moderate_plus", "PM1_strong")
+
 strip_clinvar_tags <- function(tags_vec, pm1_pathway = character(0)) {
   out <- setdiff(tags_vec, CLINVAR_DIRECT_TAGS)
-  # PM1 fires from three independent pathways in server.R: ClinVar 15-residue
-  # hotspot, CCRS percentile, UniProt domain. Only the hotspot path is
-  # ClinVar-circular; CCRS and UniProt domain pathways stay.
-  if ("PM1" %in% out && length(pm1_pathway) > 0L &&
-      "clinvar_hotspot" %in% pm1_pathway) {
-    out <- setdiff(out, "PM1")
+  if (length(pm1_pathway) == 0L) return(out)
+  pw <- pm1_pathway[1]
+  if (is.na(pw)) return(out)
+
+  # PM1 fires from several independent pathways in server.R: UniProt functional
+  # site, CCRS percentile, UniProt domain, MDS (Pfam alignment), and the ClinVar
+  # 15-residue hotspot. Only the hotspot is ClinVar-circular; the rest stay.
+  # server.R records the firing pathway, joining co-firing routes with "+"
+  # (e.g. "ccrs+mds"), so match on substrings rather than equality.
+
+  # Case 1 — PM1 originated from the hotspot alone: drop it entirely.
+  if (identical(pw, "clinvar_hotspot")) {
+    out <- setdiff(out, PM1_TAGS_ALL)
+    return(out)
+  }
+
+  # Case 2 — a non-circular pathway fired and the hotspot then upgraded it to
+  # PM1_strong. The base strength is legitimate under blinding, the upgrade is
+  # not, so restore the pre-upgrade tag that server.R recorded in the pathway
+  # string. Leaving PM1_strong in place would carry ClinVar-derived strength
+  # into the arm defined as ClinVar-blind.
+  m <- regmatches(pw, regexec("\\+hotspot_upgrade\\(([^)]+)\\)", pw))[[1]]
+  if (length(m) == 2L && "PM1_strong" %in% out) {
+    out <- setdiff(out, PM1_TAGS_ALL)
+    out <- c(out, m[2])
   }
   out
 }
