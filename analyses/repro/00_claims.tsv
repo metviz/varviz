@@ -1,0 +1,25 @@
+id	location	claim	reported
+universe_variants	MS 2.5 / Supp S3	distinct missense variants	54454
+shift_n	MS 3.1 / Table 2 note	variants shifting bin	31662
+shift_pct	MS 3.1 / Table 2 note	percent shifting bin	58.1
+lp_to_vush_n	Supp S4.3	Pass-Full LP to Pass-Blind VUS-High	21795
+p_to_lp_n	Supp S4.3	Pass-Full P to Pass-Blind LP	5561
+full_plp	Supp S4.2	Pass-Full P+LP share	85.4
+blind_plp	Supp S4.2	Pass-Blind P+LP share	44.0
+blind_vush	Supp S4.2	Pass-Blind VUS-High share	43.5
+mds_corroborate	MS 3.1 / Supp S3.2	MDS corroborating an existing PM1	5803
+mds_originate	MS 3.1 / Supp S3.2	MDS originating PM1 (leading pathway; upgrades included)	2688
+mds_fires	MS 3.1 / Supp S3.2	variants where MDS fires	8491
+pm1_strong_demoted	MS 3.1 / Supp S3.6	PM1_strong demoted by blinding	2037
+pm1_strong_demoted_pct	MS 3.1 / Supp S3.6	...as percent of Pass-Full PM1_strong	11.0
+mds_resolved_vs_off	MS 3.1 / Supp S3.2	Pass-Blind VUS resolved vs MDS-off run	1759
+pm1_blind_PM1_moderate_plus	MS 3.1 / Supp S3.2	Pass-Blind variants at Moderate-plus	671
+auroc_full	MS Table 1 / Supp Table S2	VariBench Pass-Full AUROC	0.990
+auroc_blind	MS Table 1 / Supp Table S2	VariBench Pass-Blind AUROC	0.958
+auroc_mdsoff	Supp Table S2	VariBench Pass-Blind AUROC, MDS off	0.933
+mcc_full	MS Table 1 / Supp Table S2	VariBench Pass-Full MCC	0.469
+mcc_blind	MS Table 1 / Supp Table S2	VariBench Pass-Blind MCC	0.762
+spec_full	Supp Table S2	VariBench Pass-Full specificity	0.239
+spec_blind	Supp Table S2	VariBench Pass-Blind specificity	0.593
+vus_full	Supp Table S2	VariBench Pass-Full VUS rate	0.095
+vus_blind	Supp Table S2	VariBench Pass-Blind VUS rate	0.273
