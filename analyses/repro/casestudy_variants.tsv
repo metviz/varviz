@@ -1,0 +1,14 @@
+gene	p_notation	p_notation_raw	source	label	score_raw	study	set	hgvs_g	clinvar_alleleid	hgvs_pro_raw	gnomad_ac	gnomad_an	gnomad_af	gnomad_singleton	gnomad_present
+SNCA	p.A53T		CaseStudy												
+SNCA	p.E46K		CaseStudy												
+SNCA	p.G51D		CaseStudy												
+SNCA	p.G14R		CaseStudy												
+CASR	p.S296N		CaseStudy												
+CASR	p.T111I		CaseStudy												
+CASR	p.I554N		CaseStudy												
+CASR	p.T676R		CaseStudy												
+CASR	p.D433Y		CaseStudy												
+CASR	p.A364E		CaseStudy												
+CASR	p.N1074D		CaseStudy												
+CASR	p.L87P		CaseStudy												
+CASR	p.G143E		CaseStudy												

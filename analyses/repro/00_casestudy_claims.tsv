@@ -1,0 +1,30 @@
+gene	variant	classification	points	location
+CASR	p.Asp190Gly	Pathogenic	15	Supp Table S1
+CASR	p.Phe180Cys	Pathogenic	13	Supp Table S1
+CASR	p.Ile554Asn	Pathogenic	10	Supp Table S1
+CASR	p.Gly509Arg	Pathogenic	12	Supp Table S1
+CASR	p.Arg220Trp	Pathogenic	12	Supp Table S1
+CASR	p.Ser296Asn	Pathogenic	10	Supp Table S1
+CASR	p.Thr111Ile	Pathogenic	11	Supp Table S1
+CASR	p.Gly549Arg	Pathogenic	11	Supp Table S1
+CASR	p.Leu174Arg	Pathogenic	13	Supp Table S1
+CASR	p.Met74Leu	Likely P	8	Supp Table S1
+CASR	p.Thr699Asn	Likely P	9	Supp Table S1
+CASR	p.Arg701Gly	Likely P	9	Supp Table S1
+CASR	p.Thr676Arg	Likely P	7	Supp Table S1
+CASR	p.Thr808Pro	Likely P	9	Supp Table S1
+CASR	p.Asp433Tyr	VUS-High	5	Supp Table S1
+CASR	p.Val104Ile	Likely P	8	Supp Table S1
+CASR	p.Ala835Thr	Likely P	9	Supp Table S1
+CASR	p.Ala824Gly	Likely P	9	Supp Table S1
+CASR	p.Ala364Glu	VUS-High	4	Supp Table S1
+CASR	p.Asn1074Asp	VUS-High	4	Supp Table S1
+CASR	p.Leu87Pro	Pathogenic	11	Supp Table S1
+CASR	p.Ser247Phe	Likely P	6	Supp Table S1
+CASR	p.Cys739Tyr	Likely P	9	Supp Table S1
+CASR	p.Arg205Cys	Likely P	9	Supp Table S1
+SNCA	p.Ala53Thr	Likely Pathogenic	8	MS 3.3
+SNCA	p.Glu46Lys	Pathogenic	11	MS 3.3 / Supp S2
+SNCA	p.Gly51Asp	Pathogenic	11	MS 3.3 / Supp S2
+SNCA	p.Gly14Arg	Likely Pathogenic	10	MS 3.3 / Supp S2
+CASR	p.Gly143Glu			MS 3.2 (MDS -5.95)

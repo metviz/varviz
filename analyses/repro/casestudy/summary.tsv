@@ -1,0 +1,14 @@
+gene	p_notation	pm1_pathway	tags_full	tags_blind	varviz_classification_full	varviz_pts_full	varviz_rule_full	varviz_classification_blind	varviz_pts_blind	varviz_rule_blind
+CASR	p.S296N	uniprot_domain	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3	PM1_strong,PM2,PP2,PP3	Pathogenic	10	1 PS + 2 PM + 3 PP	Likely Pathogenic	8	1 PS + 1 PM
+CASR	p.T111I	ccrs	PM1_strong, PM2, PP2, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	11	2 PS	Pathogenic	11	2 PS
+CASR	p.I554N	ccrs	PM1, PM2, PP2, PM5_supporting, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	10	1 PS + 3 PM	Likely Pathogenic	9	1 PS + 2 PM
+CASR	p.T676R	clinvar_hotspot	PM1, PM2, PP2, PP3_strong	PM2,PP2,PP3_strong	Likely Pathogenic	9	1 PS + 2 PM	Likely Pathogenic	7	1 PS + 1 PM
+CASR	p.D433Y		PM2, PP2, PP3_moderate	PM2,PP2,PP3_moderate	VUS-High	5	score 5 pts	VUS-High	5	score 5 pts
+CASR	p.A364E	clinvar_hotspot	PM1, PM2, PP2, BP4	PM2,PP2,BP4	VUS-High	4	score 4 pts	VUS-Mid	2	score 2 pts
+CASR	p.N1074D	mds_unavailable	PM2, PP2, PP3	PM2,PP2,PP3	VUS-High	4	score 4 pts	VUS-High	4	score 4 pts
+CASR	p.L87P	uniprot_site+mds	PM1_strong, PM2, PP2, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	11	2 PS	Pathogenic	11	2 PS
+CASR	p.G143E	uniprot_domain+mds	PM1_strong, PM2, PP2, PS1, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	15	3 PS	Pathogenic	11	2 PS
+SNCA	p.A53T	clinvar_hotspot	PM1, PM2, PP2, PS1, PP3	PM2,PP2,PP3	Pathogenic	10	1 PS + 2 PM + 2 PP	VUS-High	4	score 4 pts
+SNCA	p.E46K	mds+hotspot_upgrade(PM1_moderate_plus)	PM1_strong, PM2, PP2, PS1_moderate, PP3	PM2,PP2,PP3,PM1_moderate_plus	Pathogenic	10	2 PS	Likely Pathogenic	7	2 PM + 2 PP
+SNCA	p.G51D	mds+hotspot_upgrade(PM1)	PM1_strong, PM2, PP2, PS1_moderate, PP3	PM2,PP2,PP3,PM1	Pathogenic	10	2 PS	Likely Pathogenic	6	2 PM + 2 PP
+SNCA	p.G14R	mds	PM1_moderate_plus, PM2, PP2, PP3	PM1_moderate_plus,PM2,PP2,PP3	Likely Pathogenic	7	2 PM + 2 PP	Likely Pathogenic	7	2 PM + 2 PP

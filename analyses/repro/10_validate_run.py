@@ -44,14 +44,16 @@ FAIL_PATTERNS = [
 CACHE_NA = re.compile(r"\[(\w+)\] local caches: dbNSFP=NA")
 EXTRACT = re.compile(r"\[ClinVar\] Extracted (\d+) variants \((\d+) missense")
 FOUND = re.compile(r"\[ClinVar\] Found (\d+) variant IDs")
-# Healthy extracted/found ratios across a verified 14-gene run span 25.6%-63.4%
-# (SLC13A5 lowest, GCK highest). The LDLR run whose esummary batches were
-# throttled sat at 4.3% (203 of 1731 records from 4734 IDs). 15% separates them
-# with margin. This is the only ClinVar-truncation signal available in logs
-# written before the BATCH FAILED marker existed; it catches severe truncation
-# only -- PTEN's milder loss (965 vs 1123) ran at 29.7% and is invisible here,
-# which is what the BATCH FAILED instrumentation is for going forward.
-CLINVAR_MIN_RATIO = 15.0
+# Healthy extracted/found ratios across a verified 14-gene run span 12.1%-63.4%.
+# BAP1 is the floor at 12.1% (338 of 2786) and is legitimate -- its ClinVar
+# records are mostly LoF/CNV, so few yield missense; the same 338/2786 appears
+# in all four runs including the corrupt ones. BRCA1 is next at 20.3%. The LDLR
+# run whose esummary batches were throttled sat at 4.3% (203 of 1731 records
+# from 4734 IDs). 8% separates them with margin on both sides.
+# Severe truncation only: PTEN's milder loss (965 vs 1123) ran at 29.7% and is
+# invisible here. That is what the BATCH FAILED instrumentation is for; this
+# ratio exists to audit logs written before that marker.
+CLINVAR_MIN_RATIO = 8.0
 TOL = 5.0
 
 
