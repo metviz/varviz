@@ -159,6 +159,15 @@ cache_set <- function(cache_name, key, value) {
   invisible(value)
 }
 
+# Out-of-band UniProt payloads. rest.uniprot.org intermittently serves large
+# entries (Q12809/KCNH2 is ~200KB) at a few KB/s, which no client-side timeout
+# can rescue -- and a failed fetch silently drops the domain/site PM1 pathways.
+# Dropping <ACCESSION>.json here makes that gene's run reproducible offline.
+UNIPROT_OVERRIDE_DIR <- getOption("varviz.uniprot_override_dir",
+                                  "analyses/cache/uniprot")
+ENSEMBL_OVERRIDE_DIR <- getOption("varviz.ensembl_override_dir",
+                                  "analyses/cache/ensembl")
+
 # --- Orphadata prevalence lookup (OMIM -> ORPHAcode -> prevalence) -----------
 # Enriches the UniProt "Involvement in Disease" table. Best-effort only: any
 # failure, timeout, or missing mapping returns "—" so gene-info never blocks.
@@ -253,9 +262,19 @@ extract_pfam <- function(uniprotID) {
   }
   tryCatch({
     # Build the request
+    # This is the load-bearing UniProt call: it supplies prot_len and the domain
+    # architecture, so a failure here yields pfam_data = NULL, which in turn
+    # strips the domain PM1 pathway, leaves mds_entry_name unresolved (so MDS
+    # cannot score) and crashes pfamplot() on `-prot_len`. It previously ran on
+    # httr2's default timeout while the lighter gene-info call below allowed 30s;
+    # rest.uniprot.org routinely takes ~9s for a full feature payload, so give it
+    # the same headroom and retry the transient failures.
     resp <- request("https://rest.uniprot.org/uniprotkb/") %>%
       req_url_path_append(paste0(uniprotID, ".json")) %>%
       req_url_query(fields = "accession,id,protein_name,gene_primary,ft_repeat,ft_region,ft_domain,ft_compbias,ft_coiled,ft_motif,ft_zn_fing,ft_transmem,ft_topo_dom,ft_intramem,length,sequence") %>%
+      req_timeout(180) %>%
+      req_retry(max_tries = 5, retry_on_failure = TRUE,
+                backoff = function(i) min(60, 5 * 2^(i - 1))) %>%
       req_error(body = function(resp) {
         paste("Error:", resp_status(resp), resp_status_desc(resp))
       }) %>%
@@ -316,7 +335,13 @@ extract_pfam <- function(uniprotID) {
     cache_set("pfam", uniprotID, pfam_data)
     return(pfam_data)
   }, error = function(e) {
-    message("UniProt API request failed: ", e$message)
+    message("[Pfam] FAILED for ", uniprotID, ": ", e$message)
+    # Load-bearing, per the comment above: a NULL here strips the domain PM1
+    # pathway and leaves MDS unable to score, while row counts stay correct.
+    # NULL still lets the app degrade gracefully; the sentinel lets the
+    # benchmark harness refuse to cache a gene that lost this payload.
+    options(varviz.uniprot_failed =
+              union(getOption("varviz.uniprot_failed", character(0)), uniprotID))
     return(NULL) # Return NULL on error
   })
 }
@@ -330,17 +355,26 @@ extract_gene_info_uniprot <- function(uniprotID, gene_name) {
     return(cached)
   }
   tryCatch({
-    message("[GeneInfo] Fetching UniProt data for: ", uniprotID)
-    
-    resp <- request("https://rest.uniprot.org/uniprotkb/") %>%
-      req_url_path_append(paste0(uniprotID, ".json")) %>%
-      req_timeout(30) %>%
-      req_error(body = function(resp) {
-        paste("Error:", resp_status(resp), resp_status_desc(resp))
-      }) %>%
-      req_perform()
-    
-    raw_json <- resp %>% resp_body_string()
+    ov <- file.path(UNIPROT_OVERRIDE_DIR, paste0(uniprotID, ".json"))
+    raw_json <- if (file.exists(ov)) {
+      message("[GeneInfo] Using local UniProt payload: ", ov)
+      paste(readLines(ov, warn = FALSE), collapse = "")
+    } else {
+      message("[GeneInfo] Fetching UniProt data for: ", uniprotID)
+      # retry_on_failure = TRUE is load-bearing: without it req_retry() only
+      # retries transient HTTP *statuses*, never the connection-level
+      # "Failed to perform HTTP request" that these fetches actually hit.
+      request("https://rest.uniprot.org/uniprotkb/") %>%
+        req_url_path_append(paste0(uniprotID, ".json")) %>%
+        req_timeout(180) %>%
+        req_retry(max_tries = 5, retry_on_failure = TRUE,
+                  backoff = function(i) min(60, 5 * 2^(i - 1))) %>%
+        req_error(body = function(resp) {
+          paste("Error:", resp_status(resp), resp_status_desc(resp))
+        }) %>%
+        req_perform() %>%
+        resp_body_string()
+    }
     jdata <- fromJSON(raw_json, simplifyVector = FALSE)
     
     message("[GeneInfo] JSON parsed successfully. Top-level keys: ", 
@@ -636,6 +670,13 @@ extract_gene_info_uniprot <- function(uniprotID, gene_name) {
     
   }, error = function(e) {
     message("[GeneInfo] FAILED for ", uniprotID, ": ", e$message)
+    # NULL is right for the app -- the page degrades gracefully. It is NOT right
+    # for the benchmark harness, where a missing UniProt payload silently drops
+    # the domain/site PM1 pathways and corrupts the gene's numbers while row
+    # counts stay correct. Record the failure so callers that cannot tolerate it
+    # (analyses/*_harness.R) can refuse to write a checkpoint.
+    options(varviz.uniprot_failed =
+              union(getOption("varviz.uniprot_failed", character(0)), uniprotID))
     return(NULL)
   })
 }
@@ -946,15 +987,33 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
        
        summary_url <- paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=clinvar&id=",
                              id_str, "&retmode=json")
-       summary_resp <- httr::GET(summary_url)
-       summary_json <- jsonlite::fromJSON(httr::content(summary_resp, "text", encoding = "UTF-8"),
-                                          simplifyVector = FALSE)
-       
-       results <- summary_json$result
-       if (is.null(results)) next
-       
-       uid_list <- results$uids
-       if (is.null(uid_list)) next
+       # NCBI caps unauthenticated eutils at 3 req/s. Over that it answers with
+       # an error payload carrying no $result, and the old code did a bare
+       # `next` -- silently dropping a whole 200-ID batch. That is how LDLR
+       # extracted 203 of 1731 records with no error line anywhere. Retry the
+       # batch, then record the loss rather than returning a short table.
+       summary_json <- NULL
+       for (attempt in seq_len(4L)) {
+         summary_resp <- tryCatch(httr::GET(summary_url), error = function(e) NULL)
+         if (!is.null(summary_resp) && httr::status_code(summary_resp) == 200L) {
+           summary_json <- tryCatch(
+             jsonlite::fromJSON(httr::content(summary_resp, "text", encoding = "UTF-8"),
+                                simplifyVector = FALSE),
+             error = function(e) NULL)
+           if (!is.null(summary_json$result)) break
+           summary_json <- NULL
+         }
+         Sys.sleep(min(30, 2^attempt))
+       }
+       results <- if (is.null(summary_json)) NULL else summary_json$result
+       uid_list <- if (is.null(results)) NULL else results$uids
+       if (is.null(results) || is.null(uid_list)) {
+         message("[ClinVar] BATCH FAILED for ", gene_name, " (ids ", start, "-",
+                 min(start + batch_size - 1, length(ids)), " of ", length(ids), ")")
+         options(varviz.clinvar_batch_failed =
+                   union(getOption("varviz.clinvar_batch_failed", character(0)), gene_name))
+         next
+       }
        
        # Debug: save raw API response for first batch
        if (start == 1) {
@@ -1271,7 +1330,9 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
        # curated to the same standard as ft_act_site — see Famiglietti et al.
        # Hum Mutat 2019;40:2295-2304 (doi:10.1002/humu.23738) — and feed PM1.
        req_url_query(fields = "ft_signal,ft_disulfid,ft_mod_res,ft_act_site,ft_binding,ft_site,ft_mutagen,ft_lipid,ft_carbohyd,ft_crosslnk,ft_transmem,ft_topo_dom,ft_intramem") %>%
-       req_timeout(20) %>%
+       req_timeout(180) %>%
+       req_retry(max_tries = 5, retry_on_failure = TRUE,
+                 backoff = function(i) min(60, 5 * 2^(i - 1))) %>%
        req_error(body = function(resp) paste("Error:", resp_status(resp))) %>%
        req_perform()
      
@@ -2215,6 +2276,21 @@ fetch_ensembl_exons <- function(gene_symbol) {
   cache_key <- paste0("exons_", gene_symbol)
   cached <- cache_get("ucsc_cons", cache_key)
   if (!is.null(cached)) return(cached)
+
+  # Out-of-band exon cache. A failure here is not cosmetic: the caller derives
+  # chrom_for_gene from it, and a NA chrom silently disables the dbNSFP and
+  # REVEL preloads, so conservation reads as GERP=NA and PM1/PP3 collapse with
+  # the row count intact. rest.ensembl.org returns sporadic 500s/timeouts even
+  # when healthy from curl, so allow a primed copy to stand in.
+  ov <- file.path(ENSEMBL_OVERRIDE_DIR, paste0(gene_symbol, "_exons.rds"))
+  if (file.exists(ov)) {
+    got <- tryCatch(readRDS(ov), error = function(e) NULL)
+    if (!is.null(got) && nrow(got) > 0) {
+      message("[UCSC Cons] Using local exon table: ", ov)
+      cache_set("ucsc_cons", cache_key, got)
+      return(got)
+    }
+  }
 
   # Ensembl REST is occasionally slow — retry transient timeouts/5xx with
   # backoff (mirrors the gnomAD path) so one slow response doesn't drop the
@@ -5160,11 +5236,19 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       # essentially never tolerates this change at a conserved column -> PM1.
       # Reproduces DOLPHIN's deltas within the int8 quantisation step (validated
       # SNCA/CASR, rho = 1.000) but needs no network and no rate limit, so unlike
-      # the retired API it also runs in the dual-pass benchmark. Last-resort
-      # pathway: only consulted when no other path fired. Orthogonal to gnomAD
-      # frequency and to ClinVar. Disable with options(varviz.mds_pm1 = FALSE).
+      # the retired API it also runs in the dual-pass benchmark. Orthogonal to
+      # gnomAD frequency and to ClinVar. Disable with options(varviz.mds_pm1 = FALSE).
+      #
+      # MDS is evaluated for EVERY variant, in two roles:
+      #   originate  — no earlier path fired: MDS sets PM1 at its own tier.
+      #   corroborate — an earlier path already fired: the MDS tier's weight is
+      #                 added to that pathway's, capped at Strong. Two independent
+      #                 lines of domain evidence concurring is what PM1 asks for,
+      #                 and unlike the ClinVar-hotspot upgrade below this route to
+      #                 PM1_strong carries no clinical annotation, so it survives
+      #                 strip_clinvar_tags() intact.
       mds_val <- NA_real_
-      if (pm1_pathway_val == "" && !is.null(MDS_TABLE) &&
+      if (!is.null(MDS_TABLE) &&
           isTRUE(getOption("varviz.mds_pm1", getOption("varviz.dolphin_pm1", TRUE)))) {
         aa <- tryCatch(sub("^p\\.", "", aa3to1(mut)), error = function(e) "")
         m  <- regmatches(aa, regexec("^([A-Z])([0-9]+)([A-Z])$", aa))[[1]]
@@ -5175,29 +5259,61 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
             pssm_delta(MDS_TABLE, mds_entry_name, pos, wt_aa, mt_aa)$delta,
             error = function(e) NA_real_)
         }
+
+        # Shared PM1 strength ladder, in Tavtigian points.
+        PM1_TAGS <- c("PM1_strong", "PM1_moderate_plus", "PM1")
+        pm1_pts  <- function(tag) switch(tag, PM1 = 2L, PM1_moderate_plus = 3L,
+                                              PM1_strong = 4L, 0L)
+        pts_tag  <- function(p) if (p >= 4L) "PM1_strong" else
+                                if (p == 3L) "PM1_moderate_plus" else "PM1"
+
+        base_hit <- intersect(PM1_TAGS, acmg_tags)
+        base_pts <- if (length(base_hit)) pm1_pts(base_hit[1]) else 0L
+
+        # Tiered by the substitution's own LR+ (calibrated on 33,216 genome-wide
+        # ClinVar two-star variants): <= -4 Moderate (+2, LR+ 5.4), <= -8
+        # Moderate-plus (+3, LR+ 11.2), <= -12 Strong (+4, LR+ 39.0). On by
+        # default; disable with options(varviz.mds_tiered = FALSE).
+        mds_tiered <- isTRUE(getOption("varviz.mds_tiered", TRUE))
+        mds_pts <- 0L
         if (!is.na(mds_val) && mds_val <= MDS_PM1_THRESHOLD) {
-          # Tiered by the substitution's own LR+: <= -4 is Moderate (+2); the
-          # <= -8 tail is Moderate-plus (+3, LR+ ~11 on VariBench, and the tail
-          # is ~2.1x enriched for functional/DMS damage). On by default; the
-          # tier resolves +129 Pass-Blind VUS at no specificity cost. Disable
-          # with options(varviz.mds_tiered = FALSE).
-          mds_tiered <- isTRUE(getOption("varviz.mds_tiered", TRUE))
-          if (mds_tiered && mds_val <= MDS_PM1_STRONG_THRESHOLD) {
-            acmg_tags <- c(acmg_tags, "PM1_strong")          # <= -12, LR+ ~39
-          } else if (mds_tiered && mds_val <= MDS_PM1_MODPLUS_THRESHOLD) {
-            acmg_tags <- c(acmg_tags, "PM1_moderate_plus")   # <= -8, LR+ ~11
-          } else {
-            acmg_tags <- c(acmg_tags, "PM1")                 # <= -4, LR+ ~5
+          mds_pts <- if (mds_tiered && mds_val <= MDS_PM1_STRONG_THRESHOLD) 4L
+                     else if (mds_tiered && mds_val <= MDS_PM1_MODPLUS_THRESHOLD) 3L
+                     else 2L
+        }
+
+        if (mds_pts > 0L) {
+          new_pts <- if (base_pts > 0L) min(base_pts + mds_pts, 4L) else mds_pts
+          acmg_tags <- acmg_tags[!acmg_tags %in% PM1_TAGS]
+          acmg_tags <- c(acmg_tags, pts_tag(new_pts))
+          role <- if (base_pts > 0L) "corroborates" else "originates"
+          pm1_pathway_val <- if (nzchar(pm1_pathway_val))
+                               paste0(pm1_pathway_val, "+mds") else "mds"
+
+          # Release conservation back to PP3 where MDS can carry the upgrade.
+          # Paths 0/1/3a reach PM1_strong by spending cons_strong, which then
+          # suppresses the conservation tier of PP3 to avoid double-counting the
+          # same signal. When MDS also fires, the pathway's own PM1 (+2) plus the
+          # MDS tier (+2 at minimum) already reaches Strong, so conservation is
+          # no longer load-bearing for PM1 and may do its proper work in PP3.
+          # MDS is substitution-specific -- M(col,mut) - M(col,wt) -- where
+          # PhyloP/PhastCons/GERP/ConSurf are position-specific and cannot
+          # express which substitution the family tolerates, so the two are not
+          # the same evidence. Disable with options(varviz.mds_frees_cons = FALSE).
+          if (base_pts > 0L && isTRUE(cons_used_for_pm1) &&
+              isTRUE(getOption("varviz.mds_frees_cons", TRUE))) {
+            cons_used_for_pm1 <- FALSE
+            message(sprintf("[PM1] MDS carries the upgrade for %s %s; conservation released to PP3",
+                            gene_name_for_api, mut))
           }
-          pm1_pathway_val <- "mds"
-          message(sprintf("[PM1] MDS fires PM1 for %s %s (delta %.2f <= %d)",
-                          gene_name_for_api, mut, mds_val, MDS_PM1_THRESHOLD))
-        } else if (is.na(mds_val)) {
-          # Residue not in any Pfam domain (or entry/AA unresolved). Record that
-          # Path 4 was attempted but could not score, so a blank pathway is not
-          # read as "MDS said no". No PM1 tag; classification unaffected. Only
-          # ever appears where no pathway fired (strip_clinvar_tags reacts to
-          # clinvar_hotspot only, so this is non-circular for the benchmark).
+
+          message(sprintf("[PM1] MDS %s PM1 for %s %s (delta %.2f; %d + %d -> %d pts)",
+                          role, gene_name_for_api, mut, mds_val,
+                          base_pts, mds_pts, new_pts))
+        } else if (is.na(mds_val) && !nzchar(pm1_pathway_val)) {
+          # Residue not in any Pfam domain (or entry/AA unresolved) and nothing
+          # else fired. Record that Path 4 was attempted but could not score, so
+          # a blank pathway is not read as "MDS said no". No PM1 tag.
           pm1_pathway_val <- "mds_unavailable"
         }
         # else: scored but above threshold -> tolerated at that column, no PM1.
@@ -5250,6 +5366,16 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
             # (family/domain constraint vs clinical clustering), so this is
             # corroboration, not double-counting. Pathway is deliberately
             # preserved so the base PM1 keeps its non-circular provenance ("mds").
+            #
+            # The strength added here IS ClinVar-derived, so record the
+            # pre-upgrade tag in the pathway string. strip_clinvar_tags() reads
+            # it back and demotes to that tag under Pass-Blind, leaving only the
+            # non-circular base strength. Without this the blind arm silently
+            # keeps a Strong PM1 that only ClinVar earned.
+            prior_pm1 <- intersect(c("PM1_moderate_plus", "PM1"), acmg_tags)[1]
+            if (!is.na(prior_pm1))
+              pm1_pathway_val <- paste0(pm1_pathway_val, "+hotspot_upgrade(",
+                                        prior_pm1, ")")
             acmg_tags <- acmg_tags[!acmg_tags %in% c("PM1", "PM1_moderate_plus")]
             acmg_tags <- c(acmg_tags, "PM1_strong")
             message("[PM1] Neighborhood \u00b115aa PS-significant upgrade to PM1_strong: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
