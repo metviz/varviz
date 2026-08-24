@@ -1,0 +1,2 @@
+gene	p_notation	pm1_pathway	tags_full	tags_blind	varviz_classification_full	varviz_pts_full	varviz_rule_full	varviz_classification_blind	varviz_pts_blind	varviz_rule_blind
+RDH12	p.R239W	clinvar_hotspot	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM2,PP2,PP3_moderate	Likely Pathogenic	10	3 PM	VUS-High	5	score 5 pts

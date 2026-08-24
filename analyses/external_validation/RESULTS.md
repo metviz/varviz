@@ -44,22 +44,25 @@ Sanity check: BRAF c.1799T>A resolves to p.V600E.
 
 ## 2. VarViz result
 
-Run: `analyses/ps_external/`, harness `analyses/ps_final_harness.R` with
-`VARVIZ_UNIVERSE=analyses/derived/variant_universe_external163.tsv`.
-44/44 genes, 65/65 variants, all four data-source sentinels clean.
+Run: `analyses/ps_external_moi/` (inheritance assigned per gene), harness
+`analyses/ps_final_harness.R` with
+`VARVIZ_UNIVERSE=analyses/derived/variant_universe_external163_moi.tsv`.
+44/44 genes, 65/65 variants, all four data-source sentinels clean. WNT10A is
+held monoallelic throughout (see limitation 2); its rows come from the
+all-monoallelic run `analyses/ps_external/`, which is bit-identical elsewhere.
 
 | | Pathogenic | Likely Path | VUS-High | VUS-Mid | P+LP |
 |---|---|---|---|---|---|
-| Pass-Full | 36 | 20 | 8 | 1 | **56/65 = 86.2%** |
-| Pass-Blind | 7 | 38 | 15 | 5 | **45/65 = 69.2%** |
+| Pass-Full | 37 | 20 | 7 | 1 | **57/65 = 87.7%** |
+| Pass-Blind | 7 | 38 | 17 | 3 | **45/65 = 69.2%** |
 
 42/65 (64.6%) change class under ClinVar blinding — a larger penalty than the
 14-gene benchmark, because this cohort leans harder on ClinVar lookups.
 
 Excluding COL1A1/COL1A2 (Gly-X-Y motif genes that favour MDS), on the
-remaining 50: Pass-Full 84.0%, Pass-Blind 64.0%. Not a collagen artifact.
+remaining 50: Pass-Full 86.0%, Pass-Blind 64.0%. Not a collagen artifact.
 
-Per proband: the causative variant reaches P/LP in 70/83 (84.3%) Pass-Full,
+Per proband: the causative variant reaches P/LP in 71/83 (85.5%) Pass-Full,
 58/83 (69.9%) Pass-Blind.
 
 ### PM1 pathway distribution (Pass-Full)
@@ -77,11 +80,11 @@ Per proband: the causative variant reaches P/LP in 70/83 (84.3%) Pass-Full,
 | mds_unavailable | 1 |
 | none | 2 |
 
-**MDS originates or contributes PM1 on 32/65 (49%)** — the largest single
+**MDS originates or contributes PM1 on 35/65 (53.8%)** — the largest single
 pathway, larger than clinvar_hotspot, on genes with no overlap with the
 development set.
 
-### The 9 misses
+### The 8 misses
 
 | gene | variant | VarViz | PM1 pathway | other tools |
 |---|---|---|---|---|
@@ -90,12 +93,11 @@ development set.
 | ESRRB | p.E167K | VUS-High | none | — |
 | P3H1 | p.Q714R | VUS-High | clinvar_hotspot | Franklin LP |
 | TBX3 | p.A549D | VUS-High | mds_unavailable | — |
-| WFS1 | p.K193Q | VUS-High | clinvar_hotspot | — |
 | WNT10A | p.R70W | VUS-High | mds | — |
 | WNT10A | p.R171C | VUS-High | mds | Franklin Benign |
 | WNT10A | p.G213S | VUS-High | mds | Franklin Benign |
 
-Three of nine are WNT10A hypomorphic alleles with reduced penetrance and
+Three of eight are WNT10A hypomorphic alleles with reduced penetrance and
 appreciable population frequency, where VUS-High is arguably better supported
 than Franklin's Benign. TBX3 p.A549D uses a non-MANE transcript, so
 `mds_unavailable` may reflect the numbering mismatch rather than a real miss.
@@ -135,14 +137,15 @@ transcripts.
 
 | | P/LP | sensitivity | Benign-side calls |
 |---|---|---|---|
-| VarViz Pass-Full | 55/63 | **87.3%** | 0 |
+| VarViz Pass-Full | 56/63 | **88.9%** | 0 |
 | VarViz Pass-Blind | 45/63 | **71.4%** | 0 |
 | InterVar | 20/63 | **31.7%** | 1 |
 
 InterVar returns Uncertain significance on 42 of 63 and never reaches
 Pathogenic on any variant in this set — Likely Pathogenic is its ceiling here.
-VarViz Pass-Blind, with all ClinVar-derived evidence withheld, still more than
-doubles InterVar's rate.
+InterVar's automated rule set is deliberately conservative and defaults to
+Uncertain significance wherever its criteria are not met, so the gap reflects
+the breadth of evidence each engine brings rather than a ranking of accuracy.
 
 **The re-run validates the published data.** All 9 overlapping variants agree
 exactly between the paper's truncated InterVar export and the fresh wInterVar
@@ -204,13 +207,18 @@ about workflow position without claiming a user study.
 1. **No benign arm.** Every variant is causative by construction, so this
    measures sensitivity only — no specificity, no FPR, no AUC. A classifier
    returning Pathogenic for everything scores 100%.
-2. **Single parameter set.** All 44 genes ran monoallelic with PM2 < 1e-4,
-   while roughly 19 are recessive (ABCA4, USH2A, MYO15A, OTOF, PCDH15,
-   TMPRSS3, SLC26A4, GALC, RPE65, TULP1, CNGA3, RDH12, CRB1, PJVK, ESRRB,
-   MYO7A, WNT10A, FAM20A, ENAM). Recessive genes tolerate higher allele
-   frequencies, so this over-fires PM2 in the pathogenic direction.
-   Inheritance hints from LIRICAL zygosity and OMIM are in
-   `inheritance_hints.tsv` for a corrected run. EDA is X-linked and was
+2. **Inheritance is assigned, not assumed — but four assignments are judgement
+   calls.** 26 biallelic / 18 monoallelic, from observed proband zygosity plus
+   curated gene-disease MOI (`inheritance_assignment.tsv`, with a confidence
+   grade per gene). FAM20A, KREMEN1, TYR and WNT10A rest on curated recessive
+   inheritance that the het-only observed zygosity does not corroborate. Three
+   of the four change nothing either way. **WNT10A changes three variants and
+   is held monoallelic in every figure above.** Taking it biallelic gives
+   Pass-Full 92.3% and Pass-Blind 73.8% — the entire Pass-Blind difference
+   rests on that one assignment, which is why the conservative reading is
+   reported. Control: the 33 monoallelic-gene variants are bit-identical
+   between the original and corrected runs, so the difference is the
+   correction, not API drift. EDA is X-linked and was
    separately re-run in the app at prevalence 1 in 25,000, hetA 0.1, hetG 0.8,
    penetrance 1.0 (af_cutoff 1.6e-6); the call did not change because the
    variant is absent from gnomAD.

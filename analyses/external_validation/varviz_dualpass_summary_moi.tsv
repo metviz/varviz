@@ -1,0 +1,66 @@
+gene	p_notation	pm1_pathway	tags_full	tags_blind	varviz_classification_full	varviz_pts_full	varviz_rule_full	varviz_classification_blind	varviz_pts_blind	varviz_rule_blind
+ABCA4	p.E1087G	mds+hotspot_upgrade(PM1)	PM1_strong, PM2, PP2, PS1_moderate, PP3_strong	PM2,PP2,PP3_strong,PM1	Pathogenic	13	3 PS	Likely Pathogenic	9	1 PS + 2 PM
+ABCA4	p.G607R	clinvar_hotspot	PM1, PM2, PP2, PS1_supporting, PP3_strong	PM2,PP2,PP3_strong	Pathogenic	10	2 PS	Likely Pathogenic	7	1 PS + 1 PM
+ADAMTS1	p.E752K		PM2, PP3	PM2,PP3	VUS-Mid	3	score 3 pts	VUS-Mid	3	score 3 pts
+AXIN2	p.I195T	clinvar_hotspot	PM1, PM2, PP2, PP3	PM2,PP2,PP3	Likely Pathogenic	6	2 PM + 2 PP	VUS-High	4	score 4 pts
+BMP1	p.C322Y	mds	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_moderate	PM1_strong,PM2,PP2,PP3_moderate	Pathogenic	11	1 PS + 2 PM + 3 PP	Likely Pathogenic	9	1 PS + 1 PM
+BMP4	p.R309W	mds	PM1_moderate_plus, PM2, PP2, PP3	PM1_moderate_plus,PM2,PP2,PP3	Likely Pathogenic	7	2 PM + 2 PP	Likely Pathogenic	7	2 PM + 2 PP
+BRAF	p.Q257R	ccrs+mds	PM1_strong, PM2, PP2, PS1, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	15	3 PS	Pathogenic	11	2 PS
+BRAF	p.V600E	ccrs	PM1_strong, PM2, PP2, PM5_supporting, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	12	2 PS	Pathogenic	11	2 PS
+CNGA3	p.R283Q	clinvar_hotspot	PM1, PM2, PP2, PS1, PP3	PM2,PP2,PP3	Pathogenic	10	1 PS + 2 PM + 2 PP	VUS-High	4	score 4 pts
+CNNM4	p.G492D	mds	PM1, PM2, PP2, PS1_moderate, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	11	2 PS	Likely Pathogenic	9	1 PS + 2 PM
+COL1A1	p.G1040S	mds	PM1, PM2, PP2, PS1, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	13	2 PS	Likely Pathogenic	9	1 PS + 2 PM
+COL1A1	p.G1076S	mds	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	12	1 PS + 3 PM	Likely Pathogenic	9	1 PS + 2 PM
+COL1A1	p.G260D	ccrs+mds	PM1_strong, PM2, PP2, PM5, PP5, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	14	2 PS	Pathogenic	11	2 PS
+COL1A1	p.G332R	mds	PM1_moderate_plus, PM2, PP2, PS1, PP3_strong	PM1_moderate_plus,PM2,PP2,PP3_strong	Pathogenic	14	2 PS	Likely Pathogenic	10	1 PS + 2 PM
+COL1A1	p.G374A	mds+hotspot_upgrade(PM1)	PM1_strong, PM2, PP2, PS1, PP3_moderate	PM2,PP2,PP3_moderate,PM1	Pathogenic	13	2 PS	Likely Pathogenic	7	2 PM + 2 PP
+COL1A1	p.G746S	ccrs	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	13	2 PS	Pathogenic	11	2 PS
+COL1A1	p.G821S	mds	PM1_moderate_plus, PM2, PP2, PS1, PP3_strong	PM1_moderate_plus,PM2,PP2,PP3_strong	Pathogenic	14	2 PS	Likely Pathogenic	10	1 PS + 2 PM
+COL1A1	p.G866S	mds	PM1, PM2, PP2, PS1, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	13	2 PS	Likely Pathogenic	9	1 PS + 2 PM
+COL1A1	p.S1199G	clinvar_hotspot	PM1, PM2, PP2, BP4	PM2,PP2,BP4	VUS-High	4	score 4 pts	VUS-Mid	2	score 2 pts
+COL1A2	p.G190R	mds+hotspot_upgrade(PM1_moderate_plus)	PM1_strong, PM2, PP2, PS1_moderate, PP3_strong	PM2,PP2,PP3_strong,PM1_moderate_plus	Pathogenic	13	3 PS	Likely Pathogenic	10	1 PS + 2 PM
+COL1A2	p.G358S	clinvar_hotspot	PM1, PM2, PP2, PS1, PP3_strong	PM2,PP2,PP3_strong	Pathogenic	13	2 PS	Likely Pathogenic	7	1 PS + 1 PM
+COL1A2	p.G712S	clinvar_hotspot	PM1, PM2, PP2, PS1_moderate, PP3_strong	PM2,PP2,PP3_strong	Pathogenic	11	2 PS	Likely Pathogenic	7	1 PS + 1 PM
+COL1A2	p.G766V	clinvar_hotspot	PM1, PM2, PP2, PS1_moderate, PP3_strong	PM2,PP2,PP3_strong	Pathogenic	11	2 PS	Likely Pathogenic	7	1 PS + 1 PM
+COL1A2	p.G772S	clinvar_hotspot	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM2,PP2,PP3_moderate	Likely Pathogenic	10	3 PM	VUS-High	5	score 5 pts
+COL1A2	p.S251F	ccrs+hotspot_upgrade(PM1)	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3	PM2,PP2,PP3,PM1	Pathogenic	10	1 PS + 2 PM + 3 PP	Likely Pathogenic	6	2 PM + 2 PP
+CRB1	p.C790F	clinvar_hotspot	PM1, PM2, PP2, PP3_moderate	PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	VUS-High	5	score 5 pts
+DSPP	p.P17L	ccrs	PM1_strong, PM2, PP2, PS1_moderate, PP3_moderate	PM1_strong,PM2,PP2,PP3_moderate	Pathogenic	11	2 PS	Likely Pathogenic	9	1 PS + 1 PM
+EDA	p.R276C	clinvar_hotspot	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM2,PP2,PP3_moderate	Likely Pathogenic	10	3 PM	VUS-High	5	score 5 pts
+EDARADD	p.N138I	mds+hotspot_upgrade(PM1)	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_moderate	PM2,PP2,PP3_moderate,PM1	Pathogenic	11	1 PS + 2 PM + 3 PP	Likely Pathogenic	7	2 PM + 2 PP
+ENAM	p.T533S	mds	PM1, PM2, PP2, PP3	PM1,PM2,PP2,PP3	Likely Pathogenic	6	2 PM + 2 PP	Likely Pathogenic	6	2 PM + 2 PP
+ESRRB	p.E167K		PM2, PP2, PP3_moderate	PM2,PP2,PP3_moderate	VUS-High	5	score 5 pts	VUS-High	5	score 5 pts
+FAM20A	p.R361C	mds	PM1_moderate_plus, PM2, PP2, PP3_moderate	PM1_moderate_plus,PM2,PP2,PP3_moderate	Likely Pathogenic	8	2 PM + 2 PP	Likely Pathogenic	8	2 PM + 2 PP
+FAM20A	p.R411W	mds	PM1_moderate_plus, PM2, PP2, PM5_supporting, PP5, PP3_moderate	PM1_moderate_plus,PM2,PP2,PP3_moderate	Likely Pathogenic	10	3 PM	Likely Pathogenic	8	2 PM + 2 PP
+FGFR2	p.S354C	ccrs+hotspot_upgrade(PM1)	PM1_strong, PM2, PP2, PS1, PP3	PM2,PP2,PP3,PM1	Pathogenic	12	2 PS	Likely Pathogenic	6	2 PM + 2 PP
+GALC	p.R531L	clinvar_hotspot	PM1, PM2, PP2, PM5_supporting, PP5, PP3	PM2,PP2,PP3	Likely Pathogenic	8	3 PM	VUS-High	4	score 4 pts
+KCNE1	p.E43K	mds	PM1, PM2, PP2, PP3_moderate, BP1	PM1,PM2,PP2,PP3_moderate,BP1	Likely Pathogenic	6	2 PM + 2 PP	Likely Pathogenic	6	2 PM + 2 PP
+KREMEN1	p.C111S	uniprot_domain+mds	PM1_strong, PM2, PP3_strong	PM1_strong,PM2,PP3_strong	Pathogenic	10	2 PS	Pathogenic	10	2 PS
+LRP6	p.D411Y	clinvar_hotspot	PM1, PM2, PP2, PM5_supporting, PP5, PP3_strong	PM2,PP2,PP3_strong	Pathogenic	11	1 PS + 3 PM	Likely Pathogenic	7	1 PS + 1 PM
+MYO15A	p.E1593K	mds	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	12	1 PS + 3 PM	Likely Pathogenic	9	1 PS + 2 PM
+MYO7A	p.T165M	uniprot_site+mds	PM1_strong, PM2, PP2, PM5, PP5, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	14	2 PS	Pathogenic	11	2 PS
+OTOF	p.G371R	mds	PM1_moderate_plus, PM2, PP2, PS1_moderate, PP3_moderate	PM1_moderate_plus,PM2,PP2,PP3_moderate	Pathogenic	10	1 PS + 2 PM + 2 PP	Likely Pathogenic	8	2 PM + 2 PP
+P3H1	p.Q714R	clinvar_hotspot	PM1, PM2, PP2, BP4	PM2,PP2,BP4	VUS-High	4	score 4 pts	VUS-Mid	2	score 2 pts
+PAX9	p.P20L	mds	PM1_moderate_plus, PM2, PP2, PS1_moderate, PP3_strong	PM1_moderate_plus,PM2,PP2,PP3_strong	Pathogenic	12	2 PS	Likely Pathogenic	10	1 PS + 2 PM
+PAX9	p.R77Q	ccrs	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	13	2 PS	Pathogenic	11	2 PS
+PCDH15	p.G53D	mds	PM1_moderate_plus, PM2, PP2, PP3_strong	PM1_moderate_plus,PM2,PP2,PP3_strong	Likely Pathogenic	10	1 PS + 2 PM	Likely Pathogenic	10	1 PS + 2 PM
+PITX2	p.A145P	clinvar_hotspot	PM1, PM2, PP2, PP3_moderate	PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	VUS-High	5	score 5 pts
+PJVK	p.I61T	mds	PM1, PM2, PP2, PP3	PM1,PM2,PP2,PP3	Likely Pathogenic	6	2 PM + 2 PP	Likely Pathogenic	6	2 PM + 2 PP
+PTCH1	p.R13C	clinvar_hotspot	PM1, PM2, PP2, PP3	PM2,PP2,PP3	Likely Pathogenic	6	2 PM + 2 PP	VUS-High	4	score 4 pts
+PTH1R	p.G330V	ccrs	PM1, PM2, PP2, PP3_moderate	PM1,PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	Likely Pathogenic	7	2 PM + 2 PP
+RDH12	p.R239W	clinvar_hotspot	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM2,PP2,PP3_moderate	Likely Pathogenic	10	3 PM	VUS-High	5	score 5 pts
+RGS9	p.W299R	clinvar_hotspot	PM1, PM2, PP2, PS1_moderate, PP3_moderate	PM2,PP2,PP3_moderate	Pathogenic	9	1 PS + 2 PM + 2 PP	VUS-High	5	score 5 pts
+RPE65	p.P35L	mds	PM1, PM2, PP2, PP3_strong	PM1,PM2,PP2,PP3_strong	Likely Pathogenic	9	1 PS + 2 PM	Likely Pathogenic	9	1 PS + 2 PM
+RPE65	p.P363R	mds	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	12	1 PS + 3 PM	Likely Pathogenic	9	1 PS + 2 PM
+SLC26A4	p.G334V	mds	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	12	1 PS + 3 PM	Likely Pathogenic	9	1 PS + 2 PM
+TBX3	p.A549D	mds_unavailable	PM2, PP2, PP3	PM2,PP2,PP3	VUS-High	4	score 4 pts	VUS-High	4	score 4 pts
+TMPRSS3	p.G244D	mds	PM1, PM2, PP2, PS1_moderate, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	11	2 PS	Likely Pathogenic	9	1 PS + 2 PM
+TP63	p.R243W	mds+hotspot_upgrade(PM1_moderate_plus)	PM1_strong, PM2, PP2, PS1, PP3_strong	PM2,PP2,PP3_strong,PM1_moderate_plus	Pathogenic	15	3 PS	Likely Pathogenic	10	1 PS + 2 PM
+TULP1	p.N349K	mds	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	12	1 PS + 3 PM	Likely Pathogenic	9	1 PS + 2 PM
+TULP1	p.R400Q	mds	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM1,PM2,PP2,PP3_moderate	Likely Pathogenic	10	3 PM	Likely Pathogenic	7	2 PM + 2 PP
+TYR	p.G419R	clinvar_hotspot	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM2,PP2,PP3_strong	Pathogenic	12	1 PS + 3 PM	Likely Pathogenic	7	1 PS + 1 PM
+USH2A	p.G4976S	clinvar_hotspot	PM1, PM2, PP2, PP3	PM2,PP2,PP3	Likely Pathogenic	6	2 PM + 2 PP	VUS-High	4	score 4 pts
+WFS1	p.K193Q	clinvar_hotspot	PM1, PM2, PP2, PP3_moderate	PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	VUS-High	5	score 5 pts
+WNT10A	p.G213S	mds	PM1, PM2, PP2, PP3_moderate	PM1,PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	Likely Pathogenic	7	2 PM + 2 PP
+WNT10A	p.R171C	mds	PM1, PM2, PP2, PP3_moderate	PM1,PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	Likely Pathogenic	7	2 PM + 2 PP
+WNT10A	p.R70W	mds	PM1, PM2, PP2, PP3_moderate	PM1,PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	Likely Pathogenic	7	2 PM + 2 PP

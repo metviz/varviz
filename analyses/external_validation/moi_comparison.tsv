@@ -1,0 +1,66 @@
+gene	p_notation	inh_param	confidence	full_old	full_new	pts_old	pts_new	blind_old	blind_new	tags_old	tags_new
+ABCA4	p.E1087G	biallelic	high	Pathogenic	Pathogenic	13	13	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PS1_moderate, PP3_strong	PM1_strong, PM2, PP2, PS1_moderate, PP3_strong
+ABCA4	p.G607R	biallelic	high	Pathogenic	Pathogenic	10	10	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PS1_supporting, PP3_strong	PM1, PM2, PP2, PS1_supporting, PP3_strong
+ADAMTS1	p.E752K	monoallelic	medium	VUS-Mid	VUS-Mid	3	3	VUS-Mid	VUS-Mid	PM2, PP3	PM2, PP3
+AXIN2	p.I195T	monoallelic	high	Likely Pathogenic	Likely Pathogenic	6	6	VUS-High	VUS-High	PM1, PM2, PP2, PP3	PM1, PM2, PP2, PP3
+BMP1	p.C322Y	biallelic	medium	Pathogenic	Pathogenic	11	11	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_moderate	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_moderate
+BMP4	p.R309W	monoallelic	high	Likely Pathogenic	Likely Pathogenic	7	7	Likely Pathogenic	Likely Pathogenic	PM1_moderate_plus, PM2, PP2, PP3	PM1_moderate_plus, PM2, PP2, PP3
+BRAF	p.Q257R	monoallelic	high	Pathogenic	Pathogenic	15	15	Pathogenic	Pathogenic	PM1_strong, PM2, PP2, PS1, PP3_strong	PM1_strong, PM2, PP2, PS1, PP3_strong
+BRAF	p.V600E	monoallelic	high	Pathogenic	Pathogenic	12	12	Pathogenic	Pathogenic	PM1_strong, PM2, PP2, PM5_supporting, PP3_strong	PM1_strong, PM2, PP2, PM5_supporting, PP3_strong
+CNGA3	p.R283Q	biallelic	high	Pathogenic	Pathogenic	10	10	VUS-High	VUS-High	PM1, PM2, PP2, PS1, PP3	PM1, PM2, PP2, PS1, PP3
+CNNM4	p.G492D	biallelic	medium	Pathogenic	Pathogenic	11	11	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PS1_moderate, PP3_strong	PM1, PM2, PP2, PS1_moderate, PP3_strong
+COL1A1	p.G1040S	monoallelic	high	Pathogenic	Pathogenic	13	13	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PS1, PP3_strong	PM1, PM2, PP2, PS1, PP3_strong
+COL1A1	p.G1076S	monoallelic	high	Pathogenic	Pathogenic	12	12	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1, PM2, PP2, PM5, PP5, PP3_strong
+COL1A1	p.G260D	monoallelic	high	Pathogenic	Pathogenic	14	14	Pathogenic	Pathogenic	PM1_strong, PM2, PP2, PM5, PP5, PP3_strong	PM1_strong, PM2, PP2, PM5, PP5, PP3_strong
+COL1A1	p.G332R	monoallelic	high	Pathogenic	Pathogenic	14	14	Likely Pathogenic	Likely Pathogenic	PM1_moderate_plus, PM2, PP2, PS1, PP3_strong	PM1_moderate_plus, PM2, PP2, PS1, PP3_strong
+COL1A1	p.G374A	monoallelic	high	Pathogenic	Pathogenic	13	13	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PS1, PP3_moderate	PM1_strong, PM2, PP2, PS1, PP3_moderate
+COL1A1	p.G746S	monoallelic	high	Pathogenic	Pathogenic	13	13	Pathogenic	Pathogenic	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_strong	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_strong
+COL1A1	p.G821S	monoallelic	high	Pathogenic	Pathogenic	14	14	Likely Pathogenic	Likely Pathogenic	PM1_moderate_plus, PM2, PP2, PS1, PP3_strong	PM1_moderate_plus, PM2, PP2, PS1, PP3_strong
+COL1A1	p.G866S	monoallelic	high	Pathogenic	Pathogenic	13	13	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PS1, PP3_strong	PM1, PM2, PP2, PS1, PP3_strong
+COL1A1	p.S1199G	monoallelic	high	VUS-High	VUS-High	4	4	VUS-Mid	VUS-Mid	PM1, PM2, PP2, BP4	PM1, PM2, PP2, BP4
+COL1A2	p.G190R	monoallelic	high	Pathogenic	Pathogenic	13	13	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PS1_moderate, PP3_strong	PM1_strong, PM2, PP2, PS1_moderate, PP3_strong
+COL1A2	p.G358S	monoallelic	high	Pathogenic	Pathogenic	13	13	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PS1, PP3_strong	PM1, PM2, PP2, PS1, PP3_strong
+COL1A2	p.G712S	monoallelic	high	Pathogenic	Pathogenic	11	11	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PS1_moderate, PP3_strong	PM1, PM2, PP2, PS1_moderate, PP3_strong
+COL1A2	p.G766V	monoallelic	high	Pathogenic	Pathogenic	11	11	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PS1_moderate, PP3_strong	PM1, PM2, PP2, PS1_moderate, PP3_strong
+COL1A2	p.G772S	monoallelic	high	Likely Pathogenic	Likely Pathogenic	10	10	VUS-High	VUS-High	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM1, PM2, PP2, PM5, PP5, PP3_moderate
+COL1A2	p.S251F	monoallelic	high	Pathogenic	Pathogenic	10	10	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3
+CRB1	p.C790F	biallelic	medium	Likely Pathogenic	Likely Pathogenic	7	7	VUS-High	VUS-High	PM1, PM2, PP2, PP3_moderate	PM1, PM2, PP2, PP3_moderate
+DSPP	p.P17L	monoallelic	high	Pathogenic	Pathogenic	11	11	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PS1_moderate, PP3_moderate	PM1_strong, PM2, PP2, PS1_moderate, PP3_moderate
+EDA	p.R276C	monoallelic	medium	Likely Pathogenic	Likely Pathogenic	10	10	VUS-High	VUS-High	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM1, PM2, PP2, PM5, PP5, PP3_moderate
+EDARADD	p.N138I	monoallelic	medium	Pathogenic	Pathogenic	11	11	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_moderate	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_moderate
+ENAM	p.T533S	monoallelic	medium	Likely Pathogenic	Likely Pathogenic	6	6	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PP3	PM1, PM2, PP2, PP3
+ESRRB	p.E167K	biallelic	high	VUS-High	VUS-High	5	5	VUS-High	VUS-High	PM2, PP2, PP3_moderate	PM2, PP2, PP3_moderate
+FAM20A	p.R361C	biallelic	low	Likely Pathogenic	Likely Pathogenic	8	8	Likely Pathogenic	Likely Pathogenic	PM1_moderate_plus, PM2, PP2, PP3_moderate	PM1_moderate_plus, PM2, PP2, PP3_moderate
+FAM20A	p.R411W	biallelic	low	Likely Pathogenic	Likely Pathogenic	10	10	Likely Pathogenic	Likely Pathogenic	PM1_moderate_plus, PM2, PP2, PM5_supporting, PP5, PP3_moderate	PM1_moderate_plus, PM2, PP2, PM5_supporting, PP5, PP3_moderate
+FGFR2	p.S354C	monoallelic	high	Pathogenic	Pathogenic	12	12	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PS1, PP3	PM1_strong, PM2, PP2, PS1, PP3
+GALC	p.R531L	biallelic	medium	Likely Pathogenic	Likely Pathogenic	8	8	VUS-High	VUS-High	PM1, PM2, PP2, PM5_supporting, PP5, PP3	PM1, PM2, PP2, PM5_supporting, PP5, PP3
+KCNE1	p.E43K	biallelic	medium	Likely Pathogenic	Likely Pathogenic	6	6	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PP3_moderate, BP1	PM1, PM2, PP2, PP3_moderate, BP1
+KREMEN1	p.C111S	biallelic	low	Pathogenic	Pathogenic	10	10	Pathogenic	Pathogenic	PM1_strong, PM2, PP3_strong	PM1_strong, PM2, PP3_strong
+LRP6	p.D411Y	monoallelic	high	Pathogenic	Pathogenic	11	11	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PM5_supporting, PP5, PP3_strong	PM1, PM2, PP2, PM5_supporting, PP5, PP3_strong
+MYO15A	p.E1593K	biallelic	high	Pathogenic	Pathogenic	12	12	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1, PM2, PP2, PM5, PP5, PP3_strong
+MYO7A	p.T165M	biallelic	high	Pathogenic	Pathogenic	14	14	Pathogenic	Pathogenic	PM1_strong, PM2, PP2, PM5, PP5, PP3_strong	PM1_strong, PM2, PP2, PM5, PP5, PP3_strong
+OTOF	p.G371R	biallelic	high	Pathogenic	Pathogenic	10	10	Likely Pathogenic	Likely Pathogenic	PM1_moderate_plus, PM2, PP2, PS1_moderate, PP3_moderate	PM1_moderate_plus, PM2, PP2, PS1_moderate, PP3_moderate
+P3H1	p.Q714R	biallelic	medium	VUS-High	VUS-High	4	4	VUS-Mid	VUS-Mid	PM1, PM2, PP2, BP4	PM1, PM2, PP2, BP4
+PAX9	p.P20L	monoallelic	high	Pathogenic	Pathogenic	12	12	Likely Pathogenic	Likely Pathogenic	PM1_moderate_plus, PM2, PP2, PS1_moderate, PP3_strong	PM1_moderate_plus, PM2, PP2, PS1_moderate, PP3_strong
+PAX9	p.R77Q	monoallelic	high	Pathogenic	Pathogenic	13	13	Pathogenic	Pathogenic	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_strong	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_strong
+PCDH15	p.G53D	biallelic	high	Likely Pathogenic	Likely Pathogenic	10	10	Likely Pathogenic	Likely Pathogenic	PM1_moderate_plus, PM2, PP2, PP3_strong	PM1_moderate_plus, PM2, PP2, PP3_strong
+PITX2	p.A145P	monoallelic	medium	Likely Pathogenic	Likely Pathogenic	7	7	VUS-High	VUS-High	PM1, PM2, PP2, PP3_moderate	PM1, PM2, PP2, PP3_moderate
+PJVK	p.I61T	biallelic	high	Likely Pathogenic	Likely Pathogenic	6	6	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PP3	PM1, PM2, PP2, PP3
+PTCH1	p.R13C	monoallelic	high	Likely Pathogenic	Likely Pathogenic	6	6	VUS-High	VUS-High	PM1, PM2, PP2, PP3	PM1, PM2, PP2, PP3
+PTH1R	p.G330V	monoallelic	high	Likely Pathogenic	Likely Pathogenic	7	7	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PP3_moderate	PM1, PM2, PP2, PP3_moderate
+RDH12	p.R239W	biallelic	high	Likely Pathogenic	Likely Pathogenic	10	10	VUS-High	VUS-High	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM1, PM2, PP2, PM5, PP5, PP3_moderate
+RGS9	p.W299R	biallelic	high	Likely Pathogenic	Pathogenic	7	9	VUS-Mid	VUS-High	PM1, PP2, PS1_moderate, PP3_moderate	PM1, PM2, PP2, PS1_moderate, PP3_moderate
+RPE65	p.P35L	biallelic	high	Likely Pathogenic	Likely Pathogenic	9	9	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PP3_strong	PM1, PM2, PP2, PP3_strong
+RPE65	p.P363R	biallelic	high	Pathogenic	Pathogenic	12	12	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1, PM2, PP2, PM5, PP5, PP3_strong
+SLC26A4	p.G334V	biallelic	high	Pathogenic	Pathogenic	12	12	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1, PM2, PP2, PM5, PP5, PP3_strong
+TBX3	p.A549D	monoallelic	high	VUS-High	VUS-High	4	4	VUS-High	VUS-High	PM2, PP2, PP3	PM2, PP2, PP3
+TMPRSS3	p.G244D	biallelic	high	Pathogenic	Pathogenic	11	11	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PS1_moderate, PP3_strong	PM1, PM2, PP2, PS1_moderate, PP3_strong
+TP63	p.R243W	monoallelic	high	Pathogenic	Pathogenic	15	15	Likely Pathogenic	Likely Pathogenic	PM1_strong, PM2, PP2, PS1, PP3_strong	PM1_strong, PM2, PP2, PS1, PP3_strong
+TULP1	p.N349K	biallelic	high	Pathogenic	Pathogenic	12	12	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1, PM2, PP2, PM5, PP5, PP3_strong
+TULP1	p.R400Q	biallelic	high	Likely Pathogenic	Likely Pathogenic	10	10	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PM5, PP5, PP3_moderate	PM1, PM2, PP2, PM5, PP5, PP3_moderate
+TYR	p.G419R	biallelic	low	Pathogenic	Pathogenic	12	12	Likely Pathogenic	Likely Pathogenic	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1, PM2, PP2, PM5, PP5, PP3_strong
+USH2A	p.G4976S	biallelic	high	Likely Pathogenic	Likely Pathogenic	6	6	VUS-High	VUS-High	PM1, PM2, PP2, PP3	PM1, PM2, PP2, PP3
+WFS1	p.K193Q	biallelic	medium	VUS-High	Likely Pathogenic	5	7	VUS-Mid	VUS-High	PM1, PP2, PP3_moderate	PM1, PM2, PP2, PP3_moderate
+WNT10A	p.G213S	biallelic	low	VUS-High	Likely Pathogenic	5	7	VUS-High	Likely Pathogenic	PM1, PP2, PP3_moderate	PM1, PM2, PP2, PP3_moderate
+WNT10A	p.R171C	biallelic	low	VUS-High	Likely Pathogenic	5	7	VUS-High	Likely Pathogenic	PM1, PP2, PP3_moderate	PM1, PM2, PP2, PP3_moderate
+WNT10A	p.R70W	biallelic	low	VUS-High	Likely Pathogenic	5	7	VUS-High	Likely Pathogenic	PM1, PP2, PP3_moderate	PM1, PM2, PP2, PP3_moderate

@@ -1,0 +1,2 @@
+gene	p_notation	pm1_pathway	tags_full	tags_blind	varviz_classification_full	varviz_pts_full	varviz_rule_full	varviz_classification_blind	varviz_pts_blind	varviz_rule_blind
+MYO7A	p.T165M	uniprot_site+mds	PM1_strong, PM2, PP2, PM5, PP5, PP3_strong	PM1_strong,PM2,PP2,PP3_strong	Pathogenic	14	2 PS	Pathogenic	11	2 PS

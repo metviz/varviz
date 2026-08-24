@@ -1,0 +1,2 @@
+gene	p_notation	pm1_pathway	tags_full	tags_blind	varviz_classification_full	varviz_pts_full	varviz_rule_full	varviz_classification_blind	varviz_pts_blind	varviz_rule_blind
+BMP1	p.C322Y	mds	PM1_strong, PM2, PP2, PM5_supporting, PP5, PP3_moderate	PM1_strong,PM2,PP2,PP3_moderate	Pathogenic	11	1 PS + 2 PM + 3 PP	Likely Pathogenic	9	1 PS + 1 PM

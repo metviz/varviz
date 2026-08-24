@@ -322,6 +322,31 @@ classify_gene <- function(gene_name) {
   hl <- hl[!is.na(hl$prot_pos), , drop = FALSE]
   if (nrow(hl) == 0) return(NULL)
 
+  # Disease-model parameters. A universe may carry per-gene values in optional
+  # columns (inh_param, af_cutoff, prevalence_1_in_n, allelic_het, genetic_het,
+  # penetrance); where a column is absent the historical constant is used, so
+  # universes without them classify exactly as before. These feed the maximum
+  # credible allele frequency and therefore PM2, and inh_param additionally
+  # switches the BS1/PM2 thresholds (server.R:5118-5144), so a recessive gene
+  # run as monoallelic over-fires PM2.
+  .col <- function(name, default) {
+    if (!name %in% names(universe)) return(default)
+    v <- universe[[name]][universe$gene == gene_name]
+    v <- v[!is.na(v) & nzchar(as.character(v))]
+    if (length(v) == 0) default else v[1]
+  }
+  .p <- list(
+    inh_param         = as.character(.col("inh_param", "monoallelic")),
+    af_cutoff         = as.numeric(.col("af_cutoff", 0.0001)),
+    prevalence_1_in_n = as.numeric(.col("prevalence_1_in_n", 2000)),
+    allelic_het       = as.numeric(.col("allelic_het", 0.5)),
+    genetic_het       = as.numeric(.col("genetic_het", 1.0)),
+    penetrance        = as.numeric(.col("penetrance", 1.0))
+  )
+  cat(sprintf("  [%s] params: inh=%s af_cutoff=%.3g prev=1/%s hetA=%s hetG=%s pen=%s\n",
+              gene_name, .p$inh_param, .p$af_cutoff, .p$prevalence_1_in_n,
+              .p$allelic_het, .p$genetic_het, .p$penetrance))
+
   cat(sprintf("  [%s] uid=%s, %d variants, calling build_variant_table()...\n",
               gene_name, uid, nrow(hl)))
   t1 <- Sys.time()
@@ -329,13 +354,14 @@ classify_gene <- function(gene_name) {
     build_variant_table(
       hl, af_d, mean_d, afs_d, gnomad_d, clinvar_d,
       pfam_d, uniprot_d, ccrs_d,
-      af_cutoff = 0.0001, ac_cutoff = 13,
+      af_cutoff = .p$af_cutoff, ac_cutoff = 13,
       clinvar_missense = NULL, consurf_data = NULL,
       denovo_status     = "not_denovo",
-      inh_param         = "monoallelic",
+      inh_param         = .p$inh_param,
       cutoff_method     = "calc_af",
-      prevalence_1_in_n = 2000,
-      allelic_het = 0.5, genetic_het = 1.0, penetrance = 1.0,
+      prevalence_1_in_n = .p$prevalence_1_in_n,
+      allelic_het = .p$allelic_het, genetic_het = .p$genetic_het,
+      penetrance = .p$penetrance,
       pop_size = 125748, conf_interval = 0.95,
       clingen_disease_param = clingen_d$disease %||% "",
       clingen_moi_param     = clingen_d$moi     %||% "",
