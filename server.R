@@ -977,21 +977,31 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
      
      message("[ClinVar] Found ", length(ids), " variant IDs, fetching summaries...")
      
-     # Step 2: Fetch summaries in batches of 200
+     # Step 2: Fetch summaries in batches, splitting any batch NCBI refuses.
      all_rows <- list()
      batch_size <- 200
-     
-     for (start in seq(1, length(ids), by = batch_size)) {
-       batch_ids <- ids[start:min(start + batch_size - 1, length(ids))]
+
+     # Work queue of ID vectors rather than a fixed stride, so a refused batch
+     # can be split and re-queued instead of dropped.
+     queue <- unname(split(ids, ceiling(seq_along(ids) / batch_size)))
+     first_batch <- TRUE
+
+     while (length(queue)) {
+       batch_ids <- queue[[1]]
+       queue <- queue[-1]
        id_str <- paste(batch_ids, collapse = ",")
-       
+
        summary_url <- paste0("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=clinvar&id=",
                              id_str, "&retmode=json")
-       # NCBI caps unauthenticated eutils at 3 req/s. Over that it answers with
-       # an error payload carrying no $result, and the old code did a bare
-       # `next` -- silently dropping a whole 200-ID batch. That is how LDLR
-       # extracted 203 of 1731 records with no error line anywhere. Retry the
-       # batch, then record the loss rather than returning a short table.
+       # Two unrelated failures both answer HTTP 200 with no $result:
+       #   1. Rate limit -- NCBI caps unauthenticated eutils at 3 req/s. A
+       #      backoff clears it. The original bare `next` dropped a whole
+       #      200-ID batch silently; that is how LDLR extracted 203 of 1731.
+       #   2. Payload cap -- "Input XML size is N bytes ... the max size is
+       #      10MB". Deterministic: EDA's third batch is 12.15MB, so all four
+       #      retries fail identically. Only splitting the batch helps.
+       # Retry first (covers 1), then split (covers 2), and record a loss only
+       # when a single ID still fails.
        summary_json <- NULL
        for (attempt in seq_len(4L)) {
          summary_resp <- tryCatch(httr::GET(summary_url), error = function(e) NULL)
@@ -1008,15 +1018,24 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
        results <- if (is.null(summary_json)) NULL else summary_json$result
        uid_list <- if (is.null(results)) NULL else results$uids
        if (is.null(results) || is.null(uid_list)) {
-         message("[ClinVar] BATCH FAILED for ", gene_name, " (ids ", start, "-",
-                 min(start + batch_size - 1, length(ids)), " of ", length(ids), ")")
+         if (length(batch_ids) > 1L) {
+           mid <- length(batch_ids) %/% 2L
+           message("[ClinVar] batch of ", length(batch_ids), " refused for ", gene_name,
+                   "; splitting into ", mid, " + ", length(batch_ids) - mid)
+           queue <- c(list(batch_ids[seq_len(mid)],
+                           batch_ids[(mid + 1L):length(batch_ids)]), queue)
+           next
+         }
+         message("[ClinVar] BATCH FAILED for ", gene_name, " (id ", batch_ids,
+                 " of ", length(ids), " total)")
          options(varviz.clinvar_batch_failed =
                    union(getOption("varviz.clinvar_batch_failed", character(0)), gene_name))
          next
        }
        
        # Debug: save raw API response for first batch
-       if (start == 1) {
+       if (first_batch) {
+         first_batch <- FALSE
          tryCatch({
            debug_file <- file.path(getwd(), "clinvar_debug_raw.json")
            writeLines(httr::content(summary_resp, "text", encoding = "UTF-8"), debug_file)
