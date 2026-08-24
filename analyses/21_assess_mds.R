@@ -70,7 +70,10 @@ hits <- mp[vb[, .(id = entry, residue = pos, vid, wt, mut)],
            on = .(id, residue), nomatch = 0L, allow.cartesian = TRUE]
 # delta per hit, vectorised within each family's matrix
 hits[, delta := {
-  M <- tbl$pssm[[.BY$family]]
+  # as.character() is load-bearing: pssm_table_load() stores map$family as a
+  # factor to save memory, and tbl$pssm[[<factor>]] indexes by integer LEVEL,
+  # not by family name -- silently returning the wrong matrix for every group.
+  M <- tbl$pssm[[as.character(.BY$family)]]
   if (is.null(M)) rep(NA_real_, .N) else {
     mc <- match(mut, colnames(M)); wc <- match(wt, colnames(M))
     ok <- column <= nrow(M) & !is.na(mc) & !is.na(wc)
