@@ -1,0 +1,45 @@
+gene	inh_param	curated_moi	hom_path	het_path	basis	confidence
+ABCA4	biallelic	AR	12	0	zygosity 12hom/0het agrees with MOI AR	high
+ADAMTS1	monoallelic	AD	0	0	MOI AD; zygosity absent	medium
+AXIN2	monoallelic	AD	0	2	zygosity 0hom/2het agrees with MOI AD	high
+BMP1	biallelic	AR	0	0	MOI AR; zygosity absent	medium
+BMP4	monoallelic	AD	0	2	zygosity 0hom/2het agrees with MOI AD	high
+BRAF	monoallelic	AD	0	25	zygosity 0hom/25het agrees with MOI AD	high
+CNGA3	biallelic	AR	1	0	zygosity 1hom/0het agrees with MOI AR	high
+CNNM4	biallelic	AR	1	2	MOI AR; zygosity mixed	medium
+COL1A1	monoallelic	AD	0	126	zygosity 0hom/126het agrees with MOI AD	high
+COL1A2	monoallelic	AD	0	27	zygosity 0hom/27het agrees with MOI AD	high
+CRB1	biallelic	AR	0	0	MOI AR; zygosity absent	medium
+DSPP	monoallelic	AD	0	4	zygosity 0hom/4het agrees with MOI AD	high
+EDA	monoallelic	XL	2	2	X-linked (zyg 2hom/2het, not informative)	medium
+EDARADD	monoallelic	AD/AR	0	4	zygosity 0hom/4het decides AD/AR gene	medium
+ENAM	monoallelic	AD/AR	0	2	zygosity 0hom/2het decides AD/AR gene	medium
+ESRRB	biallelic	AR	1	0	zygosity 1hom/0het agrees with MOI AR	high
+FAM20A	biallelic	AR	0	3	MOI AR over zygosity monoallelic (0hom/3het)	low
+FGFR2	monoallelic	AD	0	11	zygosity 0hom/11het agrees with MOI AD	high
+GALC	biallelic	AR	0	0	MOI AR; zygosity absent	medium
+KCNE1	biallelic	AD/AR	2	0	zygosity 2hom/0het decides AD/AR gene	medium
+KREMEN1	biallelic	AR	0	5	MOI AR over zygosity monoallelic (0hom/5het)	low
+LRP6	monoallelic	AD	0	1	zygosity 0hom/1het agrees with MOI AD	high
+MYO15A	biallelic	AR	1	0	zygosity 1hom/0het agrees with MOI AR	high
+MYO7A	biallelic	AR	3	0	zygosity 3hom/0het agrees with MOI AR	high
+OTOF	biallelic	AR	1	0	zygosity 1hom/0het agrees with MOI AR	high
+P3H1	biallelic	AR	0	0	MOI AR; zygosity absent	medium
+PAX9	monoallelic	AD	0	3	zygosity 0hom/3het agrees with MOI AD	high
+PCDH15	biallelic	AR	3	0	zygosity 3hom/0het agrees with MOI AR	high
+PITX2	monoallelic	AD	0	0	MOI AD; zygosity absent	medium
+PJVK	biallelic	AR	1	0	zygosity 1hom/0het agrees with MOI AR	high
+PTCH1	monoallelic	AD	0	4	zygosity 0hom/4het agrees with MOI AD	high
+PTH1R	monoallelic	AD	0	4	zygosity 0hom/4het agrees with MOI AD	high
+RDH12	biallelic	AR	1	0	zygosity 1hom/0het agrees with MOI AR	high
+RGS9	biallelic	AR	1	0	zygosity 1hom/0het agrees with MOI AR	high
+RPE65	biallelic	AR	6	0	zygosity 6hom/0het agrees with MOI AR	high
+SLC26A4	biallelic	AR	2	0	zygosity 2hom/0het agrees with MOI AR	high
+TBX3	monoallelic	AD	0	1	zygosity 0hom/1het agrees with MOI AD	high
+TMPRSS3	biallelic	AR	1	0	zygosity 1hom/0het agrees with MOI AR	high
+TP63	monoallelic	AD	0	7	zygosity 0hom/7het agrees with MOI AD	high
+TULP1	biallelic	AR	6	0	zygosity 6hom/0het agrees with MOI AR	high
+TYR	biallelic	AR	0	2	MOI AR over zygosity monoallelic (0hom/2het)	low
+USH2A	biallelic	AR	2	0	zygosity 2hom/0het agrees with MOI AR	high
+WFS1	biallelic	AR	0	0	MOI AR; zygosity absent	medium
+WNT10A	biallelic	AR	0	6	MOI AR over zygosity monoallelic (0hom/6het)	low
