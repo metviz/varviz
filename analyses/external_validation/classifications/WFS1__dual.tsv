@@ -1,0 +1,2 @@
+gene	p_notation	pm1_pathway	tags_full	tags_blind	varviz_classification_full	varviz_pts_full	varviz_rule_full	varviz_classification_blind	varviz_pts_blind	varviz_rule_blind
+WFS1	p.K193Q	clinvar_hotspot	PM1, PP2, PP3_moderate	PP2,PP3_moderate	VUS-High	5	score 5 pts	VUS-Mid	3	score 3 pts

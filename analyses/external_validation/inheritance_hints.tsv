@@ -1,0 +1,45 @@
+gene	omim	moi_text	hom_path	het_path	disease
+ABCA4	OMIM:153800;OMIM:248200;OMIM:601718;OMIM:604116		12	0	Cone-rod dystrophy 3 | Macular degeneration, age-related, 2
+ADAMTS1					
+AXIN2	OMIM:114500;OMIM:608615		0	2	Colorectal cancer | Oligodontia-colorectal cancer syndrome
+BMP1					
+BMP4	OMIM:600625;OMIM:607932		0	2	Microphthalmia, syndromic 6 | Orofacial cleft 11
+BRAF	OMIM:114500;OMIM:115150;OMIM:155600;OMIM:163950;OMIM:211980;OMIM:613706;OMIM:613707		0	25	Cardiofaciocutaneous syndrome 1 | Colorectal cancer
+CNGA3	OMIM:216900		1	0	Achromatopsia 2
+CNNM4	OMIM:217080		1	2	Jalili syndrome
+COL1A1	OMIM:114000;OMIM:130060;OMIM:166200;OMIM:166210;OMIM:166220;OMIM:166710;OMIM:259420;OMIM:619115		0	126	Caffey disease | Combined osteogenesis imperfecta and Ehlers-Danlos syndrome 1
+COL1A2	OMIM:166210;OMIM:166220;OMIM:166710;OMIM:259420;OMIM:617821;OMIM:619120		0	27	Combined osteogenesis imperfecta and Ehlers-Danlos syndrome 2 | Ehlers-Danlos syndrome, arthrochalasia type, 2
+CRB1					
+DSPP	OMIM:125420;OMIM:125490;OMIM:125500;OMIM:605594	autosomal dominant	0	4	Deafness, autosomal dominant 39, with dentinogenesis imperfecta 1 | Dentin dysplasia, type II
+EDA	OMIM:305100;OMIM:313500	x-linked	2	2	Ectodermal dysplasia 1, hypohidrotic, X-linked | Tooth agenesis, selective, X-linked, 1
+EDARADD	OMIM:129490;OMIM:224900;OMIM:614940;OMIM:614941	autosomal dominant,autosomal recessive	0	4	Ectodermal dysplasia 10A, hypohidrotic/hair/nail type, autosomal dominant | Ectodermal dysplasia 10B, hypohidrotic/hair/tooth type, autosomal recessive
+ENAM	OMIM:104500;OMIM:204650		0	2	Amelogenesis imperfecta, type IB | Amelogenesis imperfecta, type IC
+ESRRB	OMIM:608565	autosomal recessive	1	0	Deafness, autosomal recessive 35
+FAM20A	OMIM:204690		0	3	Amelogenesis imperfecta, type IG (enamel-renal syndrome)
+FGFR2	OMIM:101200;OMIM:101400;OMIM:101600;OMIM:123150;OMIM:123500;OMIM:123790;OMIM:149730;OMIM:207410;OMIM:609579;OMIM:613659;OMIM:614592		0	11	Antley-Bixler syndrome without genital anomalies or disordered steroidogenesis | Apert syndrome
+GALC					
+KCNE1	OMIM:612347;OMIM:613695		2	0	Jervell and Lange-Nielsen syndrome 2 | Long QT syndrome 5
+KREMEN1	OMIM:617392		0	5	Ectodermal dysplasia 13, Hair/tooth type
+LRP6	OMIM:616724		0	1	Tooth agenesis, selective, 7
+MYO15A	OMIM:600316	autosomal recessive	1	0	Deafness, neurosensory, autosomal recessive 3
+MYO7A	OMIM:276900;OMIM:600060;OMIM:601317	autosomal dominant,autosomal recessive	3	0	Deafness, autosomal dominant nonsyndromic sensorineural 11 | Deafness, neurosensory, autosomal recessive 2
+OTOF	OMIM:601071	autosomal recessive	1	0	Deafness, autosomal recessive 9
+P3H1					
+PAX9	OMIM:604625		0	3	Tooth agenesis, selective, 3
+PCDH15	OMIM:601067;OMIM:602083;OMIM:609533	autosomal recessive	3	0	Deafness, autosomal recessive 23 | Usher syndrome, type ID
+PITX2					
+PJVK	OMIM:610220	autosomal recessive	1	0	Deafness, autosomal recessive 59
+PTCH1	OMIM:109400;OMIM:605462		0	4	Basal cell carcinoma, susceptibility to, 1 | Basal cell nevus syndrome
+PTH1R	OMIM:125350;OMIM:156400;OMIM:215045;OMIM:600002		0	4	Chondrodysplasia, Blomstrand type | Dental noneruption
+RDH12	OMIM:612712		1	0	Leber congenital amaurosis 13
+RGS9	OMIM:608415		1	0	Prolonged electroretinal response suppression 1
+RPE65	OMIM:204100;OMIM:613794;OMIM:618697		6	0	Leber congenital amaurosis, type II | Retinitis pigmentosa 20
+SLC26A4	OMIM:274600;OMIM:600791	autosomal recessive	2	0	Deafness, autosomal recessive 4, with enlarged vestibular aqueduct | Pendred syndrome
+TBX3	OMIM:181450		0	1	Ulnar-Mammary syndrome
+TMPRSS3	OMIM:601072	autosomal recessive	1	0	Deafness, autosomal recessive 8/10
+TP63	OMIM:103285;OMIM:106260;OMIM:129400;OMIM:603543;OMIM:604292;OMIM:605289;OMIM:620311		0	7	Adult syndrome | Ectrodactyly, ectodermal dysplasia, and cleft lip/palate syndrome 3
+TULP1	OMIM:600132;OMIM:613843		6	0	Leber congenital amaurosis 15 | Retinitis pigmentosa 14
+TYR	OMIM:203100;OMIM:606952		0	2	Albinism, oculocutaneous, type IA | Albinism, oculocutaneous, type IB
+USH2A	OMIM:276901;OMIM:613809		2	0	Retinitis pigmentosa 39 | Usher syndrome, type IIA
+WFS1					
+WNT10A	OMIM:150400;OMIM:224750;OMIM:257980		0	6	Odontoonychodermal dysplasia | Schopf-Schulz-Passarge syndrome

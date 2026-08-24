@@ -1,0 +1,2 @@
+gene	p_notation	pm1_pathway	tags_full	tags_blind	varviz_classification_full	varviz_pts_full	varviz_rule_full	varviz_classification_blind	varviz_pts_blind	varviz_rule_blind
+SLC26A4	p.G334V	mds	PM1, PM2, PP2, PM5, PP5, PP3_strong	PM1,PM2,PP2,PP3_strong	Pathogenic	12	1 PS + 3 PM	Likely Pathogenic	9	1 PS + 2 PM
