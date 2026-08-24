@@ -1,0 +1,70 @@
+{
+ "CEP128|c.1657G>T": [
+  [
+   "ENST00000933395",
+   "stop_gained",
+   553,
+   "E/*"
+  ]
+ ],
+ "CRB1|c.2369G>T": [
+  [
+   "ENST00000367399",
+   "missense_variant",
+   790,
+   "C/F"
+  ],
+  [
+   "ENST00000681519",
+   "missense_variant",
+   790,
+   "C/F"
+  ]
+ ],
+ "PCDH15|c.4726C>T": [
+  [
+   "ENST00000621708",
+   "missense_variant",
+   1576,
+   "P/S"
+  ],
+  [
+   "ENST00000613657",
+   "stop_gained",
+   1576,
+   "Q/*"
+  ],
+  [
+   "ENST00000320301",
+   "stop_gained",
+   1576,
+   "Q/*"
+  ],
+  [
+   "ENST00000395433",
+   "stop_gained",
+   1576,
+   "Q/*"
+  ],
+  [
+   "ENST00000437009",
+   "synonymous_variant",
+   1576,
+   "L"
+  ],
+  [
+   "ENST00001142983",
+   "stop_gained",
+   1576,
+   "Q/*"
+  ]
+ ],
+ "TBX3|c.1646C>A": [
+  [
+   "ENST00000257566",
+   "missense_variant",
+   549,
+   "A/D"
+  ]
+ ]
+}

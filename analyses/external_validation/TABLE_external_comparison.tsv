@@ -1,0 +1,66 @@
+gene	p_notation	c_notation	transcript	n_probands	varviz_full	varviz_full_pts	varviz_blind	pm1_pathway	intervar_rerun	franklin_published	genebe_published	intervar_published	tapes_published
+ABCA4	p.G607R	c.1819G>A	ENST00000370225.4	1	Pathogenic	10	Likely Pathogenic	clinvar_hotspot	Likely pathogenic	Pathogenic	Pathogenic		
+ABCA4	p.E1087G	c.3260A>G	ENST00000370225.4	2	Pathogenic	13	Likely Pathogenic	mds+hotspot_upgrade(PM1)	Uncertain significance	Likely Pathogenic	Pathogenic		
+ADAMTS1	p.E752K	c.2254G>A	ENST00000284984.8	1	VUS-Mid	3	VUS-Mid	NA	Uncertain significance			Uncertain Significance	
+AXIN2	p.I195T	c.584T>C	ENST00000307078.10	1	Likely Pathogenic	6	VUS-High	clinvar_hotspot	Uncertain significance				
+BMP1	p.C322Y	c.965G>A	ENST00000306385.10	1	Pathogenic	11	Likely Pathogenic	mds	Likely pathogenic	Likely Pathogenic		Likely Pathogenic	
+BMP4	p.R309W	c.925C>T	ENST00000245451.9	1	Likely Pathogenic	7	Likely Pathogenic	mds	Uncertain significance				
+BRAF	p.Q257R	c.770A>G	ENST00000646891.2	1	Pathogenic	15	Pathogenic	ccrs+mds	Likely pathogenic	Pathogenic	Pathogenic		
+BRAF	p.V600E	c.1799T>A	ENST00000646891.2	1	Pathogenic	12	Pathogenic	ccrs	Likely pathogenic	Pathogenic			
+CNGA3	p.R283Q	c.848G>A	ENST00000272602.7	1	Pathogenic	10	VUS-High	clinvar_hotspot	Likely pathogenic		Pathogenic		
+CNNM4	p.G492D	c.1475G>A	ENST00000377075.3	3	Pathogenic	11	Likely Pathogenic	mds	Uncertain significance	Likely Pathogenic	Pathogenic		
+COL1A1	p.G260D	c.779G>A	ENST00000225964.10	1	Pathogenic	14	Pathogenic	ccrs+mds	Uncertain significance	Pathogenic			
+COL1A1	p.G332R	c.994G>A	ENST00000225964.10	3	Pathogenic	14	Likely Pathogenic	mds	Uncertain significance	Pathogenic			
+COL1A1	p.G374A	c.1121G>C	ENST00000225964.10	3	Pathogenic	13	Likely Pathogenic	mds+hotspot_upgrade(PM1)	Uncertain significance	Likely Pathogenic			
+COL1A1	p.G746S	c.2236G>A	ENST00000225964.10	1	Pathogenic	13	Pathogenic	ccrs	Uncertain significance				
+COL1A1	p.G821S	c.2461G>A	ENST00000225964.10	1	Pathogenic	14	Likely Pathogenic	mds	Uncertain significance	Pathogenic			
+COL1A1	p.G866S	c.2596G>A	ENST00000225964.10	3	Pathogenic	13	Likely Pathogenic	mds	Uncertain significance	Pathogenic			Uncertain Significance
+COL1A1	p.G1040S	c.3118G>A	ENST00000225964.10	1	Pathogenic	13	Likely Pathogenic	mds	Uncertain significance				
+COL1A1	p.G1076S	c.3226G>A	ENST00000225964.10	2	Pathogenic	12	Likely Pathogenic	mds	Uncertain significance	Pathogenic			
+COL1A1	p.S1199G	c.3595A>G	ENST00000225964.10	1	VUS-High	4	VUS-Mid	clinvar_hotspot	Uncertain significance				
+COL1A2	p.G190R	c.568G>A	ENST00000297268.11	1	Pathogenic	13	Likely Pathogenic	mds+hotspot_upgrade(PM1_moderate_plus)	Uncertain significance	Likely Pathogenic			
+COL1A2	p.S251F	c.752C>T	ENST00000297268.11	1	Pathogenic	10	Likely Pathogenic	ccrs+hotspot_upgrade(PM1)	Uncertain significance	Likely Pathogenic			
+COL1A2	p.G358S	c.1072G>A	ENST00000297268.11	1	Pathogenic	13	Likely Pathogenic	clinvar_hotspot	Likely pathogenic	Pathogenic		Likely Pathogenic	
+COL1A2	p.G712S	c.2134G>A	ENST00000297268.11	1	Pathogenic	11	Likely Pathogenic	clinvar_hotspot	Uncertain significance				
+COL1A2	p.G766V	c.2297G>T	ENST00000297268.11	1	Pathogenic	11	Likely Pathogenic	clinvar_hotspot	Uncertain significance				
+COL1A2	p.G772S	c.2314G>A	ENST00000297268.11	1	Likely Pathogenic	10	VUS-High	clinvar_hotspot	Likely pathogenic	Pathogenic		Likely Pathogenic	
+CRB1	p.C790F	c.2369G>T	ENST00000367399	1	Likely Pathogenic	7	VUS-High	clinvar_hotspot	not queried				
+DSPP	p.P17L	c.50C>T	ENST00000651931.1	1	Pathogenic	11	Likely Pathogenic	ccrs	Uncertain significance	Likely Pathogenic			
+EDA	p.R276C	c.826C>T	ENST00000374552.9	2	Likely Pathogenic	10	VUS-High	clinvar_hotspot	Likely pathogenic	Pathogenic		Likely Pathogenic	
+EDARADD	p.N138I	c.413A>T	ENST00000334232.9	1	Pathogenic	11	Likely Pathogenic	mds+hotspot_upgrade(PM1)	Likely pathogenic				
+ENAM	p.T533S	c.1598C>G	ENST00000396073.4	1	Likely Pathogenic	6	Likely Pathogenic	mds	Uncertain significance	Uncertain Significance			
+ESRRB	p.E167K	c.499G>A	ENST00000644823.1	1	VUS-High	5	VUS-High	NA	Uncertain significance				
+FAM20A	p.R361C	c.1081C>T	ENST00000592554.2	1	Likely Pathogenic	8	Likely Pathogenic	mds	Uncertain significance	Uncertain Significance			
+FAM20A	p.R411W	c.1231C>T	ENST00000592554.2	1	Likely Pathogenic	10	Likely Pathogenic	mds	Uncertain significance				
+FGFR2	p.S354C	c.1061C>G	ENST00000358487.10	1	Pathogenic	12	Likely Pathogenic	ccrs+hotspot_upgrade(PM1)	Likely pathogenic				
+GALC	p.R531L	c.1592G>T	ENST00000261304.7	1	Likely Pathogenic	8	VUS-High	clinvar_hotspot	Likely pathogenic				
+KCNE1	p.E43K	c.127G>A	ENST00000399286.3	1	Likely Pathogenic	6	Likely Pathogenic	mds	Uncertain significance	Likely Pathogenic			
+KREMEN1	p.C111S	c.331T>A	ENST00000400335.9	3	Pathogenic	10	Pathogenic	uniprot_domain+mds	Likely pathogenic	Likely Pathogenic		Likely Pathogenic	
+LRP6	p.D411Y	c.1231G>T	ENST00000261349.9	1	Pathogenic	11	Likely Pathogenic	clinvar_hotspot	Uncertain significance	Likely Pathogenic			
+MYO15A	p.E1593K	c.4777G>A	ENST00000647165.2	1	Pathogenic	12	Likely Pathogenic	mds	Uncertain significance	Pathogenic			
+MYO7A	p.T165M	c.494C>T	ENST00000409709.9	1	Pathogenic	14	Pathogenic	uniprot_site+mds	Likely pathogenic	Pathogenic	Pathogenic		
+OTOF	p.G371R	c.1111G>C	ENST00000272371.7	1	Pathogenic	10	Likely Pathogenic	mds	Likely pathogenic	Likely Pathogenic		Likely Pathogenic	
+P3H1	p.Q714R	c.2141A>G	ENST00000296388.10	2	VUS-High	4	VUS-Mid	clinvar_hotspot	Uncertain significance	Likely Pathogenic			
+PAX9	p.P20L	c.59C>T	ENST00000361487.7	1	Pathogenic	12	Likely Pathogenic	mds	Likely pathogenic			Likely Pathogenic	
+PAX9	p.R77Q	c.230G>A	ENST00000361487.7	1	Pathogenic	13	Pathogenic	ccrs	Likely pathogenic				
+PCDH15	p.G53D	c.158G>A	ENST00000644397.2	1	Likely Pathogenic	10	Likely Pathogenic	mds	Uncertain significance	Likely Pathogenic			
+PITX2	p.A145P	c.433G>C	ENST00000644743.1	1	Likely Pathogenic	7	VUS-High	clinvar_hotspot	Uncertain significance				
+PJVK	p.I61T	c.182T>C	ENST00000644580.2	1	Likely Pathogenic	6	Likely Pathogenic	mds	Uncertain significance	Likely Pathogenic			
+PTCH1	p.R13C	c.37C>T	ENST00000331920.11	1	Likely Pathogenic	6	VUS-High	clinvar_hotspot	Likely benign	Likely Pathogenic			
+PTH1R	p.G330V	c.989G>T	ENST00000449590.6	1	Likely Pathogenic	7	Likely Pathogenic	ccrs	Uncertain significance	Likely Pathogenic			
+RDH12	p.R239W	c.715C>T	ENST00000551171.6	1	Likely Pathogenic	10	VUS-High	clinvar_hotspot	Likely pathogenic	Pathogenic	Pathogenic		
+RGS9	p.W299R	c.895T>C	ENST00000262406.10	1	Likely Pathogenic	7	VUS-Mid	clinvar_hotspot	Uncertain significance				
+RPE65	p.P35L	c.104C>T	ENST00000262340.6	1	Likely Pathogenic	9	Likely Pathogenic	mds	Uncertain significance	Likely Pathogenic			
+RPE65	p.P363R	c.1088C>G	ENST00000262340.6	1	Pathogenic	12	Likely Pathogenic	mds	Uncertain significance	Likely Pathogenic			
+SLC26A4	p.G334V	c.1001G>T	ENST00000644269.2	1	Pathogenic	12	Likely Pathogenic	mds	Likely pathogenic	Pathogenic	Pathogenic		
+TBX3	p.A549D	c.1646C>A	ENST00000257566	1	VUS-High	4	VUS-High	mds_unavailable	not queried				
+TMPRSS3	p.G244D	c.731G>A	ENST00000644384.2	1	Pathogenic	11	Likely Pathogenic	mds	Uncertain significance	Likely Pathogenic			
+TP63	p.R243W	c.727C>T	ENST00000264731.8	1	Pathogenic	15	Likely Pathogenic	mds+hotspot_upgrade(PM1_moderate_plus)	Likely pathogenic	Pathogenic		Likely Pathogenic	
+TULP1	p.N349K	c.1047T>G	ENST00000229771.11	1	Pathogenic	12	Likely Pathogenic	mds	Uncertain significance	Likely Pathogenic	Pathogenic		
+TULP1	p.R400Q	c.1199G>A	ENST00000229771.11	2	Likely Pathogenic	10	Likely Pathogenic	mds	Likely pathogenic	Pathogenic	Pathogenic		
+TYR	p.G419R	c.1255G>A	ENST00000263321.6	1	Pathogenic	12	Likely Pathogenic	clinvar_hotspot	Uncertain significance	Pathogenic			Likely Pathogenic
+USH2A	p.G4976S	c.14926G>A	ENST00000307340.8	1	Likely Pathogenic	6	VUS-High	clinvar_hotspot	Uncertain significance	Likely Pathogenic			
+WFS1	p.K193Q	c.577A>C	ENST00000226760.5	1	VUS-High	5	VUS-Mid	clinvar_hotspot	Uncertain significance				
+WNT10A	p.R70W	c.208C>T	ENST00000258411.8	2	VUS-High	5	VUS-High	mds	Uncertain significance				
+WNT10A	p.R171C	c.511C>T	ENST00000258411.8	3	VUS-High	5	VUS-High	mds	Uncertain significance	Benign			
+WNT10A	p.G213S	c.637G>A	ENST00000258411.8	2	VUS-High	5	VUS-High	mds	Uncertain significance	Benign			
