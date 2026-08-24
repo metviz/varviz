@@ -70,7 +70,7 @@ cat(sprintf("[harness] Sourced server.R in %.1f sec\n",
 source("analyses/lib/clinvar_blind.R")
 source("analyses/lib/local_predictors.R")
 
-UNIVERSE_IN    <- "analyses/derived/variant_universe_gnomad.tsv"
+UNIVERSE_IN    <- Sys.getenv("VARVIZ_UNIVERSE", "analyses/derived/variant_universe_gnomad.tsv")
 .out_dir <- Sys.getenv("VARVIZ_OUT_DIR", "analyses/ps_final")
 CHECKPOINT_DIR <- file.path(.out_dir, "classifications")
 SUMMARY_OUT    <- file.path(.out_dir, "summary.tsv")
