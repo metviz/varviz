@@ -31,9 +31,14 @@ import urllib.request
 import docx
 
 DOCS = [
-    ("manuscript", "docs/Metpally_VarViz_HumMutat_Manuscript.docx", "runs"),
-    ("supplementary", "docs/Metpally_VarViz_HumMutat_Supplementary.docx", "unicode"),
+    ("manuscript", "docs/Metpally_VarViz_HumMutat_Manuscript.docx", "brackets"),
+    ("supplementary", "docs/Metpally_VarViz_HumMutat_Supplementary.docx", "brackets"),
 ]
+
+# Journal style is "[9]" / "[9, 10]" / "[14-20]". Brackets are also used for
+# CRediT roles in Author Contributions ("[equal]") and for the supplementary's
+# author line, so a bracket only counts when it holds digits and separators.
+BRACKET_RE = re.compile(r"\[([\d][\d,;\s\u2013\u2014-]*)\]")
 
 UNSUP = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
 SUPCHARS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
@@ -53,26 +58,28 @@ def unicode_tokens(text):
 
     Every exponent in these documents is preceded by superscript minus and no
     genuine marker is, so that is the discriminator. It cannot be a
-    digit-predecessor test: real markers do follow digits ("allelic
-    heterogeneity 0.2¹", "gnomAD v4.1²²").
+    digit-predecessor test: real markers do follow digits, as in a parameter
+    value or a database version immediately before its citation.
     """
     for m in MARKER_RE.finditer(text):
         if m.start() and text[m.start() - 1] == SUPMINUS:
             continue
-        # the class admits a trailing separator ("0.2¹," before "penetrance")
+        # the class admits a trailing separator, as in a marker before a comma
         tok = m.group(0).rstrip(SEPS + "–— ").translate(UNSUP)
         if re.search(r"\d", tok):
             yield tok
 
 
 def _selftest():
-    got = list(unicode_tokens("PM2 below 1×10⁻⁴ with BS1 above 5×10⁻² for biallelic"))
+    """Synthetic fixtures, not lines from the documents: this repository is
+    public and the manuscript is not."""
+    got = list(unicode_tokens("threshold 1×10⁻⁴ and cutoff 5×10⁻² apply"))
     assert got == [], f"exponents leaked through: {got}"
-    assert list(unicode_tokens("allelic heterogeneity 0.2¹, penetrance")) == ["1"]
-    assert list(unicode_tokens("enrichment in gnomAD v4.1²².")) == ["22"]
-    assert list(unicode_tokens("MuPIT / VarSite ¹¹˒¹²")) == ["11˒12"]
-    assert list(unicode_tokens("VariBench²⁸,²⁹, re-selecting")) == ["28,29"]
-    assert list(unicode_tokens("4.17 × 10⁻⁵ for PM2 and 0.2¹")) == ["1"]
+    assert list(unicode_tokens("parameter 0.2¹, next clause")) == ["1"]   # marker after a digit
+    assert list(unicode_tokens("release v4.1²².")) == ["22"]              # and after a version
+    assert list(unicode_tokens("two tools ¹¹˒¹²")) == ["11˒12"]           # U+02D2 separator
+    assert list(unicode_tokens("sources²⁸,²⁹, then more")) == ["28,29"]   # comma pair
+    assert list(unicode_tokens("4.17 × 10⁻⁵ alongside 0.2¹")) == ["1"]    # both in one line
     print("self-test OK")
 
 
@@ -118,7 +125,10 @@ def extract(doc_path, mode):
 
     def markers(p):
         out = []
-        if mode == "runs":
+        if mode == "brackets":
+            for m in BRACKET_RE.finditer(p.text):
+                out += expand(m.group(1))
+        elif mode == "runs":
             for r in p.runs:
                 if r.font.superscript and r.text.strip():
                     out += expand(r.text)
