@@ -1,0 +1,4 @@
+gene	p_notation	pm1_pathway	tags_full	tags_blind	varviz_classification_full	varviz_pts_full	varviz_rule_full	varviz_classification_blind	varviz_pts_blind	varviz_rule_blind
+SLC16A2	p.A150T	ccrs	PM1, PM2, PP2, PP3	PM1,PM2,PP2,PP3	Likely Pathogenic	6	2 PM + 2 PP	Likely Pathogenic	6	2 PM + 2 PP
+SLC16A2	p.G208R	mds	PM1, PM2, PP2, PP3_moderate	PM1,PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	Likely Pathogenic	7	2 PM + 2 PP
+SLC16A2	p.G208D	mds	PM1, PM2, PP2, PP3_moderate	PM1,PM2,PP2,PP3_moderate	Likely Pathogenic	7	2 PM + 2 PP	Likely Pathogenic	7	2 PM + 2 PP
