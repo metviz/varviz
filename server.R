@@ -7991,7 +7991,6 @@ shinyServer(function(input, output, session) {
       gene_lbl <- if (!is.null(rp$gene) && nzchar(rp$gene)) rp$gene else
                   tryCatch(as.character(input$gene_name), error = function(e) "")
       meta <- c(
-        "VarViz variant summary"                                = "",
         "run"                                                   = if (!is.null(rp$run_time)) rp$run_time else "",
         "exported"                                              = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
         "gene"                                                  = gene_lbl,
@@ -8014,10 +8013,14 @@ shinyServer(function(input, output, session) {
         "clingen_classification"                                = hdr_val("ClinGen_Class"),
         "consurf_file"                                          = hdr_val("ConSurf_File")
       )
-      hdr <- vapply(seq_along(meta), function(i) {
-        k <- names(meta)[i]; v <- meta[[i]]
-        if (nzchar(v)) paste0("# ", k, ": ", v) else paste0("# ", k)
-      }, character(1))
+      # Drop the params that carry no value -- a bare "# clingen_disease" reads
+      # as a truncated field rather than an absent one.
+      meta <- meta[nzchar(meta)]
+      # length(meta) == 0 is load-bearing: paste0() coerces a zero-length
+      # vector to "" when another argument is length 1, so the unguarded form
+      # emits a junk "# : " line instead of nothing.
+      hdr <- c("# VarViz variant summary",
+               if (length(meta)) paste0("# ", names(meta), ": ", unname(meta)))
       hdr <- c(hdr,
                "# these parameters set the maximum credible allele frequency and enter",
                "# the ClinVar hotspot null model, so PM1 strength depends on them",
