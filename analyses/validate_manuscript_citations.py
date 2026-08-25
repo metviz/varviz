@@ -37,7 +37,43 @@ DOCS = [
 
 UNSUP = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
 SUPCHARS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+SUPMINUS = "\u207b"  # U+207B SUPERSCRIPT MINUS, the exponent tell
+SEPS = ",;\u02d2"    # U+02D2 MODIFIER LETTER CENTRED RIGHT HALF RING
+MARKER_RE = re.compile(f"[{SUPCHARS}][{SUPCHARS}{SEPS}–—-]*")
 DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Za-z0-9]+")
+
+
+def unicode_tokens(text):
+    """Citation markers written as Unicode superscript characters.
+
+    Exponents are indistinguishable from markers by shape: "1×10⁻⁴" ends in a
+    superscript 4, "4.17 × 10⁻⁵" in a 5. Counting them inflates the cited set
+    with whatever numbers the exponents happen to be -- harmless while those
+    land inside the reference range, then silently wrong.
+
+    Every exponent in these documents is preceded by superscript minus and no
+    genuine marker is, so that is the discriminator. It cannot be a
+    digit-predecessor test: real markers do follow digits ("allelic
+    heterogeneity 0.2¹", "gnomAD v4.1²²").
+    """
+    for m in MARKER_RE.finditer(text):
+        if m.start() and text[m.start() - 1] == SUPMINUS:
+            continue
+        # the class admits a trailing separator ("0.2¹," before "penetrance")
+        tok = m.group(0).rstrip(SEPS + "–— ").translate(UNSUP)
+        if re.search(r"\d", tok):
+            yield tok
+
+
+def _selftest():
+    got = list(unicode_tokens("PM2 below 1×10⁻⁴ with BS1 above 5×10⁻² for biallelic"))
+    assert got == [], f"exponents leaked through: {got}"
+    assert list(unicode_tokens("allelic heterogeneity 0.2¹, penetrance")) == ["1"]
+    assert list(unicode_tokens("enrichment in gnomAD v4.1²².")) == ["22"]
+    assert list(unicode_tokens("MuPIT / VarSite ¹¹˒¹²")) == ["11˒12"]
+    assert list(unicode_tokens("VariBench²⁸,²⁹, re-selecting")) == ["28,29"]
+    assert list(unicode_tokens("4.17 × 10⁻⁵ for PM2 and 0.2¹")) == ["1"]
+    print("self-test OK")
 
 
 def norm_title(s):
@@ -87,10 +123,7 @@ def extract(doc_path, mode):
                 if r.font.superscript and r.text.strip():
                     out += expand(r.text)
         else:
-            for m in re.finditer(f"[{SUPCHARS}–—,-]+", p.text):
-                tok = m.group(0).translate(UNSUP)
-                if re.search(r"\d", tok):
-                    out += expand(tok)
+            out += [t for tok in unicode_tokens(p.text) for t in expand(tok)]
         return out
 
     cited = []
@@ -115,7 +148,14 @@ def main():
     ap.add_argument(
         "--check-dois", action="store_true", help="verify against Crossref (slow)"
     )
+    ap.add_argument(
+        "--self-test", action="store_true", help="check marker parsing and exit"
+    )
     args = ap.parse_args()
+
+    if args.self_test:
+        _selftest()
+        return 0
 
     problems = 0
     for name, path, mode in DOCS:
