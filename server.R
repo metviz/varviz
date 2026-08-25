@@ -6763,6 +6763,18 @@ shinyServer(function(input, output, session) {
         cg_disease <- if (!is.null(cg_res) && length(cg_res$disease) > 0) cg_res$disease[1] else ""
         cg_moi     <- if (!is.null(cg_res) && length(cg_res$moi)     > 0) cg_res$moi[1]     else ""
         cs_fname   <- if (!is.null(input$consurf_file)) input$consurf_file$name else ""
+
+        # Snapshot of the run itself, taken at Go. The per-variant Analysis_*
+        # columns already hold the parameters; this adds what they cannot -- when
+        # the run happened and what was asked for -- so an export can be tied to
+        # the run that produced it rather than to the moment it was downloaded.
+        prefetch_state$run_params <- list(
+          run_time  = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
+          gene      = isolate(as.character(input$gene_name)),
+          variants  = isolate(as.character(input$variants)),
+          n_variants = nrow(h)
+        )
+
         vtbl <- build_variant_table(
           h, af(), mean_data(), afs_data(), gene_gnomad_data(), cv_data,
           pfam_data(), uniprot_data(), gene_ccrs_data(),
@@ -7975,11 +7987,15 @@ shinyServer(function(input, output, session) {
         v <- vtbl[[col]][1]
         if (is.null(v) || is.na(v)) "" else as.character(v)
       }
-      gene_lbl <- tryCatch(as.character(input$gene_name), error = function(e) "")
+      rp <- prefetch_state$run_params
+      gene_lbl <- if (!is.null(rp$gene) && nzchar(rp$gene)) rp$gene else
+                  tryCatch(as.character(input$gene_name), error = function(e) "")
       meta <- c(
         "VarViz variant summary"                                = "",
-        "generated"                                             = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
+        "run"                                                   = if (!is.null(rp$run_time)) rp$run_time else "",
+        "exported"                                              = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
         "gene"                                                  = gene_lbl,
+        "variants_requested"                                    = if (!is.null(rp$variants)) rp$variants else "",
         "variants"                                              = as.character(nrow(vtbl)),
         "inheritance"                                           = hdr_val("Analysis_Inheritance"),
         "prevalence"                                            = hdr_val("Analysis_Prevalence"),
