@@ -7964,7 +7964,53 @@ shinyServer(function(input, output, session) {
                         "FATHMM_V", "PROVEAN_V", "MutTaster_V", "REVEL_V", "MetaSVM_V",
                         "MetaLR_V", "MetaRNN_V", "CADD_V", "DANN_V", "AM_V")
       export_cols <- setdiff(colnames(vtbl), exclude_cols)
-      write.table(vtbl[, export_cols, drop = FALSE], file, sep = "\t", row.names = FALSE, quote = FALSE, na = "")
+
+      # ── Run parameters as a commented header ──────────────────────────────
+      # Read back from the table's own Analysis_* columns, not from input$*:
+      # the sliders may have moved since the run, and the header must describe
+      # the run that produced these rows. Consumers should skip lines starting
+      # with "#".
+      hdr_val <- function(col) {
+        if (!col %in% colnames(vtbl) || nrow(vtbl) == 0) return("")
+        v <- vtbl[[col]][1]
+        if (is.null(v) || is.na(v)) "" else as.character(v)
+      }
+      gene_lbl <- tryCatch(as.character(input$gene_name), error = function(e) "")
+      meta <- c(
+        "VarViz variant summary"                                = "",
+        "generated"                                             = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
+        "gene"                                                  = gene_lbl,
+        "variants"                                              = as.character(nrow(vtbl)),
+        "inheritance"                                           = hdr_val("Analysis_Inheritance"),
+        "prevalence"                                            = hdr_val("Analysis_Prevalence"),
+        "allelic_heterogeneity"                                 = hdr_val("Analysis_Allelic_Het"),
+        "genetic_heterogeneity"                                 = hdr_val("Analysis_Genetic_Het"),
+        "penetrance"                                            = hdr_val("Analysis_Penetrance"),
+        "cutoff_method"                                         = hdr_val("Analysis_Cutoff_Method"),
+        "af_cutoff"                                             = hdr_val("Analysis_AF_Cutoff"),
+        "ac_cutoff"                                             = hdr_val("Analysis_AC_Cutoff"),
+        "pm2_threshold"                                         = hdr_val("Analysis_PM2_Threshold"),
+        "bs1_threshold"                                         = hdr_val("Analysis_BS1_Threshold"),
+        "population_size"                                       = hdr_val("Analysis_Pop_Size"),
+        "confidence_interval"                                   = hdr_val("Analysis_CI"),
+        "clingen_disease"                                       = hdr_val("ClinGen_Disease"),
+        "clingen_moi"                                           = hdr_val("ClinGen_MOI"),
+        "clingen_classification"                                = hdr_val("ClinGen_Class"),
+        "consurf_file"                                          = hdr_val("ConSurf_File")
+      )
+      hdr <- vapply(seq_along(meta), function(i) {
+        k <- names(meta)[i]; v <- meta[[i]]
+        if (nzchar(v)) paste0("# ", k, ": ", v) else paste0("# ", k)
+      }, character(1))
+      hdr <- c(hdr,
+               "# these parameters set the maximum credible allele frequency and enter",
+               "# the ClinVar hotspot null model, so PM1 strength depends on them",
+               "#")
+
+      con <- file(file, open = "wt")
+      on.exit(close(con), add = TRUE)
+      writeLines(hdr, con)
+      write.table(vtbl[, export_cols, drop = FALSE], con, sep = "\t", row.names = FALSE, quote = FALSE, na = "")
     }
   )
 

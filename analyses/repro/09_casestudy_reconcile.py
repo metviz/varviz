@@ -32,10 +32,15 @@ def ncls(c):
 def load_claims(p):
     return list(csv.DictReader(open(p), delimiter='\t'))
 
+def uncommented(path):
+    """App exports carry the run parameters as leading '#' lines."""
+    return [ln for ln in open(path) if not ln.startswith('#')]
+
+
 def load_exports(paths):
     out = {}
     for p in paths:
-        for r in csv.DictReader(open(p), delimiter='\t'):
+        for r in csv.DictReader(uncommented(p), delimiter='\t'):
             v = r.get('Variant') or r.get('variant') or ''
             if not v: continue
             out[norm(v)] = r
