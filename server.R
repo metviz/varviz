@@ -4479,6 +4479,19 @@ clinvar_hotspot_profile <- function(gene_name, clinvar_data, gnomad_data, L, af_
 
 # For each user-input variant, look up data from all tracks
 # ============================================================
+# Plain-language name for each PM1 pathway, used in the criterion-card tooltip
+# so the badge can say how the strength was reached rather than only that it was.
+pm1_base_label <- function(pathway) {
+  switch(pathway,
+    "uniprot_site"     = "UniProt residue-level functional site",
+    "uniprot_domain"   = "inside a curated UniProt domain",
+    "ccrs"             = "constrained coding region (CCRS)",
+    "clinvar_hotspot"  = "ClinVar pathogenic hotspot",
+    "mds"              = "Missense Disfavour Score",
+    "mds_unavailable"  = "no Pfam alignment for this residue",
+    if (nzchar(pathway)) pathway else "gene-level evidence")
+}
+
 build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnomad_data,
                                  clinvar_data, pfam_data, uniprot_data, ccrs_data,
                                  af_cutoff = NULL, ac_cutoff = NULL,
@@ -5307,6 +5320,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
                          ccrs_info$percentile > 0) ccrs_info$percentile else 0
 
       cons_used_for_pm1 <- FALSE  # tracks whether conservation already spent on PM1_strong
+      # How this variant's PM1 strength was reached, recorded where the points are
+      # actually decided. It cannot be reconstructed downstream: the ladder caps at
+      # 4, so a final PM1_strong is ambiguous between "base 2 + MDS 2" and "base 4,
+      # MDS added nothing".
+      pm1_deriv_val <- ""
       if (nchar(uniprot_site_desc) > 0) {
         # Path 0 — exact hit on a UniProt residue-level functional site
         # (computed above, next to the PTM lookup). "Active site of an enzyme"
@@ -5432,6 +5450,19 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           message(sprintf("[PM1] MDS %s PM1 for %s %s (delta %.2f; %d + %d -> %d pts)",
                           role, gene_name_for_api, mut, mds_val,
                           base_pts, mds_pts, new_pts))
+
+          mds_tier_txt <- if (mds_val <= MDS_PM1_STRONG_THRESHOLD) "strong tier, LR+ 39.0"
+                          else if (mds_val <= MDS_PM1_MODPLUS_THRESHOLD) "moderate-plus tier, LR+ 11.2"
+                          else "moderate tier, LR+ 5.4"
+          base_txt <- if (base_pts > 0L)
+                        paste0(pm1_base_label(sub("\\+mds$", "", pm1_pathway_val)), " (+", base_pts, ")")
+                      else ""
+          pm1_deriv_val <- if (base_pts > 0L)
+            sprintf("%s + MDS %.2f (%s, +%d) = %d points%s", base_txt, mds_val, mds_tier_txt,
+                    mds_pts, new_pts,
+                    if (base_pts + mds_pts > 4L) ", capped at Strong" else "")
+          else
+            sprintf("MDS %.2f (%s) = %d points", mds_val, mds_tier_txt, mds_pts)
         } else if (is.na(mds_val) && !nzchar(pm1_pathway_val)) {
           # Residue not in any Pfam domain (or entry/AA unresolved) and nothing
           # else fired. Record that Path 4 was attempted but could not score, so
@@ -5439,6 +5470,19 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           pm1_pathway_val <- "mds_unavailable"
         }
         # else: scored but above threshold -> tolerated at that column, no PM1.
+      }
+
+      # No MDS contribution: the pathway carried PM1 on its own.
+      if (!nzchar(pm1_deriv_val) && nzchar(pm1_pathway_val) &&
+          pm1_pathway_val != "mds_unavailable") {
+        base_hit2 <- intersect(c("PM1_strong", "PM1_moderate_plus", "PM1"), acmg_tags)
+        if (length(base_hit2)) {
+          bp <- switch(base_hit2[1], PM1 = 2L, PM1_moderate_plus = 3L, PM1_strong = 4L, 0L)
+          pm1_deriv_val <- paste0(pm1_base_label(pm1_pathway_val), " = ", bp, " points",
+                                  if (isTRUE(cons_used_for_pm1))
+                                    "; conservation corroborated, so its PP3 tier is withheld to avoid counting the same signal twice"
+                                  else "")
+        }
       }
     }
 
@@ -6011,6 +6055,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       # ── ACMG + Comment + JSON ──
       ACMG_Tags = acmg_str,
       ACMG_PM1_Pathway = pm1_pathway_val,
+      PM1_Derivation   = pm1_deriv_val,
       MDS_Score = if (exists("mds_val") && !is.na(mds_val)) round(mds_val, 2) else NA_real_,
       Comment = acmg_comment,
       dbNSFP_JSON = as.character(dbnsfp_json),
@@ -7197,7 +7242,7 @@ shinyServer(function(input, output, session) {
       }
 
       make_criterion_card <- function(tag, gevir_pct_val = NA,
-                                       site_ctx = "", ptm_ctx = "") {
+                                       site_ctx = "", ptm_ctx = "", pm1_ctx = "") {
         tag  <- trimws(tag)
         pts  <- if (tag %in% names(tag_pts_map)) tag_pts_map[[tag]] else 0
         is_p <- pts > 0
@@ -7260,6 +7305,11 @@ shinyServer(function(input, output, session) {
                              "MDS = M(column,mut) − M(column,wt) over the Pfam family alignment; the ≤ −8 tail ",
                              "is likelihood-ratio-calibrated on 33,216 genome-wide 2★ ClinVar missense. ",
                              "See the MDS_Score column for the value.")
+        # PM1 carries a strength ladder rather than a single rule, so say how this
+        # variant reached its points instead of only which criterion fired.
+        if (base_tag == "PM1" && nzchar(pm1_ctx))
+          tip_body <- paste0(tip_body, " -- How this strength was reached: ", pm1_ctx, ".")
+
         # Append the applied evidence strength for strength-suffixed tags (e.g. PP3_Strong).
         str_q <- if (grepl("_strong$", tag)) ". Applied at STRONG evidence strength." else
                  if (grepl("_moderate_plus$", tag)) ". Applied at MODERATE-PLUS evidence strength (+3)." else
@@ -7763,7 +7813,8 @@ shinyServer(function(input, output, session) {
                  'letter-spacing:0.5px;margin-bottom:3px;">&#9650; Pathogenic</div>',
                  paste(sapply(path_tags,  function(t) make_criterion_card(t, gevir_pct_val=r$GeVIR_Gene_Pct,
                    site_ctx = if ("UniProt_Site" %in% colnames(vtbl)) as.character(r$UniProt_Site) else "",
-                   ptm_ctx  = as.character(r$PTM))), collapse=""),
+                   ptm_ctx  = as.character(r$PTM),
+                   pm1_ctx  = if ("PM1_Derivation" %in% colnames(vtbl)) as.character(r$PM1_Derivation) else "")), collapse=""),
                  '</div>') else ""
 
         benign_grid <- if (length(benign_tags) > 0)
@@ -7772,7 +7823,8 @@ shinyServer(function(input, output, session) {
                  'letter-spacing:0.5px;margin-bottom:3px;">&#9660; Benign</div>',
                  paste(sapply(benign_tags, function(t) make_criterion_card(t, gevir_pct_val=r$GeVIR_Gene_Pct,
                    site_ctx = if ("UniProt_Site" %in% colnames(vtbl)) as.character(r$UniProt_Site) else "",
-                   ptm_ctx  = as.character(r$PTM))), collapse=""),
+                   ptm_ctx  = as.character(r$PTM),
+                   pm1_ctx  = if ("PM1_Derivation" %in% colnames(vtbl)) as.character(r$PM1_Derivation) else "")), collapse=""),
                  '</div>') else ""
 
         badges_html <- if (nchar(path_grid) > 0 || nchar(benign_grid) > 0)
