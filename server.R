@@ -6424,6 +6424,17 @@ shinyServer(function(input, output, session) {
 
   variants <- eventReactive(input$goButton,{
     raw <- split_variant_input(input$variants)$ok
+    # Drop variants that disagree with the canonical sequence. Filtering here
+    # rather than only warning in the observer is what keeps them out of the
+    # table, the plot and the export: every one of those reads variants().
+    # pfam_data() is safe to call from here -- it depends on input$variants
+    # through require_valid_variants(), not on this reactive.
+    seq <- tryCatch({
+      pf <- pfam_data()
+      if (!is.null(pf) && !is.null(pf$sequence)) pf$sequence$value else NULL
+    }, error = function(e) NULL)
+    mm <- check_reference_residues(raw, seq)
+    if (!is.null(mm)) raw <- raw[!raw %in% mm$variant]
     as.data.frame(raw, stringsAsFactors = FALSE) |>
       setNames("x")
   })
@@ -6820,33 +6831,57 @@ shinyServer(function(input, output, session) {
     }, error = function(e) { message("[RefCheck] skipped: ", e$message); NULL })
 
     if (!is.null(mismatches)) {
-      removeNotification(nid)
       gene_lbl <- isolate(as.character(input$gene_name))
+      n_ok <- tryCatch(nrow(variants()), error = function(e) 0)
       rows_html <- paste0(
         "<li><code>", htmltools::htmlEscape(mismatches$variant), "</code> &mdash; position ",
         mismatches$pos, " carries <strong>", htmltools::htmlEscape(mismatches$found),
         "</strong>, not <strong>", htmltools::htmlEscape(mismatches$stated), "</strong></li>",
         collapse = "")
-      showModal(modalDialog(
-        title = tags$span(
-          tags$span(style = "color:#dc2626; margin-right:8px;", HTML("&#9888;")),
-          "Reference residue does not match"
-        ),
+      cause_txt <- paste0(
+        'Usually the position is numbered on another isoform or on the MANE transcript ',
+        'rather than the canonical one.')
+
+      if (n_ok == 0) {
+        # Nothing survives, so there is no run to report on.
+        removeNotification(nid)
+        showModal(modalDialog(
+          title = tags$span(
+            tags$span(style = "color:#dc2626; margin-right:8px;", HTML("&#9888;")),
+            "Reference residue does not match"
+          ),
+          HTML(paste0(
+            '<div style="font-size:14px; line-height:1.7; color:#374151;">',
+            '<p style="margin:0 0 10px;">VarViz numbers on the UniProt canonical sequence for ',
+            '<strong>', htmltools::htmlEscape(gene_lbl), '</strong>. These variants name a different ',
+            'residue than that sequence carries:</p>',
+            '<ul style="margin:0 0 10px; padding-left:20px; color:#1e3a5f;">', rows_html, '</ul>',
+            '<p style="margin:0; color:#6b7280; font-size:13px;">', cause_txt, ' Nothing was scored: ',
+            'every track is read at the position alone, so classifying these would describe the ',
+            'wrong residue.</p>',
+            '</div>'
+          )),
+          footer = modalButton("Got it"), easyClose = TRUE, size = "m"
+        ))
+        return()
+      }
+
+      # Some variants are usable. Skip only the mismatches and say so, rather
+      # than discarding a good list because one entry is numbered wrong. The
+      # toast persists until dismissed: the results that follow cover fewer
+      # variants than were pasted, and that must not scroll past unnoticed.
+      showNotification(
         HTML(paste0(
-          '<div style="font-size:14px; line-height:1.7; color:#374151;">',
-          '<p style="margin:0 0 10px;">VarViz numbers on the UniProt canonical sequence for ',
-          '<strong>', htmltools::htmlEscape(gene_lbl), '</strong>. These variants name a different ',
-          'residue than that sequence carries:</p>',
-          '<ul style="margin:0 0 10px; padding-left:20px; color:#1e3a5f;">', rows_html, '</ul>',
-          '<p style="margin:0; color:#6b7280; font-size:13px;">Usually the position is numbered on ',
-          'another isoform or on the MANE transcript rather than the canonical one. Nothing was ',
-          'scored: every track is read at the position alone, so classifying these would describe ',
-          'the wrong residue.</p>',
-          '</div>'
+          '<div style="font-size:13px; line-height:1.6;">',
+          '<strong>&#9888; ', nrow(mismatches), ' variant',
+          if (nrow(mismatches) == 1) '' else 's', ' skipped</strong> &mdash; not what the ',
+          htmltools::htmlEscape(gene_lbl), ' canonical sequence carries:',
+          '<ul style="margin:6px 0 0; padding-left:18px;">', rows_html, '</ul>',
+          '<div style="margin-top:6px; color:#6b7280;">', cause_txt, ' Continuing with the other ',
+          n_ok, '.</div></div>'
         )),
-        footer = modalButton("Got it"), easyClose = TRUE, size = "m"
-      ))
-      return()
+        duration = NULL, closeButton = TRUE, type = "warning"
+      )
     }
 
     update_note("Fetching gnomAD variants...")
