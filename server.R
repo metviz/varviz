@@ -1913,6 +1913,7 @@ clingen_gv_table <- function() {
                       disease    = trimws(df[[3]]),
                       moi        = trimws(df[[5]]),
                       classification = trimws(df[[7]]),
+                      report     = if (ncol(df) >= 8) trimws(df[[8]]) else "",
                       submitter  = if (ncol(df) >= 10) trimws(df[[10]]) else "ClinGen GCEP",
                       stringsAsFactors = FALSE)
     message("[ClinGen GV] Loaded ", nrow(out), " curations covering ",
@@ -1971,7 +1972,7 @@ fetch_clingen_validity <- function(gene_symbol, hgnc_id = NULL) {
       if (nrow(hit) > 0) {
         df <- data.frame(disease = hit$disease, classification = hit$tier,
                          moi = hit$moi, submitter = hit$submitter,
-                         stringsAsFactors = FALSE)
+                         report = hit$report, stringsAsFactors = FALSE)
         best <- df[which.max(tier_order[df$classification]), ]
         result$all_assertions <- df
         result$source         <- "ClinGen gene-disease validity"
@@ -8226,8 +8227,19 @@ shinyServer(function(input, output, session) {
              '</div>')
     } else ""
 
+    # Link to the curation actually being shown when the source gives us its
+    # URL (the validity table's ONLINE REPORT column), so the badge lands on the
+    # assertion behind the tier rather than on the gene's whole record. Falls
+    # back to the gene page for the legacy sources, which carry no report URL.
+    top_report <- if (!is.null(all_a) && nrow(all_a) > 0 && "report" %in% colnames(all_a)) {
+      r <- all_a$report[!is.na(all_a$tn) & all_a$tn == max(all_a$tn, na.rm = TRUE)]
+      r <- r[!is.na(r) & nzchar(r)]
+      if (length(r)) r[1] else NULL
+    } else NULL
+
     # ClinGen search link — uses HGNC ID for direct gene page (e.g. HGNC:950 → BAP1)
-    clingen_search_url <- if (!is.null(gi$hgnc_id) && nchar(gi$hgnc_id) > 0) {
+    clingen_search_url <- if (!is.null(top_report)) top_report
+    else if (!is.null(gi$hgnc_id) && nchar(gi$hgnc_id) > 0) {
       paste0("https://search.clinicalgenome.org/kb/genes/", URLencode(gi$hgnc_id, reserved = TRUE))
     } else if (!is.null(gi$gene_name) && nchar(gi$gene_name) > 0) {
       paste0("https://search.clinicalgenome.org/kb/genes?search=", URLencode(gi$gene_name, reserved = TRUE))
