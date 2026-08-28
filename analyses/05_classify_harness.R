@@ -81,7 +81,7 @@ classify_gene <- function(gene_name) {
     error = function(e) list(classification = NA_character_, moi = "", disease = "", source = "ClinGen LDH")
   )
 
-  afs_dest <- file.path(getwd(), paste0(uid, "-F1-aa-substitutions.csv"))
+  afs_dest <- am_csv_path(uid)  # server.R helper: app dir if present, else scratch
   afs_d <- if (file.exists(afs_dest)) {
     tryCatch(data.table::fread(afs_dest), error = function(e) NULL)
   } else NULL

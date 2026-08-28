@@ -75,6 +75,26 @@ add_variant_vlines <- function(p, highlight, xmax = Inf, xmin = 0, ymax = NULL) 
 
 current_directory <- getwd()
 
+# Runtime scratch. Downloads and debug dumps used to land in the app directory,
+# which accumulates one <ACC>-F1-aa-substitutions.csv per gene visited plus a
+# clinvar_debug_raw.json that is overwritten but never cleaned up. tempdir() is
+# per-session and the OS reclaims it; set options(varviz.tmp_dir=) to keep the
+# AlphaMissense CSVs across runs (worth it for the benchmark harness, which
+# re-visits the same accessions).
+VARVIZ_TMP_DIR <- getOption("varviz.tmp_dir", file.path(tempdir(), "varviz"))
+dir.create(VARVIZ_TMP_DIR, recursive = TRUE, showWarnings = FALSE)
+varviz_tmp <- function(...) file.path(VARVIZ_TMP_DIR, ...)
+
+# AlphaMissense per-substitution CSV. The benchmark harnesses read this file
+# back by path after get_mean_pathogenicity() downloads it, so resolution has to
+# be shared rather than duplicated: an existing copy in the app directory (what
+# every run before this wrote) wins, otherwise the scratch dir.
+am_csv_path <- function(uid) {
+  f <- paste0(uid, "-F1-aa-substitutions.csv")
+  legacy <- file.path(current_directory, f)
+  if (file.exists(legacy)) legacy else varviz_tmp(f)
+}
+
 load("data/VarViz.RData")
 gene_list <- sort(gene_data$gene_name)  # safety sort; run presort_gene_data.R once to pre-sort in RData
 
@@ -252,6 +272,26 @@ fetch_orphadata_prevalence <- function(omim_id) {
 
 #function to extract the protein position
 extract_protein_position <- function(uniprotID){ as.numeric(lapply(regmatches(uniprotID , gregexpr("[[:digit:]]+", uniprotID)), `[`, 1)) }
+
+# VarViz is protein-level: every coordinate (AlphaFold, AlphaMissense, UniProt
+# features, Pfam) is on the UniProt canonical isoform. Coding or genomic HGVS
+# must be REFUSED rather than coerced. The "p." prefix was previously prepended
+# to whatever the user typed, so "c.289C>T" became "p.c.289C>T" and
+# extract_protein_position() -- which takes the first digit run -- returned 289,
+# scoring an unrelated residue with no error. "NM_000388.4:c.2968G>A" returned
+# 388, the transcript version. Silent wrong answers, so parse strictly.
+split_variant_input <- function(txt) {
+  raw <- trimws(strsplit(txt, "[,\n;]")[[1]])
+  raw <- raw[nzchar(raw)]
+  # A protein accession prefix is legitimate (NP_000379.2:p.Arg334Trp); drop it
+  # so it cannot be mistaken for the position. Any other prefix stays put and
+  # falls through to the reject below.
+  raw <- sub("^[A-Za-z0-9_.]+:(?=[Pp]\\.)", "", raw, perl = TRUE)
+  ok <- grepl("^(p\\.)?[A-Za-z]{1,3}[0-9]+[A-Za-z]{1,3}$", raw)
+  list(ok  = ifelse(grepl("^p\\.", raw[ok], ignore.case = TRUE),
+                    raw[ok], paste0("p.", raw[ok])),
+       bad = raw[!ok])
+}
 
 # Function to fetch UniProt features for a given UniProt ID
 extract_pfam <- function(uniprotID) {
@@ -816,7 +856,7 @@ get_mean_pathogenicity <- function(uniprotID) {
   cached <- cache_get("alphafold", uniprotID)
   if (!is.null(cached)) { message("[AlphaFold Path] Cache hit for: ", uniprotID); return(cached) }
   
-  destination_path <- file.path(current_directory, paste0(uniprotID, "-F1-aa-substitutions.csv"))
+  destination_path <- am_csv_path(uniprotID)
   
   # Try multiple filename patterns (AlphaMissense data)
   urls <- c(
@@ -1037,7 +1077,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
        if (first_batch) {
          first_batch <- FALSE
          tryCatch({
-           debug_file <- file.path(getwd(), "clinvar_debug_raw.json")
+           debug_file <- varviz_tmp("clinvar_debug_raw.json")
            writeLines(httr::content(summary_resp, "text", encoding = "UTF-8"), debug_file)
            message("[ClinVar DEBUG] Raw API response saved to: ", debug_file)
          }, error = function(e) message("[ClinVar DEBUG] Could not save debug file: ", e$message))
@@ -6310,13 +6350,17 @@ shinyServer(function(input, output, session) {
                         min_sens = input$calib_min_sens %||% 0.90))
   })
 
+  # Every gene-level fetch below is keyed on the Go button, not on variants(),
+  # so a submission rejected for bad notation still spent a UniProt, UCSC,
+  # ClinVar and gnomAD round trip before the user saw the modal. Validate the
+  # notation before any network call: no usable variant list, no API traffic.
+  require_valid_variants <- function() {
+    parsed <- split_variant_input(input$variants %||% "")
+    req(length(parsed$ok) > 0, length(parsed$bad) == 0)
+  }
+
   variants <- eventReactive(input$goButton,{
-    raw <- strsplit(input$variants, "[,]")[[1]]
-    raw <- trimws(raw)
-    raw <- raw[nchar(raw) > 0]
-    # Normalize: add p. prefix if missing
-    raw <- ifelse(grepl("^p\\.", raw, ignore.case = TRUE), raw,
-                  paste0("p.", raw))
+    raw <- split_variant_input(input$variants)$ok
     as.data.frame(raw, stringsAsFactors = FALSE) |>
       setNames("x")
   })
@@ -6401,7 +6445,7 @@ shinyServer(function(input, output, session) {
     }
   }) 
   
-  gene_attrib <- eventReactive(input$goButton,{ gene_data[gene_data$gene_name==input$gene_name, ] })
+  gene_attrib <- eventReactive(input$goButton,{ require_valid_variants(); gene_data[gene_data$gene_name==input$gene_name, ] })
   uniprotID <- eventReactive(input$goButton,{ as.character(gene_attrib()$uniprot_id)  })
   uniprot_data <- eventReactive(input$goButton,{ extract_uniprot_feature_data(uniprotID())  })
   
@@ -6418,7 +6462,7 @@ shinyServer(function(input, output, session) {
   # (same file that get_mean_pathogenicity downloads — read from disk cache)
   afs_data <- eventReactive(input$goButton, {
     uid <- uniprotID()
-    dest <- file.path(getwd(), paste0(uid, "-F1-aa-substitutions.csv"))
+    dest <- am_csv_path(uid)
     if (!file.exists(dest)) {
       # Try to download if not present (may already be there from mean_data fetch)
       urls <- c(
@@ -6508,13 +6552,17 @@ shinyServer(function(input, output, session) {
 
   # Gene info from UniProt (for GeneInfo tab)
   gene_info_uniprot <- eventReactive(input$goButton, {
+    require_valid_variants()
     extract_gene_info_uniprot(uniprotID(), input$gene_name)
   })
   
-  gene_clinvar_data <- eventReactive(input$goButton,{ extract_clinvar(input$gene_name) })
+  gene_clinvar_data <- eventReactive(input$goButton,{ require_valid_variants(); extract_clinvar(input$gene_name) })
 
   # ClinGen gene validity — fetched once per gene at top level so Gene Info card can show badge
   clingen_validity_reactive <- eventReactive(input$goButton, {
+    # req() here rather than inside the tryCatch below: that handler would
+    # otherwise swallow the silent error and fetch anyway.
+    require_valid_variants()
     # Get HGNC ID from UniProt gi (most reliable — fetched from UniProt cross-refs)
     # Falls back to NULL if gene_info_uniprot not yet available
     hgnc_for_clingen <- tryCatch({
@@ -6526,8 +6574,8 @@ shinyServer(function(input, output, session) {
       error = function(e) list(classification = NA_character_, moi = "", disease = "", source = "ClinGen LDH")
     )
   })
-  gene_gnomad_data <- eventReactive(input$goButton,{ extract_gnomad(input$gene_name) })
-  gene_ccrs_data <- eventReactive(input$goButton,{ extract_ccrs(input$gene_name, pfam_data()$primaryAccession) })
+  gene_gnomad_data <- eventReactive(input$goButton,{ require_valid_variants(); extract_gnomad(input$gene_name) })
+  gene_ccrs_data <- eventReactive(input$goButton,{ require_valid_variants(); extract_ccrs(input$gene_name, pfam_data()$primaryAccession) })
 
   # Multi-conservation track: UCSC REST API for true per-base PhyloP/PhastCons/GERP++ scores
   # Conservation scores: reactive on EITHER Go button OR multiconservation checkbox toggle.
@@ -6547,6 +6595,8 @@ shinyServer(function(input, output, session) {
         return()
       }
       if (input$goButton == 0) return()
+      parsed <- split_variant_input(input$variants %||% "")
+      if (!length(parsed$ok) || length(parsed$bad)) return()
       gene <- trimws(input$gene_name)
       if (nchar(gene) == 0) return()
 
@@ -6608,6 +6658,38 @@ shinyServer(function(input, output, session) {
     # Guard: require both gene and at least one variant before doing any work
     missing_gene <- is.null(input$gene_name) || nchar(trimws(input$gene_name)) == 0
     missing_vars <- is.null(input$variants)  || nchar(trimws(input$variants))  == 0
+
+    # Refuse coding/genomic HGVS before any work starts -- see
+    # split_variant_input(). Checked here as well as in variants() so the user
+    # gets told why, instead of silently getting a shorter table.
+    parsed <- if (missing_vars) list(ok = character(0), bad = character(0)) else
+              split_variant_input(input$variants)
+    if (!missing_gene && !missing_vars && length(parsed$bad)) {
+      showModal(modalDialog(
+        title = tags$span(
+          tags$span(style = "color:#dc2626; margin-right:8px;", HTML("&#9888;")),
+          "Protein notation required"
+        ),
+        HTML(paste0(
+          '<div style="font-size:14px; line-height:1.7; color:#374151;">',
+          '<p style="margin:0 0 10px;">VarViz classifies on the UniProt canonical protein sequence, ',
+          'so variants must be given as protein substitutions ',
+          '(<code>p.Arg175His</code> or <code>R175H</code>). ',
+          'These entries could not be read that way:</p>',
+          '<ul style="margin:0 0 10px; padding-left:20px; color:#1e3a5f;">',
+          paste0("<li><code>", htmltools::htmlEscape(parsed$bad), "</code></li>", collapse = ""),
+          '</ul>',
+          '<p style="margin:0; color:#6b7280; font-size:13px;">Coding (<code>c.</code>) and genomic ',
+          '(<code>g.</code>) HGVS are not accepted: translating them needs a transcript choice, ',
+          'and guessing one would place the variant on the wrong residue.</p>',
+          '</div>'
+        )),
+        footer = modalButton("Got it"),
+        easyClose = TRUE,
+        size = "m"
+      ))
+      return()
+    }
 
     if (missing_gene || missing_vars) {
       missing_items <- c(
