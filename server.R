@@ -6986,8 +6986,13 @@ shinyServer(function(input, output, session) {
           message("[VariantTable] No ConSurf data available")
         }
         
-        # Capture all session analysis parameters for provenance tracking
-        cg_res     <- tryCatch(clingen_validity(), error = function(e) NULL)
+        # Capture all session analysis parameters for provenance tracking.
+        # clingen_validity_reactive(), not clingen_validity(): the latter is a
+        # local inside build_variant_table(), so this call found no function,
+        # the tryCatch swallowed the error, and ClinGen_Disease / ClinGen_MOI
+        # went out empty on every export while ClinGen_Class -- computed inside
+        # build_variant_table from its own local -- was populated.
+        cg_res     <- tryCatch(clingen_validity_reactive(), error = function(e) NULL)
         cg_disease <- if (!is.null(cg_res) && length(cg_res$disease) > 0) cg_res$disease[1] else ""
         cg_moi     <- if (!is.null(cg_res) && length(cg_res$moi)     > 0) cg_res$moi[1]     else ""
         cs_fname   <- if (!is.null(input$consurf_file)) input$consurf_file$name else ""
