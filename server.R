@@ -6439,7 +6439,15 @@ shinyServer(function(input, output, session) {
       setNames("x")
   })
   highlight = eventReactive(input$goButton,{ 
-    highlight=data.frame(variants(), sapply(variants(), extract_protein_position), input$gene_name) 
+    v <- variants()
+    # Every variant can be filtered out by the reference check, and
+    # data.frame() then pairs a 0-length column with a length-1 gene name:
+    # "arguments imply differing number of rows: 0, 1".
+    if (nrow(v) == 0) {
+      return(data.frame(Mutation = character(0), prot_pos = numeric(0),
+                        gene = character(0), stringsAsFactors = FALSE))
+    }
+    highlight=data.frame(v, sapply(v, extract_protein_position), input$gene_name) 
     colnames(highlight) <- c("Mutation","prot_pos","gene")
     highlight
   })
@@ -6826,7 +6834,9 @@ shinyServer(function(input, output, session) {
     # checked before anything is scored against them.
     mismatches <- tryCatch({
       pf <- pfam_data()
-      check_reference_residues(variants()$x,
+      # The raw list, not variants(): that reactive has already dropped the
+      # mismatches, so checking it finds nothing and the gate never fires.
+      check_reference_residues(split_variant_input(input$variants)$ok,
                                if (!is.null(pf) && !is.null(pf$sequence)) pf$sequence$value else NULL)
     }, error = function(e) { message("[RefCheck] skipped: ", e$message); NULL })
 
