@@ -1976,76 +1976,18 @@ fetch_clingen_validity <- function(gene_symbol, hgnc_id = NULL) {
     message("[ClinGen LDH] Error for ", gene_symbol, ": ", e$message); FALSE
   })
 
-  # ── Source 2: ClinGen Evidence Repo API (VCEP / affiliation-level fallback) ─
-  # Hits the erepo REST API which backs clinicalgenome.org/affiliation/50013/
-  # Returns per-disease assertions from all VCEPs for this gene
-  if (!ldh_ok || is.null(result$all_assertions)) {
-    tryCatch({
-      # Use passed-in hgnc_id if available; otherwise look up from genenames.org
-      erepo_hgnc <- if (!is.null(hgnc_id) && nchar(hgnc_id) > 0) {
-        hgnc_id
-      } else {
-        hgnc_resp <- httr::GET(
-          paste0("https://rest.genenames.org/fetch/symbol/", URLencode(gene_symbol, reserved = TRUE)),
-          httr::add_headers(Accept = "application/json"), httr::timeout(8)
-        )
-        tryCatch({
-          hj <- jsonlite::fromJSON(httr::content(hgnc_resp, "text", encoding = "UTF-8"),
-                                   simplifyVector = FALSE)
-          docs <- hj$response$docs
-          if (!is.null(docs) && length(docs) > 0) docs[[1]]$hgnc_id else NULL
-        }, error = function(e) NULL)
-      }
-
-      if (!is.null(erepo_hgnc)) {
-        erepo_resp <- httr::GET(
-          paste0("https://erepo.clinicalgenome.org/evrepo/api/classifications?hgnc_id=",
-                 URLencode(erepo_hgnc, reserved = TRUE), "&limit=50"),
-          httr::add_headers(Accept = "application/json"), httr::timeout(12)
-        )
-        if (httr::status_code(erepo_resp) == 200) {
-          ej <- jsonlite::fromJSON(httr::content(erepo_resp, "text", encoding = "UTF-8"),
-                                   simplifyVector = FALSE)
-          items <- if (!is.null(ej$results)) ej$results else if (is.list(ej)) ej else list()
-          rows <- lapply(items, function(it) {
-            tier <- match_tier(if (!is.null(it$classification)) it$classification else "")
-            if (is.na(tier)) return(NULL)
-            dis <- if (!is.null(it$disease)) {
-              if (is.list(it$disease) && !is.null(it$disease$label)) it$disease$label
-              else as.character(it$disease)
-            } else ""
-            moi <- if (!is.null(it$modeOfInheritance)) {
-              if (is.list(it$modeOfInheritance) && !is.null(it$modeOfInheritance$label))
-                it$modeOfInheritance$label
-              else as.character(it$modeOfInheritance)
-            } else ""
-            aff <- if (!is.null(it$affiliation)) {
-              if (is.list(it$affiliation) && !is.null(it$affiliation$affiliation_fullname))
-                it$affiliation$affiliation_fullname
-              else as.character(it$affiliation)
-            } else "ClinGen VCEP"
-            data.frame(disease = dis, classification = tier, moi = moi,
-                       submitter = aff, stringsAsFactors = FALSE)
-          })
-          rows <- Filter(Negate(is.null), rows)
-          if (length(rows) > 0) {
-            df <- do.call(rbind, rows)
-            result$all_assertions <<- df
-            result$source <<- "ClinGen eRepo"
-            df$tier_num <- tier_order[df$classification]
-            best <- df[which.max(df$tier_num), ]
-            result$classification <<- best$classification
-            result$disease        <<- best$disease
-            result$moi            <<- best$moi
-            message("[ClinGen eRepo] ", gene_symbol, " -> ", best$classification,
-                    " (", nrow(df), " assertions)")
-          }
-        }
-      }
-    }, error = function(e) {
-      message("[ClinGen eRepo] Error for ", gene_symbol, ": ", e$message)
-    })
-  }
+  # ── Source 2: ClinGen Evidence Repository — removed, it cannot answer this ──
+  # fetch_clingen_validity() returns GENE-DISEASE VALIDITY (Definitive ... Refuted).
+  # erepo/api/classifications serves VARIANT interpretations (Pathogenic ... Benign)
+  # from VCEPs, so match_tier() never matched and the branch could not contribute an
+  # assertion. It also queried ?hgnc_id=, which the endpoint silently IGNORES: a CASR
+  # request came back with Phenylketonuria VCEP records, and the only reason another
+  # gene's calls were never grafted onto this one is that the tier mapping failed. The
+  # response is keyed "variantInterpretations", not "results", so the items fallback
+  # ran $ over an atomic "@context" string and threw "$ operator is invalid for atomic
+  # vectors" on every gene load -- caught, logged, and misread as an API outage.
+  # ClinGen curations reach the app through GenCC below, which carries them as a
+  # submitter. The correct filter, if a variant-level use is ever wanted, is ?gene=<symbol>.
 
   # ── Source 3: GenCC API ───────────────────────────────────────────────────
   # https://thegencc.org/api/v1/validity-prop?hgnc_id=HGNC:XXXXX
