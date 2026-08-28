@@ -273,6 +273,48 @@ fetch_orphadata_prevalence <- function(omim_id) {
 #function to extract the protein position
 extract_protein_position <- function(uniprotID){ as.numeric(lapply(regmatches(uniprotID , gregexpr("[[:digit:]]+", uniprotID)), `[`, 1)) }
 
+# Wild-type residue check. Nothing downstream looks at the reference letter --
+# extract_protein_position() takes the digits and every track (domain, CCRS,
+# conservation, MDS, AlphaMissense) is read at that position -- so p.I554N on a
+# protein carrying V at 554 scores a residue the user did not mean, silently.
+# The cause is usually numbering from a different isoform or transcript, or a
+# typo; both need the user to see it rather than a plausible-looking result.
+AA3_TO_1 <- c(Ala="A",Arg="R",Asn="N",Asp="D",Cys="C",Gln="Q",Glu="E",Gly="G",
+              His="H",Ile="I",Leu="L",Lys="K",Met="M",Phe="F",Pro="P",Ser="S",
+              Thr="T",Trp="W",Tyr="Y",Val="V",Ter="*",Sec="U")
+
+parse_protein_sub <- function(v) {
+  b  <- sub("^p\\.", "", as.character(v))
+  m3 <- regmatches(b, regexec("^([A-Za-z]{3})([0-9]+)([A-Za-z]{3}|Ter|\\*)$", b))[[1]]
+  if (length(m3) == 4) {
+    return(list(ref = unname(AA3_TO_1[m3[2]]), pos = as.integer(m3[3]),
+                alt = if (m3[4] %in% c("Ter", "*")) "*" else unname(AA3_TO_1[m3[4]])))
+  }
+  m1 <- regmatches(b, regexec("^([A-Za-z])([0-9]+)([A-Za-z*])$", b))[[1]]
+  if (length(m1) == 4) {
+    return(list(ref = toupper(m1[2]), pos = as.integer(m1[3]), alt = toupper(m1[4])))
+  }
+  list(ref = NA_character_, pos = NA_integer_, alt = NA_character_)
+}
+
+# Returns the mismatching variants, or NULL when every one agrees with the
+# canonical sequence. A variant whose reference letter cannot be parsed is left
+# alone: this check is about disagreement, not about re-validating notation.
+check_reference_residues <- function(muts, seq) {
+  if (is.null(seq) || !nzchar(seq)) return(NULL)
+  rows <- lapply(muts, function(v) {
+    pr <- parse_protein_sub(v)
+    if (is.na(pr$ref) || is.na(pr$pos)) return(NULL)
+    obs <- if (pr$pos >= 1 && pr$pos <= nchar(seq)) substr(seq, pr$pos, pr$pos) else NA_character_
+    if (!is.na(obs) && obs == pr$ref) return(NULL)
+    data.frame(variant = as.character(v), pos = pr$pos, stated = pr$ref,
+               found = if (is.na(obs)) paste0("nothing - the protein is ", nchar(seq), " aa") else obs,
+               stringsAsFactors = FALSE)
+  })
+  rows <- do.call(rbind, rows)
+  if (is.null(rows) || !nrow(rows)) NULL else rows
+}
+
 # VarViz is protein-level: every coordinate (AlphaFold, AlphaMissense, UniProt
 # features, Pfam) is on the UniProt canonical isoform. Coding or genomic HGVS
 # must be REFUSED rather than coerced. The "p." prefix was previously prepended
@@ -6769,6 +6811,44 @@ shinyServer(function(input, output, session) {
       pfam_data()
     }, error = function(e) { message("[Prefetch] Pfam error: ", e$message) })
     
+    # The sequence is now in hand, so the stated reference residues can be
+    # checked before anything is scored against them.
+    mismatches <- tryCatch({
+      pf <- pfam_data()
+      check_reference_residues(variants()$x,
+                               if (!is.null(pf) && !is.null(pf$sequence)) pf$sequence$value else NULL)
+    }, error = function(e) { message("[RefCheck] skipped: ", e$message); NULL })
+
+    if (!is.null(mismatches)) {
+      removeNotification(nid)
+      gene_lbl <- isolate(as.character(input$gene_name))
+      rows_html <- paste0(
+        "<li><code>", htmltools::htmlEscape(mismatches$variant), "</code> &mdash; position ",
+        mismatches$pos, " carries <strong>", htmltools::htmlEscape(mismatches$found),
+        "</strong>, not <strong>", htmltools::htmlEscape(mismatches$stated), "</strong></li>",
+        collapse = "")
+      showModal(modalDialog(
+        title = tags$span(
+          tags$span(style = "color:#dc2626; margin-right:8px;", HTML("&#9888;")),
+          "Reference residue does not match"
+        ),
+        HTML(paste0(
+          '<div style="font-size:14px; line-height:1.7; color:#374151;">',
+          '<p style="margin:0 0 10px;">VarViz numbers on the UniProt canonical sequence for ',
+          '<strong>', htmltools::htmlEscape(gene_lbl), '</strong>. These variants name a different ',
+          'residue than that sequence carries:</p>',
+          '<ul style="margin:0 0 10px; padding-left:20px; color:#1e3a5f;">', rows_html, '</ul>',
+          '<p style="margin:0; color:#6b7280; font-size:13px;">Usually the position is numbered on ',
+          'another isoform or on the MANE transcript rather than the canonical one. Nothing was ',
+          'scored: every track is read at the position alone, so classifying these would describe ',
+          'the wrong residue.</p>',
+          '</div>'
+        )),
+        footer = modalButton("Got it"), easyClose = TRUE, size = "m"
+      ))
+      return()
+    }
+
     update_note("Fetching gnomAD variants...")
     tryCatch({
       gd <- gene_gnomad_data()
