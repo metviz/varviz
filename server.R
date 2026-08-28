@@ -6887,12 +6887,21 @@ shinyServer(function(input, output, session) {
     })
     
     prefetch_state$done <- TRUE
-    
-    # Replace loading toast with completion toast (auto-dismiss after 4s)
-    showNotification(
-      HTML('<div style="font-size:13px;"><strong>&#10003; All data loaded</strong> — Plot tab ready!</div>'),
-      id = nid, duration = 4, closeButton = TRUE, type = "message"
-    )
+
+    # The fetches are finished, but the GeneInfo outputs -- word cloud, disease
+    # table, prevalence lookups -- are computed in the flush that follows this
+    # observer, and some of them are slow. Announcing completion here left the
+    # user reading "All data loaded" over a still-empty panel. onFlushed fires
+    # once those outputs have been computed and sent to the client, so hold the
+    # loading toast until then.
+    update_note("Rendering gene info...")
+    session$onFlushed(function() {
+      message("[Prefetch] GeneInfo outputs flushed -- announcing completion")
+      showNotification(
+        HTML('<div style="font-size:13px;"><strong>&#10003; All data loaded</strong> \u2014 Plot tab ready!</div>'),
+        id = nid, duration = 4, closeButton = TRUE, type = "message"
+      )
+    }, once = TRUE)
   })
 
 
