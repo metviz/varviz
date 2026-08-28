@@ -1883,6 +1883,56 @@ api_cache$dbnsfp <- list()
 # Requires no authentication. Rate limit is lenient for interactive use.
 # =============================================================================
 
+# ── ClinGen gene-disease validity table ─────────────────────────────────────
+# The per-gene APIs this used to call are gone: ldh.genome.network 404s for every
+# gene (BRCA1 and TP53 included) and thegencc.org/api/v1/validity-prop answers
+# {"message": ""}. The curation set is still published whole, as the CSV behind
+# search.clinicalgenome.org/kb/gene-validity, so fetch it once per session and
+# look genes up locally -- one request instead of three per gene, and no
+# dependence on a per-gene endpoint staying up.
+#
+# Layout: 4 banner lines, a header, a "+++" rule, then the curations. Columns are
+# GENE SYMBOL, GENE ID (HGNC), DISEASE LABEL, DISEASE ID (MONDO), MOI, SOP,
+# CLASSIFICATION, ONLINE REPORT, CLASSIFICATION DATE, GCEP.
+CLINGEN_GV_URL <- getOption("varviz.clingen_gv_url",
+                            "https://search.clinicalgenome.org/kb/gene-validity/download")
+
+clingen_gv_table <- function() {
+  cached <- cache_get("clingen_gv", "all")
+  if (!is.null(cached)) return(cached)
+  tbl <- tryCatch({
+    resp <- httr::GET(CLINGEN_GV_URL, httr::timeout(30))
+    if (httr::status_code(resp) != 200) stop("HTTP ", httr::status_code(resp))
+    txt <- httr::content(resp, "text", encoding = "UTF-8")
+    df  <- utils::read.csv(text = txt, skip = 4, header = TRUE,
+                           check.names = FALSE, stringsAsFactors = FALSE)
+    df  <- df[df[[1]] != "+++++++++++", , drop = FALSE]
+    if (ncol(df) < 7 || !nrow(df)) stop("unexpected layout: ", ncol(df), " cols, ", nrow(df), " rows")
+    out <- data.frame(gene       = trimws(df[[1]]),
+                      hgnc_id    = trimws(df[[2]]),
+                      disease    = trimws(df[[3]]),
+                      moi        = trimws(df[[5]]),
+                      classification = trimws(df[[7]]),
+                      submitter  = if (ncol(df) >= 10) trimws(df[[10]]) else "ClinGen GCEP",
+                      stringsAsFactors = FALSE)
+    message("[ClinGen GV] Loaded ", nrow(out), " curations covering ",
+            length(unique(out$gene)), " genes")
+    out
+  }, error = function(e) {
+    message("[ClinGen GV] Could not load the validity table: ", e$message)
+    NULL
+  })
+  # Cache the failure too, as an empty frame: without this every gene in the
+  # session re-attempts a 30s download when ClinGen is unreachable.
+  cache_set("clingen_gv", "all",
+            if (is.null(tbl)) data.frame(gene = character(0), hgnc_id = character(0),
+                                         disease = character(0), moi = character(0),
+                                         classification = character(0),
+                                         submitter = character(0),
+                                         stringsAsFactors = FALSE) else tbl)
+  cache_get("clingen_gv", "all")
+}
+
 fetch_clingen_validity <- function(gene_symbol, hgnc_id = NULL) {
   # Use HGNC ID as cache key if available (more stable than symbol)
   cache_key <- if (!is.null(hgnc_id) && nchar(hgnc_id) > 0) hgnc_id else gene_symbol
@@ -1907,6 +1957,34 @@ fetch_clingen_validity <- function(gene_symbol, hgnc_id = NULL) {
     matched <- names(tier_order)[sapply(names(tier_order),
                  function(t) grepl(t, cls_str, ignore.case = TRUE))]
     if (length(matched) > 0) matched[1] else NA_character_
+  }
+
+  # ── Source 1: the published validity table ────────────────────────────────
+  gv <- clingen_gv_table()
+  if (!is.null(gv) && nrow(gv) > 0) {
+    hit <- if (!is.null(hgnc_id) && nchar(hgnc_id) > 0 && any(gv$hgnc_id == hgnc_id))
+             gv[gv$hgnc_id == hgnc_id, , drop = FALSE]
+           else gv[gv$gene == gene_symbol, , drop = FALSE]
+    if (nrow(hit) > 0) {
+      hit$tier <- vapply(hit$classification, match_tier, character(1))
+      hit <- hit[!is.na(hit$tier), , drop = FALSE]
+      if (nrow(hit) > 0) {
+        df <- data.frame(disease = hit$disease, classification = hit$tier,
+                         moi = hit$moi, submitter = hit$submitter,
+                         stringsAsFactors = FALSE)
+        best <- df[which.max(tier_order[df$classification]), ]
+        result$all_assertions <- df
+        result$source         <- "ClinGen gene-disease validity"
+        result$classification <- best$classification
+        result$disease        <- best$disease
+        result$moi            <- best$moi
+        message("[ClinGen GV] ", gene_symbol, " -> ", best$classification,
+                " (", nrow(df), " assertion", if (nrow(df) == 1) "" else "s", ")")
+        cache_set("clingen", cache_key, result)
+        return(result)
+      }
+    }
+    message("[ClinGen GV] No curation for ", gene_symbol)
   }
 
   # ── Helper: try LDH URL and return parsed assertions or NULL ──────────────
