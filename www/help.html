@@ -353,7 +353,16 @@
 
 <div class="card">
   <h3>5 - ClinVar / PTM / CCRS</h3>
-  <p>Three annotation layers: ClinVar pathogenic/LP variant positions (colored by significance), UniProt PTMs (phosphorylation, ubiquitination, etc.), and CCRS constrained coding region boundaries. CCRS &ge;90th percentile zones are used by the PM1 ACMG rule.</p>
+  <p>Five stacked rows, labelled at the left edge of the panel, all on the same residue axis:</p>
+  <ul>
+    <li><strong>Mis</strong> &mdash; ClinVar missense variant positions, coloured by review status (gold stars)</li>
+    <li><strong>LOF</strong> &mdash; ClinVar loss-of-function positions (nonsense, frameshift, splice)</li>
+    <li><strong>PTM</strong> &mdash; UniProt post-translational modification sites, coloured by type</li>
+    <li><strong>RS</strong> &mdash; CCRS constrained coding regions. The &ge;90th percentile zones are what the PM1 <code>ccrs</code> pathway uses</li>
+    <li><strong>Hot</strong> &mdash; permutation-significant ClinVar hotspot positions, tested against a gnomAD null model. This row feeds the PM1 <code>clinvar_hotspot</code> pathway</li>
+  </ul>
+  <p>The rows are independent PM1 pathways, so a variant can score PM1 from <strong>RS</strong> while <strong>Hot</strong> stays empty at that position, or the reverse. The Missense Disfavour Score has no row here: it is substitution-specific rather than positional, so it cannot be drawn on a residue axis. Hover the PM1 badge on a variant card to see which pathways produced its strength.</p>
+  <p style="font-size:13px;color:#64748b;">The <strong>Hot</strong> row was labelled <strong>PS</strong> in earlier versions, which read as the ACMG Strong tier and made an empty row look like a contradiction when a variant scored <code>PM1_strong</code> by another route.</p>
 </div>
 
 <div class="card">

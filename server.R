@@ -3391,7 +3391,10 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.56, ymax=0.70, fill="#C0C0C0", alpha=0.2)
   p <- p + ggplot2::annotate(geom = "text", label = "RS",  x = label_x, y = 0.55, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
   p <- p + ggplot2::annotate(geom = "rect", xmin=0, xmax=L, ymin=0.16, ymax=0.30, fill="#C0C0C0", alpha=0.2)
-  p <- p + ggplot2::annotate(geom = "text", label = "PS",  x = label_x, y = 0.15, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
+  # "Hot", not "PS": this row is the permutation-significant ClinVar hotspot
+  # track, and the old label read as the ACMG Strong tier -- a variant scoring
+  # PM1_strong through ccrs+mds looked wrong when the row stayed empty.
+  p <- p + ggplot2::annotate(geom = "text", label = "Hot", x = label_x, y = 0.15, size = lbl_sz, colour = lbl_col, hjust = 0, vjust = 1)
   # Color scale: ClinVar gold stars + PTM types
   ptm_colors <- c(
     "Phosphorylation"              = "#E69F00",
@@ -8841,7 +8844,7 @@ shinyServer(function(input, output, session) {
     p2 <- plot_afmps(mean_data(), highlight(), prot_length = pfam_data()$sequence$length) 
     p6 <- plot_pLDDT(af(), highlight(), prot_length = pfam_data()$sequence$length)
     incProgress(0.1, detail = "Building ClinVar/PTM/CCRS track...")
-    # PS track: permutation-significant ClinVar hotspot positions (gnomAD null).
+    # "Hot" track: permutation-significant ClinVar hotspot positions (gnomAD null).
     # Cache HIT from the variant-table build (same gene/cutoff/L). Guarded so a
     # miss/insufficient data simply yields an empty PS row.
     ps_positions <- tryCatch({
