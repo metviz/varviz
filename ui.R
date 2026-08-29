@@ -165,7 +165,7 @@ shinyUI(fluidPage(
                                       tags$li("gnomAD allele frequency rainfall plot"),
                                       tags$li("Mutation density (gnomAD + ClinVar + user variants)"),
                                       tags$li("AlphaFold Mean Pathogenicity scores"),
-                                      tags$li("ClinVar / PTM / CCRS combined track"),
+                                      tags$li("ClinVar / PTM / CCRS / Hot combined track (Mis, LOF, PTM, RS, Hot rows)"),
                                       tags$li(HTML("<strong>Multi Conservation (UCSC)</strong>: PhyloP 100V, PhyloP 470M, PhastCons via UCSC REST API")),
                                       tags$li("Conservation scores (ConSurf upload)"),
                                       tags$li("UniProt domains, regions & features"),
@@ -291,7 +291,7 @@ shinyUI(fluidPage(
                               choices = c("gnomAD Frequency"          = "freq",
                                           "Mutation Density"          = "density",
                                           "AF Mean Pathogenicity"     = "clinvar",
-                                          "ClinVar / PTM / CCRS"      = "clinvar_ptm",
+                                          "ClinVar / PTM / CCRS / Hot" = "clinvar_ptm",
                                           "Multi Conservation (UCSC)" = "multiconservation"),
                               selected = c("freq","density","clinvar","clinvar_ptm","multiconservation")
                             ),
