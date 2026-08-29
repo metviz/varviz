@@ -87,7 +87,10 @@ shinyUI(fluidPage(
                      tags$img(src="VarViz_Logo.png", alt="VarViz"))),
           div(class="vv-nav",
               tags$a(href="#", onclick="vvGo('protein_view'); return false;", "Plot Gene Variants"),
-              tags$a(href="#", onclick="vvGo('help'); return false;", "Help")
+              tags$a(href="#", onclick="vvGo('help'); return false;", "Help"),
+              tags$span(style="color:#94a3b8;font-size:12px;margin-left:10px;align-self:center;",
+                        paste0("v", tryCatch(trimws(readLines("VERSION", warn = FALSE)[1]),
+                                             error = function(e) "?")))
           )
       )
   ),

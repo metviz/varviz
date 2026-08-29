@@ -75,6 +75,13 @@ add_variant_vlines <- function(p, highlight, xmax = Inf, xmin = 0, ymax = NULL) 
 
 current_directory <- getwd()
 
+# Single source of truth for the release, read from VERSION so the number cannot
+# drift between the UI, the export header and the git tag. Exports carry it so a
+# result can be tied to the code that produced it, which matters once
+# classifications change between releases.
+VARVIZ_VERSION <- tryCatch(trimws(readLines("VERSION", warn = FALSE)[1]),
+                           error = function(e) "unknown")
+
 # Runtime scratch. Downloads and debug dumps used to land in the app directory,
 # which accumulates one <ACC>-F1-aa-substitutions.csv per gene visited plus a
 # clinvar_debug_raw.json that is overwritten but never cleaned up. tempdir() is
@@ -8288,6 +8295,7 @@ shinyServer(function(input, output, session) {
       gene_lbl <- if (!is.null(rp$gene) && nzchar(rp$gene)) rp$gene else
                   tryCatch(as.character(input$gene_name), error = function(e) "")
       meta <- c(
+        "varviz_version"                                        = VARVIZ_VERSION,
         "run"                                                   = if (!is.null(rp$run_time)) rp$run_time else "",
         "exported"                                              = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
         "gene"                                                  = gene_lbl,
