@@ -7,6 +7,31 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [1.1.1] - 2026-08-30
+
+Display and export text only. **No classification changes.**
+
+### Fixed
+
+- **A transcript accession was shown as the ClinVar condition.** When ClinVar
+  returns no `trait_set`, the fallback took the title text before the gene
+  symbol; on `NM_003042.4(SLC6A1):c.914C>T (p.Ala305Val)` its pattern matched
+  only the `4(`, so the capture kept `NM_003042.` and that reached the variant
+  card and the `ClinVar_Trait` column as a condition name. The fallback now
+  rejects accession-shaped results and trims a trailing accession stem, so
+  `Noonan syndrome, NM_002834.5(PTPN11):...` yields `Noonan syndrome`.
+- **`clean_trait()` was applied to the narrative comment only**, so the raw
+  value still reached the card, the evidence card and the export. It now runs
+  on the column, and was hoisted to the top level -- it had been local to
+  `generate_acmg_comment()`, where the column could not have called it.
+- **A same-codon ClinVar match displayed the other variant's call as this
+  variant's.** `p.Ala305Thr` showed a red "Pathogenic" from the `p.Ala305Val`
+  record while being absent from ClinVar itself; only a small "(same codon)"
+  marked the difference. The row now names the source and drops the red:
+  `p.Ala305Val: Pathogenic - same codon, not this variant`. Scoring was already
+  correct -- PP5 requires an exact match, so the variant received
+  `PM5_supporting`, not PP5.
+
 ## [1.1.0] - 2026-08-29
 
 ### Fixed — wrong answers

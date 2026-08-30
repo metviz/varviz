@@ -1349,9 +1349,18 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
              names_vec <- names_vec[!sapply(names_vec, is.null)]
              if (length(names_vec) > 0) names_vec[[1]] else ""
            } else {
-             # Fallback: use title before the gene symbol
-             t2 <- sub("^(.*?)\\s*[A-Z0-9]+\\(.*$", "\\1", var_title)
-             if (nchar(t2) > 0 && t2 != var_title) trimws(t2) else ""
+             # Fallback: the text before the gene symbol, for the few records
+             # whose title is "Condition, NM_...(GENE):c...". Guard it: on the
+             # ordinary "NM_003042.4(SLC6A1):c.914C>T" shape, [A-Z0-9]+\\( matches
+             # only the "4(", so the capture returns the accession stem
+             # "NM_003042." and it reached the card as the trait name.
+             t2 <- trimws(sub("^(.*?)\\s*[A-Z0-9]+\\(.*$", "\\1", var_title))
+             # Drop a trailing accession stem the capture may have swept up:
+             # "Noonan syndrome, NM_002834." -> "Noonan syndrome".
+             t2 <- trimws(sub("[,;]?\\s*(NM_|NP_|NG_|NC_|NR_|XM_|XP_|ENST|ENSG|ENSP|LRG_)[0-9._]*$", "", t2))
+             if (nchar(t2) > 0 && t2 != var_title &&
+                 !grepl("^(NM_|NP_|NG_|NC_|NR_|XM_|XP_|ENST|ENSG|ENSP|LRG_|chr)", t2) &&
+                 grepl("[A-Za-z]{4}", t2)) t2 else ""
            }
          }, error = function(e) "")
 
@@ -4132,6 +4141,20 @@ apply_calib_override <- function(tags_vec, ovr, r) {
 # ACMG Clinical Comment Generator
 # Produces natural-language variant interpretation text from ACMG tags + data
 # ============================================================
+# Clean a ClinVar trait: reject transcript/accession IDs, bare gene symbols and
+# too-short strings. Top-level because both the narrative comment and the
+# ClinVar_Trait column need it -- while it lived inside generate_acmg_comment()
+# the column shipped the raw value, and "NM_003042." reached the variant card as
+# a condition name.
+clean_trait <- function(trait, gene_sym) {
+  trait <- as.character(trait)
+  if (length(trait) == 0 || is.na(trait) || nchar(trait) == 0) return("")
+  if (grepl("^(NM_|NP_|NG_|NC_|NR_|XM_|XP_|ENST|ENSG|ENSP|LRG_|chr)", trait)) return("")
+  if (tolower(trimws(trait)) == tolower(as.character(gene_sym))) return("")
+  if (nchar(trimws(trait)) < 5) return("")
+  trait
+}
+
 generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac,
                                    gnomad_nhomalt,
                                    clinvar_sig, clinvar_name, clinvar_vcv, clinvar_vcv_pos,
@@ -4200,14 +4223,6 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   }
   domain_clean <- clean_domain(domain)
 
-  # Clean trait: reject transcript/accession IDs, gene symbols, too-short strings
-  clean_trait <- function(trait, gene_sym) {
-    if (nchar(trait) == 0) return("")
-    if (grepl("^(NM_|NP_|NG_|NC_|ENST|ENSG|LRG_|chr)", trait)) return("")
-    if (tolower(trimws(trait)) == tolower(gene_sym)) return("")
-    if (nchar(trimws(trait)) < 5) return("")
-    trait
-  }
   trait_clean <- clean_trait(clinvar_trait, gene)
   disease_str <- if (nchar(trait_clean) > 0) trait_clean else paste0(gene, "-related disorder")
 
@@ -6016,7 +6031,10 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       ClinVar_VCV = clinvar_vcv,
       ClinVar_VCV_Pos = clinvar_vcv_pos,
       RSID = rsid_val,
-      ClinVar_Trait = clinvar_trait,
+      # Cleaned at the boundary, not only in the narrative comment: clean_trait()
+      # existed but was applied to the comment text alone, so the raw value still
+      # reached the variant card, the evidence card and the export.
+      ClinVar_Trait = clean_trait(clinvar_trait, gene_name_for_api),
       ClinVar_Match = clinvar_match_type,
       Domain = domain,
       CCRS = in_ccrs,
@@ -7663,8 +7681,17 @@ shinyServer(function(input, output, session) {
                       if (nchar(site_txt) > 0) esc(site_txt))
             if (length(bits)) paste(bits, collapse = "; ") else '<span style="color:#cbd5e1;">—</span>'
           }),
-          info_cell("ClinVar",   paste0('<span style="color:',cv_col,';font-weight:600;">',esc(cv_sig),'</span>',
-                                        if (identical(cv_match,"position")) ' <span style="color:#94a3b8;font-size:10px;">(same codon)</span>' else ''),
+          # A position match reports the OTHER variant's assertion: this variant is
+          # absent from ClinVar. Name whose call it is and drop the red, so the
+          # significance is not read as belonging to the queried variant.
+          info_cell("ClinVar",
+                    if (identical(cv_match, "position"))
+                      paste0('<span style="color:#64748b;font-weight:600;">',
+                             if (nzchar(cv_pch)) paste0(esc(cv_pch), ": ") else "",
+                             esc(cv_sig), '</span>',
+                             ' <span style="color:#94a3b8;font-size:10px;">&mdash; same codon, not this variant</span>')
+                    else
+                      paste0('<span style="color:',cv_col,';font-weight:600;">',esc(cv_sig),'</span>'),
                                 note=paste0(
                                   {
                                     n_stars <- suppressWarnings(as.integer(r$ClinVar_Stars))
