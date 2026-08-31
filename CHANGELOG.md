@@ -7,6 +7,37 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [1.1.2] - 2026-08-30
+
+Dead code and dependency removal. **No classification changes** — nothing in this
+release touches the evidence engine, the point ladder, or any export column.
+
+### Removed
+
+- **Five `output$` blocks that no UI ever rendered.** `multicons_status` (57
+  lines), `consurf_status` (88), `mplot_container` (9), `debug_cols` (4) and
+  `highlight` (2) had no `uiOutput`/`plotOutput` counterpart anywhere in `ui.R`
+  or in any `renderUI`, so none of them was reachable. The dynamic-height
+  `mplot_container` in particular was superseded by the fixed-height
+  `plotlyOutput("mplot")` that `ui.R` actually renders. The `highlight_data`
+  reactive fed only the dead `output$highlight` table and went with it.
+- **Three package dependencies.** `DT` (its only call site was the dead
+  `output$highlight`), `markdown` (loaded in `ui.R`, never called), and
+  `shinycssloaders` from `server.R` (its only `withSpinner` was in the dead
+  `mplot_container`; `ui.R` still loads it for the one live spinner).
+- **`tm`.** The word-cloud text pipeline ran `tolower` → `removeNumbers` →
+  stopwords → `removePunctuation` → `stripWhitespace` on text that the
+  preceding `gsub("[^[:alpha:][:space:]]", " ", ...)` had already reduced to
+  letters and spaces, so two of those steps were no-ops and the contraction
+  stopwords (`don't`, `it's`, …) were unreachable. Replaced with base-R
+  tokenisation plus the reachable stopwords, keeping `TermDocumentMatrix`'s
+  three-character minimum. `analyses/tests/test_wordcloud_tokens.R` asserts the
+  new tokeniser reproduces the `tm` term frequencies exactly, and skips when
+  `tm` is not installed.
+
+Together this drops four packages from the deployed bundle, which matters
+against the shinyapps.io free-tier memory ceiling.
+
 ## [1.1.1] - 2026-08-30
 
 Display and export text only. **No classification changes.**

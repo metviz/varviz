@@ -2,7 +2,6 @@ suppressMessages(library(dplyr))
 suppressMessages(library(stringr))
 suppressMessages(library(shiny))
 suppressMessages(library(shinyjs))
-suppressMessages(library(shinycssloaders))
 suppressMessages(library(data.table))
 suppressMessages(library(jsonlite))
 suppressMessages(library(grid))
@@ -12,7 +11,6 @@ suppressMessages(library(plotly))
 suppressMessages(library(httr))
 suppressMessages(library(httr2))
 suppressMessages(library(wordcloud))
-suppressMessages(library(tm))
 # trackViewer/GenomicRanges/IRanges no longer needed — lollipops drawn natively in ggplot
 theme_set(theme_cowplot(font_size=12))
 
@@ -6241,157 +6239,6 @@ shinyServer(function(input, output, session) {
     # Priority 2: auto-fetch disabled — ConSurf track shows only when file is uploaded
     return(data.frame())
   })
-  
-  # ── Multi-Conservation (UCSC) status panel ──
-  output$multicons_status <- renderUI({
-    state <- multicons_state()
-    if (identical(state, "idle")) return(NULL)
-
-    box_style <- function(bg, border)
-      paste0("margin:4px 0 8px 0; padding:8px 10px; background:", bg,
-             "; border-left:3px solid ", border, "; border-radius:4px; font-size:12px;")
-
-    if (identical(state, "loading")) {
-      return(tags$div(style = box_style("#f0f9ff", "#3b82f6"),
-        tags$span(style = "color:#2563eb;",
-          HTML('<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13"
-                     viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     style="animation:spin 1s linear infinite; vertical-align:middle;
-                     margin-right:5px;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>'),
-          "Fetching PhyloP / PhastCons / GERP++ from UCSC..."
-        ),
-        tags$style("@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}")
-      ))
-    }
-
-    if (is.list(state) && identical(state$status, "ok")) {
-      pct    <- round(100 * state$covered / max(state$total, 1))
-
-      return(tags$div(style = box_style("#f0fdf4", "#22c55e"),
-        tags$span(style = "color:#15803d; font-weight:600;",
-                  "✓ UCSC conservation loaded"),
-        tags$br(),
-        tags$span(style = "color:#4b5563;",
-          paste0(state$covered, "/", state$total, " residues (", pct,
-                 "%) • PhyloP 100V • PhyloP 30M • PhastCons"))
-      ))
-    }
-
-    if (is.list(state) && identical(state$status, "absent")) {
-      return(tags$div(style = box_style("#fef2f2", "#ef4444"),
-        tags$span(style = "color:#b91c1c; font-weight:600;",
-                  "⚠ No conservation data returned"),
-        tags$br(),
-        tags$span(style = "color:#4b5563;",
-          paste0("UCSC BigWig tracks returned no scores for ", state$gene, ".")),
-        tags$br(),
-        tags$span(style = "color:#6b7280; font-size:11px;",
-          "Gene may be novel, on an untracked chromosome, or Ensembl coordinates unavailable.")
-      ))
-    }
-
-    if (is.list(state) && identical(state$status, "error")) {
-      return(tags$div(style = box_style("#fef2f2", "#ef4444"),
-        tags$span(style = "color:#b91c1c; font-weight:600;", "✘ Fetch failed"),
-        tags$br(),
-        tags$span(style = "color:#4b5563;", state$msg)
-      ))
-    }
-
-    NULL
-  })
-
-
-  # ── ConSurf status panel: shown below the file input in the sidebar ──
-  output$consurf_status <- renderUI({
-    state <- consurf_state()
-
-    # Not yet run or track not selected — show nothing
-    if (identical(state, "idle")) return(NULL)
-
-    # Loading spinner while fetch is in progress
-    if (identical(state, "loading")) {
-      return(tags$div(
-        style = "margin: 4px 0 8px 0; padding: 8px 10px; background:#f0f9ff;
-                 border-left: 3px solid #3b82f6; border-radius: 4px; font-size:12px;",
-        tags$span(style = "color:#2563eb;",
-          HTML('<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13"
-                     viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" class="spin" style="animation:spin 1s linear infinite;
-                     vertical-align:middle; margin-right:5px;">
-                 <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-               </svg>'),
-          "Searching ConSurf-DB..."
-        ),
-        tags$style("@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }")
-      ))
-    }
-
-    # Auto-fetch success
-    if (is.list(state) && identical(state$status, "ok")) {
-      return(tags$div(
-        style = "margin: 4px 0 8px 0; padding: 8px 10px; background:#f0fdf4;
-                 border-left: 3px solid #22c55e; border-radius: 4px; font-size:12px;",
-        tags$span(style = "color:#15803d; font-weight:600;", "✓ ConSurf-DB loaded"),
-        tags$br(),
-        tags$span(style = "color:#4b5563;",
-          paste0(state$rows, " residues • ", state$uid))
-      ))
-    }
-
-    # File upload success
-    if (is.list(state) && identical(state$status, "file_ok")) {
-      return(tags$div(
-        style = "margin: 4px 0 8px 0; padding: 8px 10px; background:#f0fdf4;
-                 border-left: 3px solid #22c55e; border-radius: 4px; font-size:12px;",
-        tags$span(style = "color:#15803d; font-weight:600;", "✓ File loaded"),
-        tags$br(),
-        tags$span(style = "color:#4b5563;",
-          paste0(state$rows, " residues • ", state$fname))
-      ))
-    }
-
-    # Auto-fetch absent — no PDB / not in ConSurf-DB
-    if (is.list(state) && identical(state$status, "absent")) {
-      return(tags$div(
-        style = "margin: 4px 0 8px 0; padding: 8px 10px; background:#fef2f2;
-                 border-left: 3px solid #ef4444; border-radius: 4px; font-size:12px;",
-        tags$span(style = "color:#b91c1c; font-weight:600;",
-          paste0("⚠ Not in ConSurf-DB")),
-        tags$br(),
-        tags$span(style = "color:#4b5563;",
-          paste0(state$gene, " (", state$uid, ") has no PDB structure or ",
-                 "ConSurf-DB entry.")),
-        tags$br(),
-        tags$a(
-          href = paste0("https://consurf.tau.ac.il/?pdb_id=ALPHAFOLD&uniprot_id=",
-                        state$uid),
-          target = "_blank",
-          style = "color:#2563eb; font-size:11px;",
-          "Run ConSurf on AlphaFold model ↗"
-        ),
-        tags$span(style = "color:#6b7280; font-size:11px;",
-          " then upload grades file above.")
-      ))
-    }
-
-    # File parse error
-    if (is.list(state) && identical(state$status, "file_error")) {
-      return(tags$div(
-        style = "margin: 4px 0 8px 0; padding: 8px 10px; background:#fef2f2;
-                 border-left: 3px solid #ef4444; border-radius: 4px; font-size:12px;",
-        tags$span(style = "color:#b91c1c; font-weight:600;", "✘ Parse failed"),
-        tags$br(),
-        tags$span(style = "color:#4b5563;", state$msg),
-        tags$br(),
-        tags$span(style = "color:#6b7280; font-size:11px;",
-          "Expected: ConSurf grades file (.txt) in tab-separated format.")
-      ))
-    }
-
-    NULL
-  })
-
 
   user_path_variants <- eventReactive(input$goButton, {
     # Read custom pathogenic positions file.
@@ -8759,21 +8606,43 @@ shinyServer(function(input, output, session) {
       return()
     }
 
-    docs <- tm::Corpus(tm::VectorSource(clean_text))
-    docs <- tm::tm_map(docs, tm::content_transformer(tolower))
-    docs <- tm::tm_map(docs, tm::removeNumbers)
-    docs <- tm::tm_map(docs, tm::removeWords, tm::stopwords("english"))
+    # Tokenise and drop stopwords with base R. clean_text is already
+    # alphabetic-only (see the gsub above), so tm's removeNumbers and
+    # removePunctuation steps were no-ops and the contraction stopwords
+    # ("don't", "it's", ...) were unreachable. Same result, no tm.
+    stop_en <- c("i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your",
+                 "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", "her",
+                 "hers", "herself", "it", "its", "itself", "they", "them", "their", "theirs",
+                 "themselves", "what", "which", "who", "whom", "this", "that", "these", "those",
+                 "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+                 "having", "do", "does", "did", "doing", "would", "should", "could", "ought",
+                 "cannot", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until",
+                 "while", "of", "at", "by", "for", "with", "about", "against", "between",
+                 "into", "through", "during", "before", "after", "above", "below", "to", "from",
+                 "up", "down", "in", "out", "on", "off", "over", "under", "again", "further",
+                 "then", "once", "here", "there", "when", "where", "why", "how", "all", "any",
+                 "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor",
+                 "not", "only", "own", "same", "so", "than", "too", "very")
     extra_stops <- c("gene", "protein", "encoded", "human", "results", "associated",
                      "refseq", "provided", "also", "may", "can", "two", "one",
                      "role", "involved", "required", "member", "family", "known")
-    docs <- tm::tm_map(docs, tm::removeWords, extra_stops)
-    docs <- tm::tm_map(docs, tm::removePunctuation)
-    docs <- tm::tm_map(docs, tm::stripWhitespace)
+
+    words <- strsplit(tolower(clean_text), "[[:space:]]+")[[1]]
+    # nchar >= 3 matches TermDocumentMatrix's default wordLengths, which the
+    # Corpus form of wordcloud() applied for us before.
+    words <- words[nchar(words) >= 3 & !words %in% c(stop_en, extra_stops)]
+    freq  <- sort(table(words), decreasing = TRUE)
+
+    if (!length(freq)) {
+      plot.new(); text(0.5, 0.5, "Not enough text for word cloud", col = "#94a3b8", cex = 1.4)
+      return()
+    }
 
     par(mar = c(0, 0, 0, 0))
     tryCatch({
       wordcloud::wordcloud(
-        words = docs,
+        words = names(freq),
+        freq  = as.numeric(freq),
         min.freq = 1,
         max.words = 80,
         random.order = FALSE,
@@ -8786,13 +8655,6 @@ shinyServer(function(input, output, session) {
     })
   })
 
-  output$debug_cols <- renderPrint({
-   colnames(consurf_score())
-   head(consurf_score(), 5)
-  })
-   
-   
-  
   final_plot <- reactive({
     
     if (input$goButton == 0)
@@ -9106,23 +8968,6 @@ shinyServer(function(input, output, session) {
     )
   })
 
-  # Dynamic container height: non-domain panels ~130px each, domain panel ~280px
-  output$mplot_container <- renderUI({
-    fp <- tryCatch(final_plot(), error = function(e) NULL)
-    n_pan <- if (!is.null(fp)) fp$n_panels else 7L
-    px_h  <- (n_pan - 1L) * 130L + 280L
-    withSpinner(
-      plotlyOutput("mplot", width="100%", height=paste0(px_h, "px")),
-      type=6
-    )
-  })
-  
-  highlight_data <- eventReactive(input$goButton,{ 
-    highlight()
-  })
-  
-  output$highlight <- DT::renderDataTable( highlight_data(), options = list(scrollX = TRUE))
-  
   # ── gnomAD raw data download ──────────────────────────────────────────────
   output$download_gnomad_raw <- downloadHandler(
     filename = function() {
