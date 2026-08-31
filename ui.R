@@ -2,9 +2,7 @@
 suppressMessages(library(shiny))
 suppressMessages(library(shinyjs))
 suppressMessages(library(shinycssloaders))
-suppressMessages(library(DT))
 suppressMessages(library(plotly))
-suppressMessages(library(markdown))
 
 shinyUI(fluidPage(
   tags$head(
