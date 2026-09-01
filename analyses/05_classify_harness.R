@@ -14,14 +14,16 @@
 # can selectively strip PM1 only when its firing pathway was the ClinVar
 # 15aa hotspot.
 #
-# Resumability: per-gene checkpoint files at analyses/classifications/<gene>__dual.tsv.
+# Resumability: per-gene checkpoint files at <outdir>/classifications/<gene>__dual.tsv.
 # Re-running skips genes whose checkpoint already exists.
 #
 # Run from project root: `Rscript analyses/05_classify_harness.R`
 #
 # Output (gitignored per Pass 2 policy):
-#   analyses/classifications/<gene>__dual.tsv  (per-gene checkpoint)
-#   analyses/derived/varviz_classifications.tsv (concatenated summary)
+#   <outdir>/classifications/<gene>__dual.tsv  (per-gene checkpoint)
+#   <outdir>/summary.tsv                       (concatenated summary)
+# with <outdir> unset defaulting to the original analyses/classifications and
+# analyses/derived/varviz_classifications.tsv.
 
 suppressMessages({
   library(dplyr)
@@ -29,18 +31,89 @@ suppressMessages({
   library(purrr)
 })
 
-cat("[harness] Sourcing server.R...\n")
+# --- Run configuration -------------------------------------------------------
+# Every ablation and re-run of this harness differs from the default only in
+# where it writes, which server.R it drives, and which varviz.* options are in
+# force. Those four knobs live here so the ~370 lines below exist once.
+#
+# A wrapper (analyses/ps_*_harness.R, analyses/test_weekly_variants.R) assigns
+# HARNESS_* and then sources this file. Running this file directly uses the
+# defaults, and the CLI overrides either:
+#
+#   Rscript analyses/05_classify_harness.R \
+#     --label=ps_nomds --outdir=analyses/ps_nomds --set=varviz.mds_pm1=FALSE
+#
+#   --label=     name used in log lines                    (default "default")
+#   --server=    the server.R to source                    (default "server.R")
+#   --universe=  variant universe TSV                      (default below)
+#   --outdir=    run directory; checkpoints land in <outdir>/classifications and
+#                the summary in <outdir>/summary.tsv. Unset keeps the original
+#                analyses/classifications + analyses/derived paths.
+#   --set=k=v    an option() to set after server.R is sourced; repeatable.
+#                Values TRUE/FALSE/NA and bare numbers are coerced, else string.
+#   --dry-run    print the resolved configuration and exit without running.
+#
+# The varviz.* options are read inside classify_acmg() at call time, so setting
+# them after server.R is sourced is equivalent to setting them before.
+
+if (!exists("HARNESS_LABEL"))    HARNESS_LABEL    <- "default"
+if (!exists("HARNESS_SERVER"))   HARNESS_SERVER   <- "server.R"
+if (!exists("HARNESS_UNIVERSE")) HARNESS_UNIVERSE <- "analyses/derived/variant_universe_gnomad.tsv"
+if (!exists("HARNESS_OUTDIR"))   HARNESS_OUTDIR   <- NULL
+if (!exists("HARNESS_OPTIONS"))  HARNESS_OPTIONS  <- list()
+
+local({
+  argv <- commandArgs(trailingOnly = TRUE)
+  coerce <- function(v) {
+    if (v %in% c("TRUE", "FALSE", "T", "F")) return(as.logical(v))
+    if (v == "NA") return(NA)
+    n <- suppressWarnings(as.numeric(v))
+    if (!is.na(n) && grepl("^-?[0-9.eE+-]+$", v)) n else v
+  }
+  for (a in argv) {
+    if (identical(a, "--dry-run")) { HARNESS_DRYRUN <<- TRUE; next }
+    if (!grepl("^--[a-z-]+=", a)) stop("unrecognised argument: ", a)
+    k <- sub("^--([a-z-]+)=.*$", "\\1", a)
+    v <- sub("^--[a-z-]+=", "", a)
+    switch(k,
+      label    = HARNESS_LABEL    <<- v,
+      server   = HARNESS_SERVER   <<- v,
+      universe = HARNESS_UNIVERSE <<- v,
+      outdir   = HARNESS_OUTDIR   <<- v,
+      set      = {
+        if (!grepl("=", v)) stop("--set needs key=value, got: ", v)
+        HARNESS_OPTIONS[[sub("=.*$", "", v)]] <<- coerce(sub("^[^=]*=", "", v))
+      },
+      stop("unknown flag --", k)
+    )
+  }
+})
+if (!exists("HARNESS_DRYRUN")) HARNESS_DRYRUN <- FALSE
+
+UNIVERSE_IN    <- HARNESS_UNIVERSE
+CHECKPOINT_DIR <- if (is.null(HARNESS_OUTDIR)) "analyses/classifications" else file.path(HARNESS_OUTDIR, "classifications")
+SUMMARY_OUT    <- if (is.null(HARNESS_OUTDIR)) "analyses/derived/varviz_classifications.tsv" else file.path(HARNESS_OUTDIR, "summary.tsv")
+
+cat(sprintf("[harness] run=%s server=%s\n", HARNESS_LABEL, HARNESS_SERVER))
+cat(sprintf("[harness] universe=%s\n[harness] checkpoints=%s\n[harness] summary=%s\n",
+            UNIVERSE_IN, CHECKPOINT_DIR, SUMMARY_OUT))
+if (length(HARNESS_OPTIONS))
+  cat(sprintf("[harness] options: %s\n",
+              paste(names(HARNESS_OPTIONS), unlist(lapply(HARNESS_OPTIONS, format)),
+                    sep = " = ", collapse = " ; ")))
+if (isTRUE(HARNESS_DRYRUN)) { cat("[harness] dry run — configuration only, nothing executed\n"); quit(save = "no") }
+
+cat(sprintf("[harness] Sourcing %s...\n", HARNESS_SERVER))
 t0 <- Sys.time()
-suppressMessages(source("server.R"))
-cat(sprintf("[harness] Sourced server.R in %.1f sec\n",
+suppressMessages(source(HARNESS_SERVER))
+cat(sprintf("[harness] Sourced %s in %.1f sec\n", HARNESS_SERVER,
             as.numeric(Sys.time() - t0, units = "secs")))
+
+if (length(HARNESS_OPTIONS)) do.call(options, HARNESS_OPTIONS)
 
 source("analyses/lib/clinvar_blind.R")
 source("analyses/lib/local_predictors.R")
 
-UNIVERSE_IN    <- "analyses/derived/variant_universe_gnomad.tsv"
-CHECKPOINT_DIR <- "analyses/classifications"
-SUMMARY_OUT    <- "analyses/derived/varviz_classifications.tsv"
 dir.create(CHECKPOINT_DIR, recursive = TRUE, showWarnings = FALSE)
 
 universe <- read_tsv(UNIVERSE_IN, show_col_types = FALSE)
