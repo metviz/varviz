@@ -1,9 +1,9 @@
 # Self-check for classify_acmg(): classification comes from summed Tavtigian
 # points only. No Richards rule ladder, so
 #   * a reduced-strength tag counts at its assigned strength, not its prefix
-#     (reviewer: PS1_supporting + PM2 used to reach Likely Pathogenic at 3 pts);
+#     (PS1_supporting + PM2 used to reach Likely Pathogenic at 3 pts);
 #   * conflicting evidence sums instead of being ordered away
-#     (reviewer: PS1 + PS2 + BA1 used to return Pathogenic at 0 pts);
+#     (PS1 + PS2 + BA1 used to return Pathogenic at 0 pts);
 #   * PM2 is Supporting (+1) per ClinGen SVI 2020-09-04; PVS1 + PM2 = 9 = LP;
 #   * PP5 / BP6 do not score (retired by ClinGen SVI 2018).
 # Bands (Tavtigian 2020): P >= 10, LP 6-9, VUS 0-5, LB -1..-6, B <= -7;
@@ -30,7 +30,7 @@ check <- function(tags, class, pts, note = "") {
   if (!ok) fails <<- fails + 1L
 }
 
-cat("reviewer cases\n")
+cat("strength suffixes and conflicting evidence\n")
 check(c("PS1_supporting", "PM2"),     "VUS-Mid",           2, "was LP at 3")
 check(c("PS1_moderate", "PS2"),       "Likely Pathogenic", 6, "was P at 6")
 check(c("PS1", "PS2", "BA1"),         "Benign",            0, "BA1 stand-alone; was P at 0")

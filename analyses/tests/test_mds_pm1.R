@@ -1,8 +1,8 @@
 # Self-check for the MDS (Missense Disfavour Score) PM1 Path 4 wiring in server.R.
 # Run: Rscript test_mds_pm1.R
 #
-# Three parts: (1) server.R is wired to use MDS as Path 4 and tiers it by LR+
-# (-4 Moderate, -8 Moderate-plus, -12 Strong); (2) the tier DECISION is exercised
+# Three parts: (1) server.R is wired to use MDS as Path 4 with two tiers
+# (-4 Moderate, -12 Strong, the latter opt-in); (2) the tier DECISION is exercised
 # at its boundaries against the real thresholds extracted from server.R; (3) the
 # lookup helper reproduces DOLPHIN on the shipped table and real reference deltas
 # land in the expected tier. Slices server.R as a trusted in-repo build artifact,
@@ -14,7 +14,7 @@ stopifnot(
   any(grepl('source\\("analyses/lib/pssm_lookup.R"', src)),
   any(grepl('MDS_TABLE <- tryCatch\\(pssm_table_load\\("data/pfam_pssm_human.rds"', src)),
   any(grepl('^MDS_PM1_THRESHOLD *<-', src)),
-  any(grepl('^MDS_PM1_MODPLUS_THRESHOLD *<-', src)),
+  !any(grepl('MODPLUS', src)),                       # Moderate-plus tier retired
   any(grepl('^MDS_PM1_STRONG_THRESHOLD *<-', src)),
   # entry-name bridge from the UniProt JSON already fetched
   any(grepl('mds_entry_name <-', src)) && any(grepl('pfam_data\\$uniProtkbId', src)),
@@ -27,12 +27,10 @@ stopifnot(
   any(grepl('pm1_pathway_val <- "mds_unavailable"', src)),
   any(grepl('mds_val <= MDS_PM1_THRESHOLD', src)),
   any(grepl('mds_val <= MDS_PM1_STRONG_THRESHOLD', src)),
-  any(grepl('mds_val <= MDS_PM1_MODPLUS_THRESHOLD', src)),
   any(grepl('"PM1_strong"', src)),
-  any(grepl('"PM1_moderate_plus"', src)),
-  # tier -> points map (Strong +4, Moderate-plus +3, Moderate +2)
+  # tier -> points map (Strong +4, Moderate +2); no half-step tier
   any(grepl('PM1_strong=4', src)),
-  any(grepl('PM1_moderate_plus=3', src)),
+  !any(grepl('PM1_moderate_plus=3', src)),
   any(grepl('PM1=2', src)),
   # score is exported
   any(grepl('MDS_Score = ', src)),
@@ -46,24 +44,21 @@ num_after <- function(pat) {
   as.numeric(regmatches(rhs, regexpr("-?[0-9]+\\.?[0-9]*", rhs)))
 }
 base_thr    <- num_after("^MDS_PM1_THRESHOLD *<-")
-modplus_thr <- num_after("^MDS_PM1_MODPLUS_THRESHOLD *<-")
 strong_thr  <- num_after("^MDS_PM1_STRONG_THRESHOLD *<-")
-stopifnot(base_thr > modplus_thr, modplus_thr > strong_thr)   # -4 > -8 > -12
+stopifnot(base_thr > strong_thr)   # -4 > -12
 
 # mirrors the server.R Path-4 precedence (strong checked first); the static greps
 # above assert that precedence and the emitted tags exist in server.R.
 mds_tier <- function(mds) {
   if (is.na(mds) || mds > base_thr) return(NA_character_)
-  if (mds <= strong_thr)  return("PM1_strong")
-  if (mds <= modplus_thr) return("PM1_moderate_plus")
+  if (mds <= strong_thr) return("PM1_strong")
   "PM1"
 }
 stopifnot(
   is.na(mds_tier(base_thr + 0.01)),                       # just above -4 -> no fire
   mds_tier(base_thr)           == "PM1",                  # -4  -> Moderate
-  mds_tier(modplus_thr + 0.01) == "PM1",                  # -7.99 -> Moderate
-  mds_tier(modplus_thr)        == "PM1_moderate_plus",    # -8  -> Moderate-plus
-  mds_tier(strong_thr + 0.01)  == "PM1_moderate_plus",    # -11.99 -> Moderate-plus
+  mds_tier(-8)                 == "PM1",                  # -8  -> still Moderate
+  mds_tier(strong_thr + 0.01)  == "PM1",                  # -11.99 -> Moderate
   mds_tier(strong_thr)         == "PM1_strong",           # -12 -> Strong
   mds_tier(strong_thr - 5)     == "PM1_strong"
 )
@@ -86,11 +81,11 @@ if (file.exists("data/pfam_pssm_human.rds")) {
     !pssm_fires_pm1(t, "SYUA_HUMAN", 53, "A", "T")
   )
   # real reference deltas land in the expected tier
-  d_g14r <- pssm_delta(t, "SYUA_HUMAN", 14, "G", "R")$delta   # ~ -9.16 -> Moderate-plus
+  d_g14r <- pssm_delta(t, "SYUA_HUMAN", 14, "G", "R")$delta   # ~ -9.16 -> Moderate
   d_g51d <- pssm_delta(t, "SYUA_HUMAN", 51, "G", "D")$delta   # ~ -5.42 -> Moderate
   d_g143e <- pssm_delta(t, "CASR_HUMAN", 143, "G", "E")$delta # ~ -5.96 -> Moderate
   stopifnot(
-    mds_tier(d_g14r)  == "PM1_moderate_plus",
+    mds_tier(d_g14r)  == "PM1",
     mds_tier(d_g51d)  == "PM1",
     mds_tier(d_g143e) == "PM1"
   )

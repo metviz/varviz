@@ -7,6 +7,25 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [2.1.0] - 2026-09-06
+
+MDS strength tiers reduced to two. **No change to the default configuration**
+(`varviz.mds_tiered = FALSE`, MDS at Moderate); the opt-in tiered configuration
+now yields Strong instead of Moderate-plus for MDS ≤ −8 to −12.
+
+### Changed
+
+- **`PM1_moderate_plus` (+3) retired.** The Tavtigian point scale has no
+  half-step between Moderate (2) and Strong (4), and the LR+ at MDS ≤ −8 lands
+  between the two strength cut-points on every benign arm measured (11.2
+  genome-wide 2-star, 14.5 on 1-star-only, 12.1–17.4 against the Kwon et al.
+  2026 control sets), so that range is reported as a confident Moderate rather
+  than a separate tier. With the exploratory tier enabled, PM1 from MDS is
+  Moderate (+2) at ≤ −4 and Strong (+4) at ≤ −12; nothing in between.
+- The retired tag is still recognised by `lib/clinvar_blind.R` and
+  `repro/07_regenerate.R` so summaries written by earlier versions still
+  demote and tabulate correctly.
+
 ## [2.0.1] - 2026-09-06
 
 Analysis scripts only. **No classification changes.**
@@ -27,7 +46,7 @@ Analysis scripts only. **No classification changes.**
 
 ## [2.0.0] - 2026-09-06
 
-Evidence-engine revision after peer review. **Changes classifications.** Every
+Evidence-engine revision. **Changes classifications.** Every
 `ps_*` run, the manuscript numbers, Figure panels and Supplementary Table S2
 must be regenerated against this engine before being quoted.
 
@@ -75,9 +94,9 @@ must be regenerated against this engine before being quoted.
 
 ### Added
 
-- `analyses/tests/test_acmg_points_only.R`: reviewer cases, SVI PM2 rule,
-  retired criteria, band edges, PP1/PP4 cap. `test_uniprot_sites.R` gains the
-  alt-residue gating cases.
+- `analyses/tests/test_acmg_points_only.R`: strength-suffix and conflicting-
+  evidence cases, SVI PM2 rule, retired criteria, band edges, PP1/PP4 cap.
+  `test_uniprot_sites.R` gains the alt-residue gating cases.
 
 ## [1.1.3] - 2026-09-06
 
