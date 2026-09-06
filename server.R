@@ -47,6 +47,17 @@ MDS_PM1_THRESHOLD <- -4
 # missense (18,570 P / 14,646 B): LR+ 5.4 (-4), 11.2 (-8), 39.0 (-12).
 MDS_PM1_MODPLUS_THRESHOLD <- -8    # PM1_moderate_plus (+3), LR+ ~11
 MDS_PM1_STRONG_THRESHOLD  <- -12   # PM1_strong (+4), LR+ ~39
+#
+# Evidence-overlap constraint (one signal, one criterion):
+#   * MDS is counted ONCE, under PM1 only. It never feeds PP3 and is never
+#     summed with a pathway PM1: where both fire, the stronger is taken.
+#   * Position conservation (PhyloP / PhastCons / GERP / ConSurf) that was
+#     spent to reach PM1_strong (cons_used_for_pm1) is withheld from the PP3
+#     conservation tier, so the same alignment signal is not scored twice.
+#   * Sequence predictors (REVEL / CADD / AlphaMissense / meta-predictors) are
+#     one evidence line, PP3, at the Pejaver-calibrated strength; agreement
+#     among them never upgrades PP3 and never stands in for PS3.
+#   * PP1 + PP4 (locus evidence) are capped jointly at PP1_PP4_CAP points.
 
 # Gene-specific calibration stats core (OddsPath/LR+, ClinVar hgvsp parsing,
 # gene_calibration assembly). Pure, no network — unit-tested standalone.
