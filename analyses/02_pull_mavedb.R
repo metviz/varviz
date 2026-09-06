@@ -219,7 +219,14 @@ canonical <- bind_rows(all_canonical) |>
   distinct(gene, p_notation, study, .keep_all = TRUE) |>
   arrange(gene, study, p_notation)
 
-write_tsv(canonical, file.path(OUT_DERIVED, "mavedb_canonical.tsv"))
+out_canonical <- file.path(OUT_DERIVED, "mavedb_canonical.tsv")
+stopifnot(nrow(canonical) > 0)
+# out_canonical is a declared input of the downstream pipeline (REPRODUCIBILITY.md).
+# Re-running this puller regenerates it from live sources; never do that
+# silently over the copy the manuscript numbers were built from.
+if (file.exists(out_canonical) && !("--force" %in% commandArgs(trailingOnly = TRUE)))
+  stop("refusing to overwrite frozen input ", out_canonical, "; pass --force to regenerate it")
+write_tsv(canonical, out_canonical)
 
 cat("\n[mavedb] Summary\n")
 cat(sprintf("  Scoresets attempted:   %d\n", total_scoresets))

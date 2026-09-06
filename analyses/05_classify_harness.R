@@ -52,6 +52,8 @@ suppressMessages({
 #   --set=k=v    an option() to set after server.R is sourced; repeatable.
 #                Values TRUE/FALSE/NA and bare numbers are coerced, else string.
 #   --dry-run    print the resolved configuration and exit without running.
+#   --force      overwrite an existing summary.tsv (refused by default; the
+#                manuscript numbers were read from those files).
 #
 # The varviz.* options are read inside classify_acmg() at call time, so setting
 # them after server.R is sourced is equivalent to setting them before.
@@ -72,6 +74,7 @@ local({
   }
   for (a in argv) {
     if (identical(a, "--dry-run")) { HARNESS_DRYRUN <<- TRUE; next }
+    if (identical(a, "--force"))   { HARNESS_FORCE  <<- TRUE; next }
     if (!grepl("^--[a-z-]+=", a)) stop("unrecognised argument: ", a)
     k <- sub("^--([a-z-]+)=.*$", "\\1", a)
     v <- sub("^--[a-z-]+=", "", a)
@@ -89,6 +92,7 @@ local({
   }
 })
 if (!exists("HARNESS_DRYRUN")) HARNESS_DRYRUN <- FALSE
+if (!exists("HARNESS_FORCE"))  HARNESS_FORCE  <- FALSE
 
 UNIVERSE_IN    <- HARNESS_UNIVERSE
 CHECKPOINT_DIR <- if (is.null(HARNESS_OUTDIR)) "analyses/classifications" else file.path(HARNESS_OUTDIR, "classifications")
@@ -113,6 +117,7 @@ if (length(HARNESS_OPTIONS)) do.call(options, HARNESS_OPTIONS)
 
 source("analyses/lib/clinvar_blind.R")
 source("analyses/lib/local_predictors.R")
+source("analyses/lib/harness_guard.R")
 
 dir.create(CHECKPOINT_DIR, recursive = TRUE, showWarnings = FALSE)
 
@@ -139,14 +144,16 @@ classify_gene <- function(gene_name) {
   uid <- as.character(gene_attrib_row$uniprot_id[1])
 
   # Gene-level fetches (one call each)
-  pfam_d    <- tryCatch(extract_pfam(uid),                                 error = function(e) NULL)
-  uniprot_d <- tryCatch(extract_uniprot_feature_data(uid),                 error = function(e) NULL)
-  gnomad_d  <- tryCatch(extract_gnomad(gene_name),                         error = function(e) NULL)
-  clinvar_d <- tryCatch(extract_clinvar(gene_name),                        error = function(e) NULL)
-  ccrs_d    <- tryCatch(extract_ccrs(gene_name, pfam_d$primaryAccession),  error = function(e) NULL)
-  af_d      <- tryCatch(extract_alphafold_plddt(uid),                      error = function(e) NULL)
-  mean_d    <- tryCatch(get_mean_pathogenicity(uid),                       error = function(e) NULL)
-  gi_d      <- tryCatch(extract_gene_info_uniprot(uid, gene_name),         error = function(e) NULL)
+  # A failed fetch is recorded in options(varviz.harness_fetch_failed) so
+  # run_one() refuses to checkpoint the gene (see analyses/lib/harness_guard.R).
+  pfam_d    <- harness_fetch("pfam",    gene_name, extract_pfam(uid))
+  uniprot_d <- harness_fetch("uniprot", gene_name, extract_uniprot_feature_data(uid))
+  gnomad_d  <- harness_fetch("gnomad",  gene_name, extract_gnomad(gene_name))
+  clinvar_d <- harness_fetch("clinvar", gene_name, extract_clinvar(gene_name))
+  ccrs_d    <- harness_fetch("ccrs",    gene_name, extract_ccrs(gene_name, pfam_d$primaryAccession))
+  af_d      <- harness_fetch("alphafold", gene_name, extract_alphafold_plddt(uid))
+  mean_d    <- harness_fetch("mean_path", gene_name, get_mean_pathogenicity(uid))
+  gi_d      <- harness_fetch("gene_info", gene_name, extract_gene_info_uniprot(uid, gene_name))
 
   hgnc_for_clingen <- if (!is.null(gi_d) && !is.null(gi_d$hgnc_id) && nchar(gi_d$hgnc_id) > 0) gi_d$hgnc_id else NULL
   clingen_d <- tryCatch(
@@ -177,7 +184,7 @@ classify_gene <- function(gene_name) {
   # call (saved as fetch_dbnsfp_remote). on.exit restores the original binding
   # so the patch is scoped to this classify_gene() call.
   # ---------------------------------------------------------------------------
-  exon_df_local <- tryCatch(fetch_ensembl_exons(gene_name), error = function(e) NULL)
+  exon_df_local <- harness_fetch("ensembl_exons", gene_name, fetch_ensembl_exons(gene_name))
   chrom_for_gene <- if (!is.null(exon_df_local) && nrow(exon_df_local) > 0) {
     as.character(exon_df_local$chr[1])
   } else NA_character_
@@ -198,9 +205,19 @@ classify_gene <- function(gene_name) {
                           nrow(exon_df_local) > 0L) {
     g_start <- min(exon_df_local$genomic_start, na.rm = TRUE)
     g_end   <- max(exon_df_local$genomic_end,   na.rm = TRUE)
-    tryCatch(load_dbnsfp_for_region(chrom_for_gene, g_start, g_end),
-             error = function(e) NULL)
+    harness_fetch("dbnsfp_region", gene_name,
+                  load_dbnsfp_for_region(chrom_for_gene, g_start, g_end))
   } else NULL
+  # chrom_for_gene = NA (Ensembl down) silently disables the dbNSFP and REVEL
+  # preloads: conservation reads GERP=NA / PhyloP~0, cons_strong flips, PM1/PP3
+  # drop, row count stays correct. This corrupted BRCA1 in the first sharded
+  # ps_final run. Record it so run_one() refuses the checkpoint.
+  if (file.exists(DBNSFP_DEFAULT_PATH) && is.null(dbnsfp_env_local)) {
+    options(varviz.localpred_failed =
+              union(getOption("varviz.localpred_failed", character(0)), gene_name))
+    cat(sprintf("    [%s] LOCAL PREDICTORS FAILED TO LOAD (chrom=%s) -- gene will not be checkpointed\n",
+                gene_name, chrom_for_gene))
+  }
 
   # Protein length: prefer AM CSV max position, fall back to universe max.
   prot_length_for_gene <- if (!is.null(am_dt_local) && nrow(am_dt_local) > 0) {
@@ -399,7 +416,18 @@ run_one <- function(gene_name) {
     cat(sprintf("  [%s] cached -> %s\n", gene_name, ckpt))
     return(read_tsv(ckpt, show_col_types = FALSE))
   }
+  before <- sentinel_snapshot()
   result <- classify_gene(gene_name)
+  failed <- new_sentinels(before, sentinel_snapshot())
+  # A source outage during this gene drops PM1 pathways or predictors while
+  # leaving the row count intact -- the silent corruption that spoiled
+  # ps_mds_corroborate and ps_mds_consfree. Refuse the checkpoint so a re-run
+  # redoes the gene instead of caching bad numbers.
+  if (length(failed)) {
+    cat(sprintf("  [%s] ABORT: required data source failed (%s); checkpoint NOT written\n",
+                gene_name, paste(failed, collapse = ", ")))
+    return(NULL)
+  }
   if (!is.null(result) && nrow(result) > 0) write_tsv(result, ckpt)
   result
 }
@@ -417,7 +445,19 @@ if (length(all_results) == 0) {
   cat("[harness] FAIL: no gene yielded results\n"); quit(status = 1)
 }
 
+if (length(all_results) < length(genes)) {
+  cat(sprintf("[harness] FAIL: %d of %d genes aborted or skipped; summary NOT written (re-run to retry them)\n",
+              length(genes) - length(all_results), length(genes)))
+  quit(status = 1)
+}
+
 summary_df <- bind_rows(all_results)
+# summary.tsv is the file the manuscript numbers were read from. Never clobber
+# an existing one silently; --force is the explicit opt-in.
+if (file.exists(SUMMARY_OUT) && !HARNESS_FORCE) {
+  cat(sprintf("[harness] REFUSE: %s already exists; pass --force to overwrite\n", SUMMARY_OUT))
+  quit(status = 1)
+}
 write_tsv(summary_df, SUMMARY_OUT)
 
 # -----------------------------------------------------------------------------

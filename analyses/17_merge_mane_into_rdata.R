@@ -17,7 +17,8 @@ stopifnot(file.exists(RDATA), file.exists(AUG))
 # ── Back up first ─────────────────────────────────────────────────────────
 stamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
 bak <- paste0(RDATA, ".bak.", stamp, ".pre-mane")
-file.copy(RDATA, bak, overwrite = FALSE)
+if (!isTRUE(file.copy(RDATA, bak, overwrite = FALSE)))
+  stop("[merge] backup of ", RDATA, " to ", bak, " FAILED; not touching the RData")
 message("[merge] backed up ", RDATA, " -> ", bak)
 
 # ── Load, swap gene_data, keep everything else ────────────────────────────

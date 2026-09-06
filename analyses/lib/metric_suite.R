@@ -57,8 +57,11 @@ clinical_collapse <- function(class_vec) {
 #' @param pred_class character vector of VarViz classifications (7-bin)
 #' @param pred_score numeric vector of Tavtigian point scores (continuous)
 #' @param boot_n     number of bootstrap reps for AUROC CI (default 1000)
+#' @param seed       RNG seed for the bootstrap so the CI is reproducible run to
+#'                   run (default 1L). NULL = leave the RNG alone (non-deterministic).
+#'                   The caller's RNG state is restored afterwards either way.
 #' @return tibble with columns: metric, estimate, lower, upper
-compute_metric_suite <- function(truth, pred_class, pred_score, boot_n = 1000L) {
+compute_metric_suite <- function(truth, pred_class, pred_score, boot_n = 1000L, seed = 1L) {
   collapsed <- clinical_collapse(pred_class)
 
   # Sens/Spec/MCC on the binary collapse, excluding VUS calls
@@ -93,6 +96,16 @@ compute_metric_suite <- function(truth, pred_class, pred_score, boot_n = 1000L) 
     sc     <- pred_score[auc_idx]
     auc_pe <- .auroc_mw(is_pos, sc)
     if (boot_n > 0L) {
+      if (!is.null(seed)) {
+        # Scope the seed to this bootstrap: restore whatever RNG state the
+        # caller had so seeding here cannot alter their downstream draws.
+        had_seed <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
+        old_seed <- if (had_seed) get(".Random.seed", envir = globalenv()) else NULL
+        on.exit(if (had_seed) assign(".Random.seed", old_seed, envir = globalenv())
+                else if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+                  rm(".Random.seed", envir = globalenv()), add = TRUE)
+        set.seed(seed)
+      }
       boot <- replicate(boot_n, {
         i <- sample.int(length(sc), replace = TRUE)
         .auroc_mw(is_pos[i], sc[i])

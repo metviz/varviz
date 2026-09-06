@@ -69,11 +69,15 @@ cat(sprintf("[harness] Sourced server.R in %.1f sec\n",
 
 source("analyses/lib/clinvar_blind.R")
 source("analyses/lib/local_predictors.R")
+source("analyses/lib/harness_guard.R")
 
 UNIVERSE_IN    <- Sys.getenv("VARVIZ_UNIVERSE", "analyses/derived/variant_universe_gnomad.tsv")
 .out_dir <- Sys.getenv("VARVIZ_OUT_DIR", "analyses/ps_final")
 CHECKPOINT_DIR <- file.path(.out_dir, "classifications")
 SUMMARY_OUT    <- file.path(.out_dir, "summary.tsv")
+# summary.tsv is the FINAL shipping build the manuscript numbers were read
+# from. Overwriting it requires the explicit opt-in VARVIZ_FORCE=1.
+.force <- identical(Sys.getenv("VARVIZ_FORCE", ""), "1")
 dir.create(CHECKPOINT_DIR, recursive = TRUE, showWarnings = FALSE)
 
 universe <- read_tsv(UNIVERSE_IN, show_col_types = FALSE)
@@ -109,14 +113,17 @@ classify_gene <- function(gene_name) {
   uid <- as.character(gene_attrib_row$uniprot_id[1])
 
   # Gene-level fetches (one call each)
-  pfam_d    <- tryCatch(extract_pfam(uid),                                 error = function(e) NULL)
-  uniprot_d <- tryCatch(extract_uniprot_feature_data(uid),                 error = function(e) NULL)
-  gnomad_d  <- tryCatch(extract_gnomad(gene_name),                         error = function(e) NULL)
-  clinvar_d <- tryCatch(extract_clinvar(gene_name),                        error = function(e) NULL)
-  ccrs_d    <- tryCatch(extract_ccrs(gene_name, pfam_d$primaryAccession),  error = function(e) NULL)
-  af_d      <- tryCatch(extract_alphafold_plddt(uid),                      error = function(e) NULL)
-  mean_d    <- tryCatch(get_mean_pathogenicity(uid),                       error = function(e) NULL)
-  gi_d      <- tryCatch(extract_gene_info_uniprot(uid, gene_name),         error = function(e) NULL)
+  # Every failure is recorded in options(varviz.harness_fetch_failed) so
+  # run_one() refuses the checkpoint (analyses/lib/harness_guard.R). The old
+  # sentinel list covered only uniprot / localpred / clinvar_batch.
+  pfam_d    <- harness_fetch("pfam",    gene_name, extract_pfam(uid))
+  uniprot_d <- harness_fetch("uniprot", gene_name, extract_uniprot_feature_data(uid))
+  gnomad_d  <- harness_fetch("gnomad",  gene_name, extract_gnomad(gene_name))
+  clinvar_d <- harness_fetch("clinvar", gene_name, extract_clinvar(gene_name))
+  ccrs_d    <- harness_fetch("ccrs",    gene_name, extract_ccrs(gene_name, pfam_d$primaryAccession))
+  af_d      <- harness_fetch("alphafold", gene_name, extract_alphafold_plddt(uid))
+  mean_d    <- harness_fetch("mean_path", gene_name, get_mean_pathogenicity(uid))
+  gi_d      <- harness_fetch("gene_info", gene_name, extract_gene_info_uniprot(uid, gene_name))
 
   hgnc_for_clingen <- if (!is.null(gi_d) && !is.null(gi_d$hgnc_id) && nchar(gi_d$hgnc_id) > 0) gi_d$hgnc_id else NULL
   clingen_d <- tryCatch(
@@ -147,7 +154,7 @@ classify_gene <- function(gene_name) {
   # call (saved as fetch_dbnsfp_remote). on.exit restores the original binding
   # so the patch is scoped to this classify_gene() call.
   # ---------------------------------------------------------------------------
-  exon_df_local <- tryCatch(fetch_ensembl_exons(gene_name), error = function(e) NULL)
+  exon_df_local <- harness_fetch("ensembl_exons", gene_name, fetch_ensembl_exons(gene_name))
   chrom_for_gene <- if (!is.null(exon_df_local) && nrow(exon_df_local) > 0) {
     as.character(exon_df_local$chr[1])
   } else NA_character_
@@ -410,12 +417,9 @@ run_one <- function(gene_name) {
     cat(sprintf("  [%s] cached -> %s\n", gene_name, ckpt))
     return(read_tsv(ckpt, show_col_types = FALSE))
   }
-  sentinels <- function() c(getOption("varviz.uniprot_failed",  character(0)),
-                            getOption("varviz.localpred_failed", character(0)),
-                            getOption("varviz.clinvar_batch_failed", character(0)))
-  before <- sentinels()
+  before <- sentinel_snapshot()          # all four sentinel families
   result <- classify_gene(gene_name)
-  after  <- sentinels()
+  after  <- sentinel_snapshot()
   # A UniProt outage during this gene drops the domain/site PM1 pathways while
   # leaving the row count intact -- the exact silent corruption that spoiled
   # ps_mds_corroborate and ps_mds_consfree. Refuse the checkpoint so a re-run
@@ -441,6 +445,11 @@ for (i in seq_along(genes)) {
 if (length(all_results) == 0) {
   cat("[harness] FAIL: no gene yielded results\n"); quit(status = 1)
 }
+if (length(all_results) < length(genes)) {
+  cat(sprintf("[harness] FAIL: %d of %d genes aborted or skipped; nothing written (re-run to retry them)\n",
+              length(genes) - length(all_results), length(genes)))
+  quit(status = 1)
+}
 
 summary_df <- bind_rows(all_results)
 # A shard holds only its own genes, so writing SUMMARY_OUT here would clobber
@@ -449,6 +458,10 @@ summary_df <- bind_rows(all_results)
 if (nzchar(.shard)) {
   cat(sprintf("[harness] SHARD done (%s); summary.tsv left for the final pass\n", .shard))
   quit(status = 0)
+}
+if (file.exists(SUMMARY_OUT) && !.force) {
+  cat(sprintf("[harness] REFUSE: %s already exists; set VARVIZ_FORCE=1 to overwrite\n", SUMMARY_OUT))
+  quit(status = 1)
 }
 write_tsv(summary_df, SUMMARY_OUT)
 

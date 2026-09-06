@@ -95,9 +95,16 @@ cat(sprintf("  MDS PM1 fires on %s / %s variants overall (%.1f%%); augments %s P
 # ── Panel A on VariBench labels: Full / Blind / Blind+DOLPHIN / Blind+MDS ───
 univ <- as.data.table(read_tsv(UNIV, show_col_types = FALSE))[source == "VariBench"]
 j <- merge(cls, univ[, .(gene, p_notation, label)], by = c("gene","p_notation"))
+# Inner join: a key-format drift (p_notation 1- vs 3-letter, gene alias) would
+# silently shrink this to a handful of rows and still print an AUROC. Fail loud.
+stopifnot(nrow(j) > 0)
+cat(sprintf("  VariBench join: %s of %s labelled rows matched classifications (%.1f%%)\n",
+            format(nrow(j), big.mark=","), format(nrow(univ), big.mark=","), 100*nrow(j)/nrow(univ)))
+if (nrow(j) < 0.5 * nrow(univ)) stop("VariBench join matched under half the labelled rows; check p_notation/gene keys")
 j[, truth := fifelse(grepl("[Pp]athogenic", label), "Pathogenic",
               fifelse(grepl("[Bb]enign", label), "Benign", NA_character_))]
 j <- j[!is.na(truth)]
+stopifnot(length(unique(j$truth)) == 2L)   # both classes needed for AUROC/Sens/Spec
 cat(sprintf("\n[bench] VariBench-labelled with classifications: %d (P=%d, B=%d)\n",
             nrow(j), sum(j$truth=="Pathogenic"), sum(j$truth=="Benign")))
 

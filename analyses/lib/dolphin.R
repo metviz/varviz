@@ -145,8 +145,10 @@ dolphin_canonical_enst <- function(gene_symbol, timeout_s = 20) {
     NA
   })
 
-  .dolphin_cache_set(cache_key, result)
+  # Cache only real answers. A cached NA turned one Ensembl timeout into
+  # "no canonical transcript" for every later call in the same session.
   if (identical(result, NA)) return(NA_character_)
+  .dolphin_cache_set(cache_key, result)
   result
 }
 
@@ -230,8 +232,10 @@ fetch_dolphin <- function(gene = NULL, p_notation, ensembl = NULL,
     if (!identical(result, "RETRY")) break
   }
 
-  .dolphin_cache_set(cache_key, result)
+  # Cache only real answers. A cached NA turned one timeout / 429 budget
+  # exhaustion into "DOLPHIN has no answer" for the rest of the harness run.
   if (identical(result, NA)) return(NULL)
+  .dolphin_cache_set(cache_key, result)
   result
 }
 

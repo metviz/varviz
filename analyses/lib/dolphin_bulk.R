@@ -11,7 +11,9 @@
 #   p_notation    : the input p-notation (whatever format the caller passed)
 #   p_single      : normalised single-letter form (e.g. "S296N")
 #   ensembl       : Ensembl transcript ID used for the query
-#   pm1           : TRUE/FALSE — does DOLPHIN fire PM1?
+#   pm1           : TRUE/FALSE — does DOLPHIN fire PM1? NA = the API call
+#                   FAILED (timeout / 5xx / 429 budget); NA rows are retried
+#                   and replaced on the next run, never treated as "no PM1".
 #   acmg_raw      : pipe-delimited concatenation of acmg fields across results[]
 #                   (preserves DOLPHIN's PM2 / BP8 tags for audit, even though
 #                   the engine consumes only PM1)
@@ -84,7 +86,8 @@ fetch_dolphin_gene <- function(gene,
                          stringsAsFactors = FALSE)
   if (is.null(done) || nrow(done) == 0) done <- empty_df
 
-  todo <- setdiff(p_notations, done$p_notation)
+  # A row with pm1=NA is a failed fetch, not an answer: redo it.
+  todo <- setdiff(p_notations, done$p_notation[!is.na(done$pm1)])
 
   if (verbose) {
     message(sprintf("[DOLPHIN bulk] gene=%s enst=%s todo=%d already=%d",
@@ -97,7 +100,8 @@ fetch_dolphin_gene <- function(gene,
   flush_to_disk <- function() {
     if (length(flush_buf) == 0) return(invisible(NULL))
     chunk <- do.call(rbind, flush_buf)
-    done <<- rbind(done, chunk)
+    # Retried variants replace their earlier NA row instead of duplicating it.
+    done <<- rbind(done[!(done$p_notation %in% chunk$p_notation), ], chunk)
     utils::write.table(done, out_path, sep = "\t", row.names = FALSE,
                        quote = FALSE, na = "")
     flush_buf <<- list()
@@ -116,7 +120,9 @@ fetch_dolphin_gene <- function(gene,
       }
     )
 
-    pm1 <- isTRUE(dolphin_fires_pm1(resp))
+    # fetch_dolphin() returns NULL only on failure; a real "not in any
+    # domain" answer carries a character results field and yields FALSE.
+    pm1 <- if (is.null(resp)) NA else isTRUE(dolphin_fires_pm1(resp))
 
     # Extract per-domain summary for audit (works for the array case;
     # absent / string-sentinel cases yield empty strings)
