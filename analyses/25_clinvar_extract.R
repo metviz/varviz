@@ -20,7 +20,16 @@
 suppressMessages(library(data.table))
 
 IN  <- "analyses/tmp/clinvar/variant_summary.txt.gz"
-OUT <- "analyses/tmp/clinvar/clinvar_missense_2star.tsv"
+# --stars=2 (default) is the frozen calibration set. --stars=1 adds the
+# one-star "criteria provided, single submitter" tier for the exploratory
+# power / validation analysis; it writes to a SEPARATE file and keeps the
+# `review` column so 24_clinvar_mds_lr.R can split 1-star-only from 2-star.
+.args  <- commandArgs(trailingOnly = TRUE)
+.stars <- sub("^--stars=", "", grep("^--stars=", .args, value = TRUE))
+.stars <- if (length(.stars)) .stars[1] else "2"
+if (!.stars %in% c("1", "2")) stop("--stars must be 1 or 2, got: ", .stars)
+OUT <- if (.stars == "2") "analyses/tmp/clinvar/clinvar_missense_2star.tsv" else
+                          "analyses/tmp/clinvar/clinvar_missense_1star.tsv"
 
 aa3 <- c(Ala="A",Arg="R",Asn="N",Asp="D",Cys="C",Gln="Q",Glu="E",Gly="G",
          His="H",Ile="I",Leu="L",Lys="K",Met="M",Phe="F",Pro="P",Ser="S",
@@ -29,6 +38,7 @@ aa3 <- c(Ala="A",Arg="R",Asn="N",Asp="D",Cys="C",Gln="Q",Glu="E",Gly="G",
 STARS2 <- c("criteria provided, multiple submitters, no conflicts",
             "reviewed by expert panel",
             "practice guideline")
+if (.stars == "1") STARS2 <- c(STARS2, "criteria provided, single submitter")
 PLP <- c("Pathogenic","Likely pathogenic","Pathogenic/Likely pathogenic")
 BLB <- c("Benign","Likely benign","Benign/Likely benign")
 
