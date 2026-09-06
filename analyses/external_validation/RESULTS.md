@@ -4,7 +4,7 @@ Source: Code Ocean capsule 4308488, `data/manual_163new.xlsx` (CC0), the
 expert-curated causative variants underlying "Comprehensive Evaluation of
 ACMG/AMP-based Variant Classification Tools".
 
-Assembled 2026-08-24 for reviewer item P3 (robustness on external variants).
+Assembled 2026-08-24 to test robustness on external variants.
 
 ## 1. Test set construction
 

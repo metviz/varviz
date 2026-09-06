@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # Recompute every manuscript-reported benchmark statistic from the derived runs.
-# Base R only -- no package dependencies, so a reviewer can run this on a bare install.
+# Base R only -- no package dependencies, so this runs on a bare install.
 #
 # Input : analyses/derived/varviz_classifications_mds.tsv  (90,701 rows; carries
 #         Pass-Full, Pass-Blind, Pass-Blind+DOLPHIN and Pass-Blind+MDS in one file)
@@ -96,14 +96,14 @@ b01 <- sum(a & !b); b10 <- sum(!a & b)
 put("mcnemar_b01", b01)
 put("mcnemar_b10", b10)
 put("mcnemar_chi2", if ((b01 + b10) > 0) (abs(b01 - b10))^2 / (b01 + b10) else NA)
-# Effect size the reviewers asked for in place of an uninformative p-value.
+# Effect size, reported in place of an uninformative p-value.
 put("mds_resolve_rate_pct", 100 * sum(a) / sum(vus_rows))
 put("dol_resolve_rate_pct", 100 * sum(b) / sum(vus_rows))
 put("resolve_rate_diff_pp", 100 * (sum(a) - sum(b)) / sum(vus_rows))
 
 }  # end has_aug
 
-# ---- PM1_strong carried into Pass-Blind (reviewer D2 ceiling) ---------------
+# ---- PM1_strong carried into Pass-Blind ------------------------------------
 put("blind_pm1_strong_n",   sum(grepl("PM1_strong", d$tags_blind, fixed = TRUE)))
 put("blind_pm1_strong_pct", 100 * sum(grepl("PM1_strong", d$tags_blind, fixed = TRUE)) / n)
 

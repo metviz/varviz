@@ -20,6 +20,8 @@ CLINVAR_DIRECT_TAGS <- c(
   "BP6", "BP6_moderate", "BP6_supporting"
 )
 
+# PM1_moderate_plus is retired from the engine (2026-09-06, two-tier MDS) but
+# stays here so summaries written by earlier versions still demote correctly.
 PM1_TAGS_ALL <- c("PM1", "PM1_moderate_plus", "PM1_strong")
 
 strip_clinvar_tags <- function(tags_vec, pm1_pathway = character(0)) {

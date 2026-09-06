@@ -35,6 +35,8 @@ n   <- nrow(d)
 
 res <- list(); put <- function(k, v) res[[k]] <<- v
 VUS <- c("VUS-High", "VUS-Mid", "VUS-Low")
+# PM1_moderate_plus is retired from the engine (two-tier MDS, 2026-09-06); the
+# bin stays so pre-2.1 runs still tabulate.
 pm1 <- function(t) ifelse(grepl("PM1_strong", t), "PM1_strong",
                    ifelse(grepl("PM1_moderate_plus", t), "PM1_moderate_plus",
                    ifelse(grepl("PM1", t), "PM1", "none")))

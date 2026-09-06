@@ -38,14 +38,18 @@ MDS_TABLE <- tryCatch(pssm_table_load("data/pfam_pssm_human.rds"),
 # the ClinGen/Pejaver scale, matching PM1's own Moderate weight. Stricter cutoffs
 # raise LR+ (>=11 at -8) but shed sensitivity; -4 is the balance point.
 MDS_PM1_THRESHOLD <- -4
-# Optional second MDS tier. LR+ at MDS <= -8 is ~11 on the ClinGen/Pejaver scale
-# — between Moderate (4.3) and Strong (18.7), i.e. Moderate-plus (+3), and the
-# <= -8 tail is ~2.1x enriched for functional (MaveDB DMS) damage vs background.
-# OFF by default (submission configuration is Moderate-only MDS); enable the
-# exploratory LR tiers with options(varviz.mds_tiered = TRUE).
-# Three LR-calibrated tiers, validated on 33,216 genome-wide ClinVar 2-star
-# missense (18,570 P / 14,646 B): LR+ 5.4 (-4), 11.2 (-8), 39.0 (-12).
-MDS_PM1_MODPLUS_THRESHOLD <- -8    # PM1_moderate_plus (+3), LR+ ~11
+# Optional Strong tier, OFF by default (the shipped configuration is
+# Moderate-only MDS); enable the exploratory tier with
+# options(varviz.mds_tiered = TRUE). Two tiers only, matching the Tavtigian
+# point scale (Moderate 2, Strong 4) — there is no half-step in ACMG/AMP, so
+# the former "Moderate-plus" (+3) at MDS <= -8 was retired 2026-09-06: its LR+
+# lands between Moderate (4.33) and Strong (18.7) on every benign arm tested
+# (11.2 - 17.4) and is therefore reported as a confident Moderate.
+# MDS <= -12 gives LR+ 39.0 on 33,216 genome-wide ClinVar 2-star missense
+# (18,570 P / 14,646 B) and replicates out of sample (LR+ 32.1 on 1-star-only
+# variants; 28.7 vs the ClinVar-benign arm of Kwon et al. 2026). It does NOT
+# replicate against common population variants in genes with no disease
+# association, where domain constraint does not imply gene constraint.
 MDS_PM1_STRONG_THRESHOLD  <- -12   # PM1_strong (+4), LR+ ~39
 #
 # Evidence-overlap constraint (one signal, one criterion):
@@ -3979,7 +3983,7 @@ ACMG_TAG_PTS <- c(
   PVS1=8,
   PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
   PM5_supporting=1,
-  PM1_strong=4, PP3_strong=4, PP1_strong=4, PM1_moderate_plus=3,
+  PM1_strong=4, PP3_strong=4, PP1_strong=4,
   PM1=2, PM2=1, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
   PP1=1, PP2=1, PP3=1, PP4=1,
   BA1=-8,
@@ -4026,7 +4030,7 @@ classify_acmg <- function(tags_vec) {
 
   # Format tag summary string, e.g. "PM1↑ PM2 PP2 PP3"
   tag_summary <- if (length(tags) > 0) {
-    paste(sub("_strong$","\u2b06", sub("_moderate_plus$","\u21e7", sub("_moderate$","\u2191", tags))), collapse=" ")
+    paste(sub("_strong$","\u2b06", sub("_moderate$","\u2191", tags)), collapse=" ")
   } else "—"
 
   # Build per-tag breakdown string: e.g. "PM1_strong(+4) + PM2(+2) + PP2(+1) + PP3(+1)"
@@ -4036,7 +4040,7 @@ classify_acmg <- function(tags_vec) {
   for (t in tags) {
     v <- tag_pts_map[t]
     if (!is.na(v) && v != 0) {
-      lbl <- sub("_strong$","⬆", sub("_moderate_plus$","⇧", sub("_moderate$","↑", t)))
+      lbl <- sub("_strong$","⬆", sub("_moderate$","↑", t))
       if (v > 0) path_parts  <- c(path_parts,  paste0(lbl, "(+", v, ")")) else       benign_parts <- c(benign_parts, paste0(lbl, "(", v, ")"))
     }
   }
@@ -5397,25 +5401,20 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         }
 
         # Shared PM1 strength ladder, in Tavtigian points.
-        PM1_TAGS <- c("PM1_strong", "PM1_moderate_plus", "PM1")
-        pm1_pts  <- function(tag) switch(tag, PM1 = 2L, PM1_moderate_plus = 3L,
-                                              PM1_strong = 4L, 0L)
-        pts_tag  <- function(p) if (p >= 4L) "PM1_strong" else
-                                if (p == 3L) "PM1_moderate_plus" else "PM1"
+        PM1_TAGS <- c("PM1_strong", "PM1")
+        pm1_pts  <- function(tag) switch(tag, PM1 = 2L, PM1_strong = 4L, 0L)
+        pts_tag  <- function(p) if (p >= 4L) "PM1_strong" else "PM1"
 
         base_hit <- intersect(PM1_TAGS, acmg_tags)
         base_pts <- if (length(base_hit)) pm1_pts(base_hit[1]) else 0L
 
-        # Tiered by the substitution's own LR+ (calibrated on 33,216 genome-wide
-        # ClinVar two-star variants): <= -4 Moderate (+2, LR+ 5.4), <= -8
-        # Moderate-plus (+3, LR+ 11.2), <= -12 Strong (+4, LR+ 39.0). OFF by
-        # default (Moderate only); enable with options(varviz.mds_tiered = TRUE).
+        # MDS <= -4 is Moderate (+2, LR+ 5.4). With the exploratory tier on,
+        # MDS <= -12 is Strong (+4, LR+ 39.0); everything between stays
+        # Moderate. OFF by default: options(varviz.mds_tiered = TRUE) enables it.
         mds_tiered <- isTRUE(getOption("varviz.mds_tiered", FALSE))
         mds_pts <- 0L
         if (!is.na(mds_val) && mds_val <= MDS_PM1_THRESHOLD) {
-          mds_pts <- if (mds_tiered && mds_val <= MDS_PM1_STRONG_THRESHOLD) 4L
-                     else if (mds_tiered && mds_val <= MDS_PM1_MODPLUS_THRESHOLD) 3L
-                     else 2L
+          mds_pts <- if (mds_tiered && mds_val <= MDS_PM1_STRONG_THRESHOLD) 4L else 2L
         }
 
         if (mds_pts > 0L) {
@@ -5438,9 +5437,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
                           role, gene_name_for_api, mut, mds_val,
                           base_pts, mds_pts, new_pts))
 
-          mds_tier_txt <- if (mds_val <= MDS_PM1_STRONG_THRESHOLD) "strong tier, LR+ 39.0"
-                          else if (mds_val <= MDS_PM1_MODPLUS_THRESHOLD) "moderate-plus tier, LR+ 11.2"
-                          else "moderate tier, LR+ 5.4"
+          mds_tier_txt <- if (mds_tiered && mds_val <= MDS_PM1_STRONG_THRESHOLD)
+                            "strong tier, LR+ 39.0" else "moderate tier, LR+ 5.4"
           base_txt <- if (base_pts > 0L)
                         paste0(pm1_base_label(sub("\\+mds$", "", pm1_pathway_val)), " (+", base_pts, ")")
                       else ""
@@ -5461,9 +5459,9 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       # No MDS contribution: the pathway carried PM1 on its own.
       if (!nzchar(pm1_deriv_val) && nzchar(pm1_pathway_val) &&
           pm1_pathway_val != "mds_unavailable") {
-        base_hit2 <- intersect(c("PM1_strong", "PM1_moderate_plus", "PM1"), acmg_tags)
+        base_hit2 <- intersect(c("PM1_strong", "PM1"), acmg_tags)
         if (length(base_hit2)) {
-          bp <- switch(base_hit2[1], PM1 = 2L, PM1_moderate_plus = 3L, PM1_strong = 4L, 0L)
+          bp <- switch(base_hit2[1], PM1 = 2L, PM1_strong = 4L, 0L)
           pm1_deriv_val <- paste0(pm1_base_label(pm1_pathway_val), " = ", bp, " points",
                                   if (isTRUE(cons_used_for_pm1))
                                     "; conservation corroborated, so its PP3 tier is withheld to avoid counting the same signal twice"
@@ -5505,9 +5503,9 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         } else {
           count_fires   # fallback when PS profile unavailable
         }
-        # Any PM1-family tag (Moderate, Moderate-plus, Strong) blocks a duplicate
-        # neighborhood fire; PM1_moderate_plus (tiered MDS) counts as PM1.
-        has_pm1_mod <- any(c("PM1", "PM1_moderate_plus") %in% acmg_tags)
+        # Any PM1-family tag (Moderate, Strong) blocks a duplicate
+        # neighborhood fire.
+        has_pm1_mod <- "PM1" %in% acmg_tags
         if (count_fires && ratio_ok) {
           if ("PM1_strong" %in% acmg_tags) {
             # already strong from CCRS/domain+cons — neighborhood corroborates, no change
@@ -5524,11 +5522,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
             # it back and demotes to that tag under Pass-Blind, leaving only the
             # non-circular base strength. Without this the blind arm silently
             # keeps a Strong PM1 that only ClinVar earned.
-            prior_pm1 <- intersect(c("PM1_moderate_plus", "PM1"), acmg_tags)[1]
+            prior_pm1 <- intersect("PM1", acmg_tags)[1]
             if (!is.na(prior_pm1))
               pm1_pathway_val <- paste0(pm1_pathway_val, "+hotspot_upgrade(",
                                         prior_pm1, ")")
-            acmg_tags <- acmg_tags[!acmg_tags %in% c("PM1", "PM1_moderate_plus")]
+            acmg_tags <- acmg_tags[!acmg_tags %in% "PM1"]
             acmg_tags <- c(acmg_tags, "PM1_strong")
             message("[PM1] Neighborhood \u00b115aa PS-significant upgrade to PM1_strong: ", n_path_win, " P/LP, ", n_benign_win, " B/LB")
           } else if (!has_pm1_mod) {
@@ -7035,7 +7033,7 @@ shinyServer(function(input, output, session) {
       acmg_badge <- function(tag) {
         tag <- trimws(tag)
         tc <- if (grepl("_strong$", tag) && grepl("^P", tag)) "#9b1c1c" else if (grepl("_moderate$", tag) && grepl("^P", tag)) "#dc2626" else if (grepl("^PS", tag)) "#dc2626" else if (grepl("^PM", tag)) "#ef4444" else if (grepl("^PP", tag)) "#f97316" else if (grepl("^BS", tag)) "#065f46" else if (grepl("^BP", tag)) "#059669" else if (tag == "BA1") "#1d4ed8" else "#64748b"
-        disp <- sub("_strong$", "\u2b06", sub("_moderate_plus$", "\u21e7", sub("_moderate$", "\u2191", tag)))
+        disp <- sub("_strong$", "\u2b06", sub("_moderate$", "\u2191", tag))
         paste0('<span title="', tag, '" style="display:inline-block;background:', tc, '22;color:', tc,
                ';padding:2px 7px;border-radius:4px;font-weight:700;font-size:11px;',
                'margin:2px 2px;white-space:nowrap;border:1px solid ', tc, '44;">', disp, '</span>')
@@ -7046,7 +7044,6 @@ shinyServer(function(input, output, session) {
       tag_pts_map <- ACMG_TAG_PTS
       strength_label <- function(tag) {
         if (grepl("_strong$", tag))     return("Strong")
-        if (grepl("_moderate_plus$", tag)) return("Moderate+")
         if (grepl("_moderate$", tag))   return("Moderate")
         if (grepl("_supporting$", tag)) return("Supporting")
         if (tag %in% c("PVS1"))        return("Very Strong")
@@ -7063,7 +7060,7 @@ shinyServer(function(input, output, session) {
       # _supporting case, PS1_supporting / PS3_supporting / PM5_supporting render
       # as raw tag names on the badge AND miss the tooltip switch below, which
       # keys on the base tag.
-      tag_display <- function(tag) sub("_(strong|moderate_plus|moderate|supporting)$", "", tag)
+      tag_display <- function(tag) sub("_(strong|moderate|supporting)$", "", tag)
       tag_color <- function(tag, is_path) {
         if (!is_path) return(list(bg="#dcfce7", border="#16a34a", text="#14532d", badge_bg="#16a34a"))
         if (grepl("^PVS",tag)||grepl("_strong$",tag)) return(list(bg="#fee2e2",border="#dc2626",text="#7f1d1d",badge_bg="#dc2626"))
@@ -7129,14 +7126,6 @@ shinyServer(function(input, output, session) {
           BP7 = "Synonymous variant with no predicted splice impact (BP7)",
           tag  # fallback: show tag name
         )
-        # PM1_moderate_plus is emitted only by the Missense Disfavour Score (Path 4),
-        # so give it an MDS-specific tooltip instead of the generic PM1 domain text.
-        if (grepl("_moderate_plus$", tag))
-          tip_body <- paste0("Missense Disfavour Score (MDS, PM1 Path 4): the substitution is strongly ",
-                             "disfavoured at its aligned Pfam column (MDS ≤ −8, moderate-plus tier, LR+ ≈ 11). ",
-                             "MDS = M(column,mut) − M(column,wt) over the Pfam family alignment; the ≤ −8 tail ",
-                             "is likelihood-ratio-calibrated on 33,216 genome-wide 2★ ClinVar missense. ",
-                             "See the MDS_Score column for the value.")
         # PM1 carries a strength ladder rather than a single rule, so say how this
         # variant reached its points instead of only which criterion fired.
         if (base_tag == "PM1" && nzchar(pm1_ctx))
@@ -7144,7 +7133,6 @@ shinyServer(function(input, output, session) {
 
         # Append the applied evidence strength for strength-suffixed tags (e.g. PP3_Strong).
         str_q <- if (grepl("_strong$", tag)) ". Applied at STRONG evidence strength." else
-                 if (grepl("_moderate_plus$", tag)) ". Applied at MODERATE-PLUS evidence strength (+3)." else
                  if (grepl("_moderate$", tag)) ". Applied at MODERATE evidence strength." else
                  if (grepl("_supporting$", tag)) ". Downgraded to SUPPORTING evidence strength (ClinVar review status below 2 stars)." else ""
         tip <- paste0(tip_body, str_q)
@@ -7965,7 +7953,7 @@ shinyServer(function(input, output, session) {
           'Cross-referencing input variants with all tracks + dbNSFP scores (MyVariant.info). ',
           'ACMG evidence tags per ',
           '<strong>Richards et al. (2015)</strong> + <strong>Tavtigian et al. (2018)</strong> + <strong>Pejaver et al. (2022)</strong>. ',
-          'Strength tiers shown with arrows: ↑ moderate, ⇧ moderate-plus (MDS ≤ −8), ⬆ strong (e.g. PM1_strong, PP3_strong). ',
+          'Strength tiers shown with arrows: ↑ moderate, ⬆ strong (e.g. PM1_strong, PP3_strong). ',
           'Score verdicts: ',
           '<span style="color:#ef4444;font-weight:700;">dam</span>=damaging &nbsp;',
           '<span style="color:#f59e0b;font-weight:700;">amb</span>=ambiguous &nbsp;',
