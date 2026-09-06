@@ -5,21 +5,14 @@
 # ps_mds_consfree -- are contaminated by silent failures of that call and must
 # not be used; see analyses/repro/README.md "OPEN ISSUE".
 #
-# Config: MDS ungated (originate + corroborate), LR tiers on, conservation
-# released to PP3 where MDS carries the Strong upgrade.
+# Config (submission, 2026-09-06): MDS Moderate-only, scored for every variant
+# (originate + corroborate). Corroboration takes the STRONGER of pathway PM1
+# and MDS, never the sum; the LR tiers (+3/+4) stay off unless
+# VARVIZ_MDS_TIERED=TRUE is set for the exploratory calibration run.
 #
-# Dual-pass classification harness — MDS corroborate + conservation-release build.
-#
-# Adds to the corroborate build: where MDS corroborates a pathway that had spent
-# cons_strong to reach PM1_strong, the conservation flag is released so the
-# conservation tier of PP3 is no longer suppressed. PM1 stays Strong on
-# pathway(+2) + MDS tier(>=+2); conservation returns to PP3 where it belongs.
-#
-# Differs from analyses/05_classify_harness.R only in configuration: server.R
-# Path 4 now scores MDS for every variant, originating PM1 where no other path
-# fired and adding its LR tier to the base strength (capped at Strong) where
-# one did. The ClinVar-hotspot upgrade records its pre-upgrade tag so
-# strip_clinvar_tags() can demote it under Pass-Blind.
+# Differs from analyses/05_classify_harness.R only in configuration and in the
+# sharding / VARVIZ_* env interface. The ClinVar-hotspot upgrade records its
+# pre-upgrade tag so strip_clinvar_tags() can demote it under Pass-Blind.
 #
 # Phase 2.1b — Dual-pass classification harness (MF1)
 #
@@ -59,11 +52,16 @@ suppressMessages(source("server.R"))
 # than ps_nomds_harness.R, so the ablation gets the same four data-source
 # sentinels. A comparator scored without them is not comparable: the stale
 # analyses/ps_nomds run (Jul 30) has no run.log and cannot be audited at all.
-.mds_on <- !identical(toupper(Sys.getenv("VARVIZ_MDS_PM1", "TRUE")), "FALSE")
-options(varviz.mds_tiered = .mds_on) # LR tiers: +2 / +3 / +4 at MDS <= -4 / -8 / -12
-options(varviz.mds_pm1    = .mds_on) # MDS evaluated for every variant (originate + corroborate)
-options(varviz.mds_frees_cons = TRUE)  # MDS carries the Strong upgrade; conservation released to PP3
-cat("[harness] varviz.mds_tiered = TRUE ; varviz.mds_pm1 = TRUE (ungated Path 4)\n")
+.env_flag <- function(name, default) {
+  v <- toupper(Sys.getenv(name, default))
+  if (!v %in% c("TRUE", "FALSE")) stop(name, " must be TRUE or FALSE, got: ", Sys.getenv(name))
+  v == "TRUE"
+}
+.mds_on     <- .env_flag("VARVIZ_MDS_PM1",    "TRUE")   # MDS scored for every variant
+.mds_tiered <- .env_flag("VARVIZ_MDS_TIERED", "FALSE")  # exploratory +3/+4 tiers; off for submission
+options(varviz.mds_pm1    = .mds_on)
+options(varviz.mds_tiered = .mds_on && .mds_tiered)
+cat(sprintf("[harness] varviz.mds_pm1 = %s ; varviz.mds_tiered = %s\n", .mds_on, .mds_on && .mds_tiered))
 cat(sprintf("[harness] Sourced server.R in %.1f sec\n",
             as.numeric(Sys.time() - t0, units = "secs")))
 
