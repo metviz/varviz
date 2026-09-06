@@ -95,9 +95,17 @@ readers); the external APIs are not.
 
 - All four record the affected gene in a sentinel option
   (`varviz.uniprot_failed`, `varviz.localpred_failed`,
-  `varviz.clinvar_batch_failed`); `run_one()` in the harness refuses to write a
-  checkpoint for any gene that trips one, so a corrupt gene is re-run rather
-  than cached.
+  `varviz.clinvar_batch_failed`), and since 1.1.3 every gene-level fetch goes
+  through `analyses/lib/harness_guard.R::harness_fetch()`, which records any
+  failure in `varviz.harness_fetch_failed`. `run_one()` in all three harnesses
+  (`05_classify_harness.R`, `ps_final_harness.R`, `08_casestudy_harness.R`)
+  diffs all four families and refuses to write a checkpoint for any gene that
+  trips one, so a corrupt gene is re-run rather than cached. A run with any
+  aborted gene exits 1 and writes no `summary.tsv`.
+- **Configuration table**: which run is which, and which are superseded, lives
+  in `analyses/REPRODUCIBILITY.md` → "Run configurations". Since engine v2.0.0
+  (points-only `classify_acmg`, Moderate-only MDS, no MDS stacking) every
+  pre-existing `summary.tsv` must be regenerated before its numbers are quoted.
 - Timeouts raised to 180 s; `retry_on_failure = TRUE` on every UniProt fetch;
   ClinVar batches retry 4x with backoff before being counted as lost.
 - Out-of-band caches (`analyses/cache/uniprot`, `analyses/cache/ensembl`) take

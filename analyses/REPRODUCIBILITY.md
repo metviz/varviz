@@ -24,9 +24,9 @@ Paths are repo-relative. Committed scripts live under `analyses/`;
 | 2 | `03_build_universe.R` | VariBench + gene set | `derived/variant_universe.tsv` | 90,701-variant / 14-gene universe |
 | 3 | `01_pull_varibench.R`, `02_pull_mavedb.R` | external | `derived/varibench_canonical.tsv`, `derived/mavedb_canonical.tsv` | clinical + functional truth sets |
 | 4 | `25_clinvar_extract.R` | `tmp/clinvar/variant_summary.txt.gz` | `tmp/clinvar/clinvar_missense_2star.tsv` | 2★ ClinVar missense P/LP + B/LB |
-| 5a | `ps_nomds_harness.R` | `server.R`, `lib/clinvar_blind.R`, `lib/local_predictors.R` | `ps_nomds/summary.tsv` | dual-pass, **MDS off** (baseline) |
-| 5b | `ps_reval_harness.R` | same | `ps_reval/summary.tsv` | dual-pass, **flat MDS** |
-| 5c | `ps_tiered_harness.R` (`options(varviz.mds_tiered=TRUE)`) | same | `ps_tiered/summary.tsv` | dual-pass, **LR-tiered MDS** |
+| 5a | `ps_final_harness.R` with `VARVIZ_MDS_PM1=FALSE`, `VARVIZ_OUT_DIR=analyses/ps_nomds_v2` | `server.R`, `lib/clinvar_blind.R`, `lib/local_predictors.R`, `lib/harness_guard.R` | `ps_nomds_v2/summary.tsv` | dual-pass, **MDS off** (ablation) |
+| 5b | `ps_final_harness.R` (defaults) | same | `ps_final/summary.tsv` | dual-pass, **Moderate-only MDS** — the submission run |
+| 5c | `ps_final_harness.R` with `VARVIZ_MDS_TIERED=TRUE`, `VARVIZ_OUT_DIR=analyses/ps_tiered` (or `ps_tiered_harness.R`) | same | `ps_tiered/summary.tsv` | dual-pass, **LR-tiered MDS** — exploratory calibration only |
 | 6 | `21_assess_mds.R` | `varibench_canonical.tsv`, `pfam_pssm_human.rds` | stdout | VariBench AUROC 0.785; DOLPHIN ρ=1.000 |
 | 7 | `22_mds_benchmark.R` | `variant_universe.tsv`, `varviz_classifications_dolphin.tsv`, pssm | `derived/varviz_classifications_mds.tsv` | per-variant MDS/DOLPHIN deltas |
 | 8 | `23_mds_vs_dolphin_mcnemar.py` | `varviz_classifications_mds.tsv`, `ps_nomds/summary.tsv` | stdout | 3,584 vs 375; McNemar χ²=3,121 |
@@ -36,22 +36,62 @@ Metric computation (`AUROC`, `Sensitivity`, `Specificity`, `MCC`, `VUS_rate`)
 is `lib/metric_suite.R::compute_metric_suite`, applied to each `summary.tsv`
 joined to the VariBench-labelled subset of `variant_universe.tsv`.
 
+## Run configurations (single source of truth)
+
+One engine (`server.R` v2.0.0, points-only `classify_acmg`), one harness body,
+several option sets. A run is defined by its options, not by which wrapper file
+launched it. Regenerating any run requires `--force` (shared harness) or
+`VARVIZ_FORCE=1` (`ps_final_harness.R`); the harness refuses to overwrite a
+`summary.tsv` otherwise.
+
+| Run directory | `varviz.mds_pm1` | `varviz.mds_tiered` | Role | Status |
+|---|---|---|---|---|
+| `ps_final` | TRUE | FALSE | **Submission run.** Moderate-only MDS; corroboration takes the stronger of pathway PM1 and MDS | authoritative once regenerated on v2.0.0 |
+| `ps_nomds_v2` | FALSE | FALSE | MDS-off ablation (same harness, same sentinels) | authoritative once regenerated on v2.0.0 |
+| `ps_tiered` | TRUE | TRUE | Exploratory: +3 / +4 LR tiers at MDS ≤ −8 / −12 | supplementary calibration only; not a manuscript claim |
+| `ps_mds_corroborate`, `ps_mds_consfree` | TRUE | TRUE | pre-review builds; `mds_frees_cons` is a no-op since 2.0.0 so the two are identical | **superseded, do not use** (also contaminated by silent fetch failures, see `repro/README.md`) |
+| `ps_nomds`, `ps_reval`, `ps_baseline` | – | – | Jul 30 runs, no `run.log`, pre-sentinel engine | **superseded, do not use** |
+
+Every `summary.tsv` on disk that predates v2.0.0 was produced by the rule-ladder
+engine and is not comparable to the current one. Regenerate before quoting.
+
+## Evidence-overlap constraint
+
+Each biological signal is scored under exactly one criterion (also stated at
+the MDS constants in `server.R`):
+
+- **MDS** (Pfam PSSM, substitution-specific) is counted once, under PM1. It
+  never feeds PP3. Where a pathway PM1 (site / CCRS / domain / ClinVar hotspot)
+  and MDS both fire, the stronger is taken, never the sum: Moderate + Moderate
+  stays Moderate. No joint calibration of "PM1 and MDS together" exists, so no
+  points are awarded for the conjunction.
+- **Position conservation** (PhyloP / PhastCons / GERP / ConSurf) spent to
+  reach PM1_strong is withheld from the PP3 conservation tier
+  (`cons_used_for_pm1`).
+- **Sequence predictors** (REVEL / CADD / AlphaMissense / meta-predictors) are
+  one line of evidence, PP3, at the Pejaver 2022 calibrated strength.
+  Agreement among predictors does not upgrade PP3 and does not stand in for
+  PS3.
+- **Locus evidence** PP1 + PP4 is capped jointly at 5 points (ClinGen SVI).
+
 ## Manuscript number → source
 
 | Number | From |
 |---|---|
 | LR+ 5.4 / 11.2 / 39.0 at MDS ≤ −4 / −8 / −12 (n=18,570 P / 14,646 B) | `24_clinvar_mds_lr.R` |
-| Pass-Blind AUROC 0.938 → 0.959 → 0.960; spec 0.567, sens 1.000, MCC 0.747 | `ps_{nomds,reval,tiered}/summary.tsv` × `lib/metric_suite.R` on VariBench (n=1,108) |
+| Pass-Blind AUROC 0.938 → 0.959 → 0.960; spec 0.567, sens 1.000, MCC 0.747 | `ps_{nomds_v2,final,tiered}/summary.tsv` × `lib/metric_suite.R` on VariBench (n=1,108). **Pre-2.0.0 values; regenerate.** |
 | MDS resolves 3,584 vs DOLPHIN 375; McNemar χ²=3,121, p<10⁻³⁰⁰ | `23_mds_vs_dolphin_mcnemar.py` |
-| LR-tiering adds +130 → 3,714 total | `ps_tiered` vs `ps_nomds` (upward-only PM1 augmentation delta) |
+| LR-tiering adds +130 → 3,714 total | `ps_tiered` vs `ps_nomds_v2`. **Exploratory only since 2.0.0; not a manuscript claim.** |
 | DOLPHIN concordance ρ=1.000 (CASR G143E −5.95 vs −5.96); VariBench AUROC 0.785 | `21_assess_mds.R` |
 | MDS artifact: 6,534 families, 11,355,753 residues, ~50 MB | `data/pfam_pssm_human.rds` (from `lib/pfam_pssm.R`) |
 
 ## Notes
 
-- **Engine flag.** LR-tiered MDS is default on (`server.R`, commit `e0227c9`);
-  disable with `options(varviz.mds_tiered = FALSE)`. `ps_nomds` and `ps_reval`
-  set the flag off / flat for the A/B baselines.
+- **Engine flags.** Since v2.0.0 `varviz.mds_tiered` defaults to FALSE
+  (Moderate-only MDS). `ps_final_harness.R` reads `VARVIZ_MDS_PM1` and
+  `VARVIZ_MDS_TIERED` (TRUE/FALSE only; anything else errors). The DOLPHIN
+  comparison uses `analyses/raw/dolphin/by_gene/*.tsv`, where `pm1 = NA` means
+  the API call failed and is retried on the next `fetch_dolphin_gene()` run.
 - **`clinvar_missense_2star.tsv` fidelity.** `25_clinvar_extract.R` regenerates
   the 2★ set to ~99.8% of the committed file (dedup / p.-parse edge cases);
   immaterial to the LR tiers.
