@@ -74,6 +74,29 @@ the MDS constants in `server.R`):
   PS3.
 - **Locus evidence** PP1 + PP4 is capped jointly at 5 points (ClinGen SVI).
 
+## Exploratory: MDS tier LR+ on ClinVar 1-star (2026-09-06, not a manuscript claim)
+
+The 2-star Strong tier rests on 8 benign variants at MDS ≤ −12 (LR+ 39.0, 95% CI
+18.0–84.9, lower bound below the 18.7 Strong cut-point). To test the tiers out of
+sample, `25_clinvar_extract.R --stars=1` writes a separate ≥1-star set and
+`24_clinvar_mds_lr.R --in=<that> --review=single` scores the 1-star-ONLY rows,
+which share no variant with the 2-star calibration set.
+
+| MDS ≤ | 2-star (calibration) | 1-star-only (held-out, n=25,241 P / 36,379 B) | pooled ≥1-star |
+|---|---|---|---|
+| −4 | 5.4 [5.1–5.8] | 8.0 [7.6–8.4] | 7.0 [6.7–7.3] |
+| −8 | 11.2 [9.5–13.2] | 14.5 [12.9–16.3] | 13.3 [12.1–14.6] |
+| −10 | 18.6 [13.5–25.7] | 26.3 [20.7–33.4] | 23.5 [19.4–28.4] |
+| −12 | 39.0 [18.0–84.9] | 32.1 [20.6–50.2] | 33.0 [22.5–48.6] |
+
+Strong replicates out of sample (28 benign in the ≤ −12 tail, lower bound 20.6 >
+18.7), and ≤ −10 also clears Strong. ≤ −8 stays between Moderate and Strong on
+every set. Both sets are ClinVar, so this is not an orthogonal truth source and
+does not calibrate PM1 pathway + MDS jointly; the submission configuration
+remains Moderate-only. Outputs: `analyses/tmp/clinvar/clinvar_missense_1star.tsv`,
+`clinvar_mds_1star_only.rds`, `clinvar_mds_1star_pooled.rds`,
+`lr_1star_exploratory.log` (gitignored, regenerable in ~5 min).
+
 ## Manuscript number → source
 
 | Number | From |

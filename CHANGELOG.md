@@ -7,6 +7,24 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [2.0.1] - 2026-09-06
+
+Analysis scripts only. **No classification changes.**
+
+### Fixed
+
+- `24_clinvar_mds_lr.R` had been unrunnable since 13 Aug: the rebuilt
+  `data/pfam_pssm_human.rds` stores `family` as a factor and `nzchar(factor)`
+  errors. Now `as.character()`. The manuscript LR table reproduces exactly.
+
+### Added
+
+- `25_clinvar_extract.R --stars=1` writes a separate ≥1-star ClinVar missense
+  set; `24_clinvar_mds_lr.R --in= --review=single|all --out=` scores it. Used
+  for an exploratory out-of-sample check of the MDS tiers (REPRODUCIBILITY.md
+  "Exploratory"): Strong replicates on 1-star-only variants (LR+ 32.1,
+  95% CI 20.6–50.2 at MDS ≤ −12). Not a manuscript number; defaults unchanged.
+
 ## [2.0.0] - 2026-09-06
 
 Evidence-engine revision after peer review. **Changes classifications.** Every

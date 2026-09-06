@@ -1,6 +1,21 @@
 #!/usr/bin/env Rscript
 # Genome-wide ClinVar robustness: MDS LR+ tiers on 2-star missense P/LP vs B/LB.
+#
+# Defaults reproduce the manuscript table from the frozen 2-star set. For the
+# exploratory power / validation analysis:
+#   --in=analyses/tmp/clinvar/clinvar_missense_1star.tsv   (from 25 --stars=1)
+#   --review=single   keep only "criteria provided, single submitter" rows,
+#                     i.e. the 1-star-ONLY variants, disjoint from the 2-star
+#                     calibration set -> out-of-sample check of the tiers
+#   --review=all      pooled >=1-star (default)
+#   --out=<rds>       where to save the per-variant MDS table
 suppressMessages({library(data.table)})
+.args <- commandArgs(trailingOnly = TRUE)
+.opt  <- function(k, default) { v <- sub(paste0("^--", k, "="), "", grep(paste0("^--", k, "="), .args, value = TRUE)); if (length(v)) v[1] else default }
+IN      <- .opt("in",     "analyses/tmp/clinvar/clinvar_missense_2star.tsv")
+OUT_RDS <- .opt("out",    "analyses/tmp/clinvar/clinvar_mds.rds")
+REVIEW  <- .opt("review", "all")
+if (!REVIEW %in% c("all", "single")) stop("--review must be all or single")
 source("analyses/lib/pssm_lookup.R")
 tbl <- pssm_table_load("data/pfam_pssm_human.rds")
 deq <- function(q) (as.numeric(q)+127)/254*(attr(tbl,"Q_MAX") %||% 0) # placeholder
@@ -13,7 +28,9 @@ ae  <- fread("analyses/tmp/mane/uniprot_acc_entry.tsv")
 entry_of <- setNames(ae$entry, ae$accession)
 gm  <- fread("analyses/derived/gene_mane.tsv")
 acc_of <- setNames(gm$uniprot_id, gm$gene_name)
-cv <- fread("analyses/tmp/clinvar/clinvar_missense_2star.tsv")
+cv <- fread(IN)
+if (REVIEW == "single") cv <- cv[review == "criteria provided, single submitter"]
+cat(sprintf("input %s  review=%s  rows=%d\n", IN, REVIEW, nrow(cv)))
 cv[, entry := entry_of[acc_of[gene]]]
 n_cv0 <- nrow(cv)
 cv <- cv[!is.na(entry) & nzchar(entry)]
@@ -25,7 +42,7 @@ cv[, vid := .I]
 mp <- as.data.table(tbl$map); setkeyv(mp, c("id","residue"))
 hits <- mp[cv, on=.(id=entry, residue=pos), nomatch=0L, allow.cartesian=TRUE]
 n_h0 <- nrow(hits)
-hits <- hits[!is.na(family) & nzchar(family)]
+hits <- hits[!is.na(family) & nzchar(as.character(family))]   # family is a factor in the int8 table
 cat(sprintf("PSSM hits: %d; %d dropped with no Pfam family (%.1f%%)\n",
             n_h0, n_h0 - nrow(hits), if (n_h0) 100*(n_h0 - nrow(hits))/n_h0 else 0))
 hits[, delta := {
@@ -54,5 +71,5 @@ for(t in c(-4,-6,-8,-10,-12)){
   lo=if(fci[2]>0)sci[1]/fci[2] else NA; hi=if(fci[1]>0)sci[2]/fci[1] else Inf
   cat(sprintf("MDS<=%-4d %6.3f %6.3f %8.1f %5.1f-%-6.1f %s\n",t,sens,1-fpr,lr,lo,hi,band(lr)))
 }
-saveRDS(per, "analyses/tmp/clinvar/clinvar_mds.rds")
+saveRDS(per, OUT_RDS)
 cat("done\n")
