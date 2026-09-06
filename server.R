@@ -41,7 +41,8 @@ MDS_PM1_THRESHOLD <- -4
 # Optional second MDS tier. LR+ at MDS <= -8 is ~11 on the ClinGen/Pejaver scale
 # — between Moderate (4.3) and Strong (18.7), i.e. Moderate-plus (+3), and the
 # <= -8 tail is ~2.1x enriched for functional (MaveDB DMS) damage vs background.
-# On by default; disable with options(varviz.mds_tiered = FALSE).
+# OFF by default (submission configuration is Moderate-only MDS); enable the
+# exploratory LR tiers with options(varviz.mds_tiered = TRUE).
 # Three LR-calibrated tiers, validated on 33,216 genome-wide ClinVar 2-star
 # missense (18,570 P / 14,646 B): LR+ 5.4 (-4), 11.2 (-8), 39.0 (-12).
 MDS_PM1_MODPLUS_THRESHOLD <- -8    # PM1_moderate_plus (+3), LR+ ~11
@@ -1457,7 +1458,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
      if (is.null(features) || length(features) == 0) {
        message("[UniProt Features] No features found")
        return(data.frame(uniprot_id = character(), type = character(),
-                         start = numeric(), end = numeric(), description = character(), mod_res_group = character(),
+                         start = numeric(), end = numeric(), description = character(), mod_res_group = character(), alt_aa = character(),
                          stringsAsFactors = FALSE))
      }
      
@@ -1496,6 +1497,11 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
          if (grepl("Phospho", desc, ignore.case = TRUE)) "Phosphorylation" else if (grepl("Acetyl", desc, ignore.case = TRUE)) "Acetylation" else if (grepl("Methyl", desc, ignore.case = TRUE)) "Methylation" else if (grepl("Ubiquitin", desc, ignore.case = TRUE)) "Ubiquitination" else if (grepl("Hydroxy", desc, ignore.case = TRUE)) "Hydroxylation" else if (grepl("Glycyl", desc, ignore.case = TRUE)) "Glycylation" else "Other modification"
        } else NA_character_
        
+       # Mutagenesis features name the substitution that was assayed
+       # (alternativeSequence: S -> A/E). Kept so PS3 can require that the
+       # queried variant IS the tested one, not merely at the same residue.
+       alt_aa <- if (!is.null(f$alternativeSequence$alternativeSequences))
+         paste(unlist(f$alternativeSequence$alternativeSequences), collapse = "/") else ""
        data.frame(
          uniprot_id = uniprotID,
          type = ftype,
@@ -1503,6 +1509,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
          end = as.numeric(ifelse(is.null(loc_end), loc_start, loc_end)),
          description = if (!is.null(desc)) desc else "",
          mod_res_group = mod_group,
+         alt_aa = alt_aa,
          stringsAsFactors = FALSE
        )
      })
@@ -1510,7 +1517,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
      result <- do.call(rbind, Filter(Negate(is.null), rows))
      if (is.null(result) || nrow(result) == 0) {
        return(data.frame(uniprot_id = character(), type = character(),
-                         start = numeric(), end = numeric(), description = character(), mod_res_group = character(),
+                         start = numeric(), end = numeric(), description = character(), mod_res_group = character(), alt_aa = character(),
                          stringsAsFactors = FALSE))
      }
      
@@ -1530,7 +1537,7 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
    }, error = function(e) {
      message("[UniProt Features] Error: ", e$message)
      data.frame(uniprot_id = character(), type = character(),
-                start = numeric(), end = numeric(), description = character(), mod_res_group = character(),
+                start = numeric(), end = numeric(), description = character(), mod_res_group = character(), alt_aa = character(),
                 stringsAsFactors = FALSE)
    })
  }
@@ -3940,31 +3947,37 @@ acmg_posterior <- function(points, prior_p = 0.10, C = 2.0813) {
 # Define server logic for slider examples
 # ============================================================
 # ACMG Classification Engine
-# Implements BOTH:
-#   (a) Rule-based ACMG/AMP 2015 combination logic (Richards et al.)
-#   (b) Tavtigian 2020 Bayesian point thresholds
+# Points-only: Tavtigian 2020 Bayesian point bands over ACMG_TAG_PTS, with
+# BA1 stand-alone. (The Richards 2015 rule ladder was removed 2026-09-06.)
 # Returns: list(classification, rule, pts)
-#   classification: "Pathogenic"|"Likely Pathogenic"|"VUS"|"Likely Benign"|"Benign"
-#   rule: human-readable rule string, e.g. "1 PS + 2 PM"
+#   classification: "Pathogenic"|"Likely Pathogenic"|"VUS-High/Mid/Low"|"Likely Benign"|"Benign"
+#   rule: "score N pts" or "BA1 (stand-alone)"
 #   pts: integer Bayesian score
 # ============================================================
 # ClinGen SVI ceiling on combined PP1+PP4 locus evidence, in Tavtigian points.
 # Biesecker et al. AJHG 2024;111:24-38 (doi:10.1016/j.ajhg.2023.11.009).
 PP1_PP4_CAP <- 5
 
+# ── Point weights (Tavtigian 2020) — the ONE table both the scorer and the
+# criterion-card grid read. Every tag carries the strength it was ASSIGNED, so
+# a reduced-strength tag (PS1_supporting, PM5_supporting, PS3_supporting)
+# scores 1, not the 4 or 2 its prefix would suggest. PM2 is Supporting (+1)
+# per the ClinGen SVI recommendation of 2020-09-04; PP5 / BP6 were retired by
+# SVI in 2018 and no longer score (they are still displayed at 0 pts).
+ACMG_TAG_PTS <- c(
+  PVS1=8,
+  PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
+  PM5_supporting=1,
+  PM1_strong=4, PP3_strong=4, PP1_strong=4, PM1_moderate_plus=3,
+  PM1=2, PM2=1, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
+  PP1=1, PP2=1, PP3=1, PP4=1,
+  BA1=-8,
+  BS1=-4, BS2=-4, BS3=-4, BS4=-4,
+  BP1=-1, BP2=-1, BP3=-1, BP4=-1, BP5=-1, BP7=-1
+)
+
 classify_acmg <- function(tags_vec) {
-  # ── Point weights (Tavtigian 2020) ──────────────────────────────────────
-  tag_pts_map <- c(
-    PVS1=8,
-    PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
-    PM5_supporting=1,
-    PM1_strong=4, PP3_strong=4, PP1_strong=4, PM1_moderate_plus=3,
-    PM1=2, PM2=2, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
-    PP1=1, PP2=1, PP3=1, PP4=1, PP5=1,
-    BA1=-8,
-    BS1=-4, BS2=-4, BS3=-4, BS4=-4, BP6=-4,
-    BP1=-1, BP2=-1, BP3=-1, BP4=-1, BP5=-1, BP7=-1
-  )
+  tag_pts_map <- ACMG_TAG_PTS
   tags <- trimws(tags_vec)
   pts  <- sum(tag_pts_map[intersect(tags, names(tag_pts_map))], na.rm = TRUE)
 
@@ -3982,90 +3995,23 @@ classify_acmg <- function(tags_vec) {
                                                  "PP4"))], na.rm = TRUE)
   if (locus_pts > PP1_PP4_CAP) pts <- pts - (locus_pts - PP1_PP4_CAP)
 
-  # ── Tag counts by tier ───────────────────────────────────────────────────
-  n_pvs <- sum(grepl("^PVS",        tags))
-  n_ps  <- sum(grepl("^PS[0-9]",    tags))
-  # PM1_strong counts as PS-equivalent (4 pts)
-  n_ps_eq <- n_ps + sum(tags %in% c("PM1_strong","PP3_strong"))
-  n_pm  <- sum(grepl("^PM",         tags) & !tags %in% c("PM1_strong"))
-  n_pp  <- sum(grepl("^PP",         tags) & !tags %in% c("PP3_strong","PP3_moderate"))
-  n_pp_eq <- n_pp + sum(tags == "PP3_moderate")   # PP3_moderate counts as 2 PP
-  n_bs  <- sum(grepl("^BS",         tags))
-  n_bp  <- sum(grepl("^BP",         tags))
+  # ── Classification: Tavtigian 2020 point bands, BA1 stand-alone ──────────
+  # Points only. The Richards 2015 rule ladder that used to run first counted
+  # tags by prefix (so PS1_supporting + PM2 reached Likely Pathogenic at 3 pts)
+  # and matched pathogenic combinations before looking at benign evidence (so
+  # PS1 + PS2 + BA1 returned Pathogenic at 0 pts). Summation handles both:
+  # assigned strengths are what score, and conflicting evidence cancels.
+  #   P >= 10 | LP 6-9 | VUS 0-5 (High 4-5, Mid 2-3, Low 0-1) | LB -1..-6 | B <= -7
   has_ba1 <- "BA1" %in% tags
-
-  # ── Rule-based classifier (Richards 2015) ────────────────────────────────
-  # Returns list(class, rule) or NULL if no rule matched
-  rule_classify <- function() {
-    # ── Pathogenic rules ──
-    if (n_pvs >= 1 && n_ps_eq >= 1)
-      return(list(class="Pathogenic", rule=paste0("PVS1 + ", n_ps_eq, " PS")))
-    if (n_pvs >= 1 && n_pm >= 2)
-      return(list(class="Pathogenic", rule=paste0("PVS1 + ", n_pm, " PM")))
-    if (n_pvs >= 1 && n_pm == 1 && n_pp_eq >= 2)
-      return(list(class="Pathogenic", rule=paste0("PVS1 + 1 PM + ", n_pp_eq, " PP")))
-    if (n_pvs >= 1 && n_pp_eq >= 4)
-      return(list(class="Pathogenic", rule=paste0("PVS1 + ", n_pp_eq, " PP")))
-    if (n_ps_eq >= 2)
-      return(list(class="Pathogenic", rule=paste0(n_ps_eq, " PS")))
-    if (n_ps_eq == 1 && n_pm >= 3)
-      return(list(class="Pathogenic", rule=paste0("1 PS + ", n_pm, " PM")))
-    if (n_ps_eq == 1 && n_pm == 2 && n_pp_eq >= 2)
-      return(list(class="Pathogenic", rule=paste0("1 PS + 2 PM + ", n_pp_eq, " PP")))
-    if (n_ps_eq == 1 && n_pm == 1 && n_pp_eq >= 4)
-      return(list(class="Pathogenic", rule=paste0("1 PS + 1 PM + ", n_pp_eq, " PP")))
-    # ── Likely Pathogenic rules ──
-    if (n_pvs >= 1 && n_pm == 1)
-      return(list(class="Likely Pathogenic", rule="PVS1 + 1 PM"))
-    if (n_ps_eq == 1 && n_pm >= 1 && n_pm <= 2)
-      return(list(class="Likely Pathogenic", rule=paste0("1 PS + ", n_pm, " PM")))
-    if (n_ps_eq == 1 && n_pp_eq >= 2)
-      return(list(class="Likely Pathogenic", rule=paste0("1 PS + ", n_pp_eq, " PP")))
-    if (n_pm >= 3)
-      return(list(class="Likely Pathogenic", rule=paste0(n_pm, " PM")))
-    if (n_pm == 2 && n_pp_eq >= 2)
-      return(list(class="Likely Pathogenic", rule=paste0("2 PM + ", n_pp_eq, " PP")))
-    if (n_pm == 1 && n_pp_eq >= 4)
-      return(list(class="Likely Pathogenic", rule=paste0("1 PM + ", n_pp_eq, " PP")))
-    # ── Benign rules ──
-    if (has_ba1)
-      return(list(class="Benign", rule="BA1 (standalone)"))
-    if (n_bs >= 2)
-      return(list(class="Benign", rule=paste0(n_bs, " BS")))
-    if (n_bs >= 1 && n_bp >= 2)
-      return(list(class="Benign", rule=paste0("1 BS + ", n_bp, " BP")))
-    # ── Likely Benign rules ──
-    if (n_bs >= 1 && n_bp >= 1)
-      return(list(class="Likely Benign", rule=paste0("1 BS + 1 BP")))
-    if (n_bp >= 2)
-      return(list(class="Likely Benign", rule=paste0(n_bp, " BP")))
-    return(NULL)
-  }
-
-  rb <- rule_classify()
-
-  # ── Tavtigian Bayesian thresholds (fallback / confirmation) ──────────────
-  # VUS sub-tiers (SVC v4.0 direction, Tavtigian 2020 points 0–5):
-  #   VUS-High  (4–5 pts): leans pathogenic
-  #   VUS-Mid   (2–3 pts): truly uncertain
-  #   VUS-Low   (0–1 pts): leans benign
-  bay_class <- if (has_ba1)         "Benign" else
-               if (pts >= 10)       "Pathogenic" else
-               if (pts >= 6)        "Likely Pathogenic" else
-               if (pts <= -7)       "Benign" else
-               if (pts <= -4)       "Likely Benign" else
-               if (pts >= 4)        "VUS-High" else
-               if (pts >= 2)        "VUS-Mid" else
-                                    "VUS-Low"
-
-  # Use rule-based when it fires; fall back to Bayesian with pts note
-  if (!is.null(rb)) {
-    classification <- rb$class
-    rule_str       <- rb$rule
-  } else {
-    classification <- bay_class
-    rule_str       <- paste0("score ", pts, " pts")
-  }
+  classification <- if (has_ba1)   "Benign" else
+                    if (pts >= 10) "Pathogenic" else
+                    if (pts >= 6)  "Likely Pathogenic" else
+                    if (pts <= -7) "Benign" else
+                    if (pts <= -1) "Likely Benign" else
+                    if (pts >= 4)  "VUS-High" else
+                    if (pts >= 2)  "VUS-Mid" else
+                                   "VUS-Low"
+  rule_str <- if (has_ba1) "BA1 (stand-alone)" else paste0("score ", pts, " pts")
 
   # Format tag summary string, e.g. "PM1↑ PM2 PP2 PP3"
   tag_summary <- if (length(tags) > 0) {
@@ -4317,9 +4263,9 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
     if (has_pp3)
       s(paste0("In silico tool predictions suggest damaging effect of the variant on the gene or gene product", strength, score_str, pp3_name, ".")) else
       s(paste0("In silico tool predictions suggest the variant is likely tolerated", score_str, " (BP4)."))
-    # PS3 proxy note — when AM >= 0.90 + REVEL >= 0.773, note that PP3_strong is used as proxy
+    # Convergence note — AM >= 0.90 + REVEL >= 0.773; informational, no strength change
     if (isTRUE(ps3_proxy))
-      s(paste0("Convergent structural (AlphaMissense) and ensemble (REVEL) evidence supports damaging effect; PP3_strong applied as proxy for PS3_supporting pending experimental functional data."))
+      s(paste0("Convergent structural (AlphaMissense) and ensemble (REVEL) evidence supports a damaging effect; noted only, no additional evidence strength is applied pending experimental functional data."))
     if (isTRUE(bs3_proxy))
       s(paste0("Convergent benign structural (AlphaMissense < 0.10) and ensemble (REVEL <= 0.29) evidence suggests tolerated effect; consistent with BS3_supporting pending DMS functional data."))
   }
@@ -4971,8 +4917,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
                          grepl("phospho|ubiquit|acetyl|sumoyl", desc_lc)
         is_mod_ptm    <- any(types_present %in% c("lipid","carbohyd","mod_res")) &&
                          grepl("methyl|glycosyl|lipid|palmitoyl|myristoyl|GPI", desc_lc)
+        # A PTM at the residue is location evidence, not an assay. It stays
+        # visible (PTM_Info / PTM_Strength) under the non-scoring PP_PTM marker;
+        # it used to be scored as PS3_supporting.
         if (is_strong_ptm) {
-          ptm_acmg     <- "PS3_supporting"
+          ptm_acmg     <- "PP_PTM"
           ptm_strength <- "Strong functional site"
         } else if (nrow(ptm_rows) > 0) {
           ptm_acmg     <- "PP_PTM"
@@ -5018,17 +4967,30 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         damaging <- grepl("loss|abolish|abrogat|impair|reduce|decreas|diminish|inactiv|no longer|prevent|disrupt", lc) &
                     !grepl("no loss|no effect|no significant|no change|not affect|no reduction|unaffected", lc)
         if (any(damaging)) uniprot_mutagen <- desc_of(mut_rows[damaging, , drop = FALSE])
-      }
 
-      # Published mutagenesis showing loss of function is functional evidence in
-      # its own right. Route it through the existing PTM_ACMG channel so it
-      # reaches classification and the exported table without a parallel column.
+        # PS3 is evidence about THIS substitution. UniProt records which
+        # residues were assayed (alt_aa, e.g. "A/E"); S50A "Loss of activity"
+        # is not an experiment on S50F. Fire only on an exact match; when the
+        # tested alternatives are unknown the note stays visible but unscored.
+        q_aa  <- tryCatch(sub("^p\\.", "", aa3to1(mut)), error = function(e) "")
+        q_alt <- sub("^[A-Z][0-9]+([A-Z*])$", "\\1", q_aa)
+        tested <- if ("alt_aa" %in% colnames(mut_rows))
+          unlist(strsplit(mut_rows$alt_aa[damaging], "/", fixed = TRUE)) else character(0)
+        mutagen_matches_query <- nzchar(q_alt) && q_alt != q_aa && q_alt %in% tested
+      } else mutagen_matches_query <- FALSE
+
+      # Published mutagenesis showing loss of function for the queried
+      # substitution is functional evidence in its own right. Route it through
+      # the existing PTM_ACMG channel so it reaches classification and the
+      # exported table without a parallel column.
       if (nchar(uniprot_mutagen) > 0) {
         ptm_info <- if (nchar(ptm_info) > 0)
           paste0(ptm_info, "; Mutagenesis: ", uniprot_mutagen) else
           paste0("Mutagenesis: ", uniprot_mutagen)
-        ptm_acmg     <- "PS3_supporting"
-        ptm_strength <- "Published loss of function on substitution"
+        if (mutagen_matches_query) {
+          ptm_acmg     <- "PS3_supporting"
+          ptm_strength <- "Published loss of function for this substitution"
+        }
       }
 
       if (nchar(uniprot_site_desc) > 0 || nchar(uniprot_mutagen) > 0)
@@ -5435,9 +5397,9 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
 
         # Tiered by the substitution's own LR+ (calibrated on 33,216 genome-wide
         # ClinVar two-star variants): <= -4 Moderate (+2, LR+ 5.4), <= -8
-        # Moderate-plus (+3, LR+ 11.2), <= -12 Strong (+4, LR+ 39.0). On by
-        # default; disable with options(varviz.mds_tiered = FALSE).
-        mds_tiered <- isTRUE(getOption("varviz.mds_tiered", TRUE))
+        # Moderate-plus (+3, LR+ 11.2), <= -12 Strong (+4, LR+ 39.0). OFF by
+        # default (Moderate only); enable with options(varviz.mds_tiered = TRUE).
+        mds_tiered <- isTRUE(getOption("varviz.mds_tiered", FALSE))
         mds_pts <- 0L
         if (!is.na(mds_val) && mds_val <= MDS_PM1_THRESHOLD) {
           mds_pts <- if (mds_tiered && mds_val <= MDS_PM1_STRONG_THRESHOLD) 4L
@@ -5446,29 +5408,20 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         }
 
         if (mds_pts > 0L) {
-          new_pts <- if (base_pts > 0L) min(base_pts + mds_pts, 4L) else mds_pts
+          # MDS and a pathway PM1 are two views of the same criterion, not two
+          # criteria: take the stronger, never the sum. Moderate PM1 + Moderate
+          # MDS stays Moderate until a joint calibration says otherwise.
+          new_pts <- max(base_pts, mds_pts)
           acmg_tags <- acmg_tags[!acmg_tags %in% PM1_TAGS]
           acmg_tags <- c(acmg_tags, pts_tag(new_pts))
           role <- if (base_pts > 0L) "corroborates" else "originates"
           pm1_pathway_val <- if (nzchar(pm1_pathway_val))
                                paste0(pm1_pathway_val, "+mds") else "mds"
 
-          # Release conservation back to PP3 where MDS can carry the upgrade.
-          # Paths 0/1/3a reach PM1_strong by spending cons_strong, which then
-          # suppresses the conservation tier of PP3 to avoid double-counting the
-          # same signal. When MDS also fires, the pathway's own PM1 (+2) plus the
-          # MDS tier (+2 at minimum) already reaches Strong, so conservation is
-          # no longer load-bearing for PM1 and may do its proper work in PP3.
-          # MDS is substitution-specific -- M(col,mut) - M(col,wt) -- where
-          # PhyloP/PhastCons/GERP/ConSurf are position-specific and cannot
-          # express which substitution the family tolerates, so the two are not
-          # the same evidence. Disable with options(varviz.mds_frees_cons = FALSE).
-          if (base_pts > 0L && isTRUE(cons_used_for_pm1) &&
-              isTRUE(getOption("varviz.mds_frees_cons", TRUE))) {
-            cons_used_for_pm1 <- FALSE
-            message(sprintf("[PM1] MDS carries the upgrade for %s %s; conservation released to PP3",
-                            gene_name_for_api, mut))
-          }
+          # (The former "MDS carries the upgrade, release conservation to PP3"
+          # step is gone with the summation: MDS no longer upgrades a pathway
+          # PM1, so conservation spent on PM1 stays spent. varviz.mds_frees_cons
+          # is accepted but has no effect.)
 
           message(sprintf("[PM1] MDS %s PM1 for %s %s (delta %.2f; %d + %d -> %d pts)",
                           role, gene_name_for_api, mut, mds_val,
@@ -5481,9 +5434,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
                         paste0(pm1_base_label(sub("\\+mds$", "", pm1_pathway_val)), " (+", base_pts, ")")
                       else ""
           pm1_deriv_val <- if (base_pts > 0L)
-            sprintf("%s + MDS %.2f (%s, +%d) = %d points%s", base_txt, mds_val, mds_tier_txt,
-                    mds_pts, new_pts,
-                    if (base_pts + mds_pts > 4L) ", capped at Strong" else "")
+            sprintf("%s corroborated by MDS %.2f (%s, +%d); stronger of the two = %d points",
+                    base_txt, mds_val, mds_tier_txt, mds_pts, new_pts)
           else
             sprintf("MDS %.2f (%s) = %d points", mds_val, mds_tier_txt, mds_pts)
         } else if (is.na(mds_val) && !nzchar(pm1_pathway_val)) {
@@ -5796,10 +5748,10 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       # PS3_supporting already fires through the PTM_ACMG channel — applying the
       # proxy on top would count the same functional-evidence slot twice.
       if (am_high && revel_dam && nchar(uniprot_mutagen) == 0) {
-        # Convergent structural + ensemble evidence — PS3_supporting proxy
-        # Do not add a new tag; instead upgrade PP3_moderate -> PP3_strong as proxy for PS3_supporting
-        # (avoids tag proliferation while reflecting the stronger signal)
-        if (pp3_level(acmg_tags) < 3L) add_pp3("3")
+        # Convergent structural + ensemble evidence. Noted in the narrative
+        # only: two in-silico predictors are one evidence line (PP3), so this
+        # no longer upgrades PP3 to Strong as a "PS3 proxy". PP3 strength is
+        # set solely by the Pejaver 2022 calibrated thresholds above.
         ps3_proxy_fired <- TRUE
       } else if (am_low && revel_ben) {
         # Convergent benign structural + ensemble evidence — BS3_supporting proxy
@@ -7079,14 +7031,8 @@ shinyServer(function(input, output, session) {
       }
 
       # ── VarSome-style criterion grid ─────────────────────────────────────
-      tag_pts_map <- c(
-        PVS1=8, PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
-        PM1_strong=4, PP3_strong=4, PP1_strong=4, PM1_moderate_plus=3,
-        PM1=2, PM2=2, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
-        PP1=1, PP2=1, PP3=1, PP4=1, PP5=1,
-        BA1=-8, BS1=-4, BS2=-4, BS3=-4, BS4=-4, BP6=-4,
-        BP1=-1, BP2=-1, BP3=-1, BP4=-1, BP5=-1, BP7=-1
-      )
+      # Same table classify_acmg() scores with, so the card grid cannot drift.
+      tag_pts_map <- ACMG_TAG_PTS
       strength_label <- function(tag) {
         if (grepl("_strong$", tag))     return("Strong")
         if (grepl("_moderate_plus$", tag)) return("Moderate+")

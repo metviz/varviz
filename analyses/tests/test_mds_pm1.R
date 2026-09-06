@@ -19,7 +19,11 @@ stopifnot(
   # entry-name bridge from the UniProt JSON already fetched
   any(grepl('mds_entry_name <-', src)) && any(grepl('pfam_data\\$uniProtkbId', src)),
   # the Path 4 gate, the three tier branches, and the unavailable sentinel
-  any(grepl('pm1_pathway_val <- "mds"', src)),
+  any(grepl('paste0\\(pm1_pathway_val, "\\+mds"\\) else "mds"', src)),   # originate or corroborate
+  # MDS corroboration takes the stronger of pathway PM1 and MDS, never the sum
+  any(grepl('new_pts <- max\\(base_pts, mds_pts\\)', src)),
+  # LR tiers are opt-in (submission config is Moderate-only)
+  any(grepl('getOption\\("varviz.mds_tiered", FALSE\\)', src)),
   any(grepl('pm1_pathway_val <- "mds_unavailable"', src)),
   any(grepl('mds_val <= MDS_PM1_THRESHOLD', src)),
   any(grepl('mds_val <= MDS_PM1_STRONG_THRESHOLD', src)),

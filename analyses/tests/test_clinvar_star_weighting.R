@@ -5,6 +5,8 @@
 # build artifact, never user input — which is what makes testing the real code safe.
 src <- readLines("server.R", warn = FALSE)
 eval(parse(text = src[grep("^PP1_PP4_CAP <- ", src)]))
+pb <- grep("^ACMG_TAG_PTS <- c\\($", src); pe <- pb - 1 + which(src[pb:length(src)] == ")")[1]
+eval(parse(text = paste(src[pb:pe], collapse = "\n")))                # points table classify_acmg reads
 beg <- grep("^classify_acmg <- function", src)
 end <- beg - 1 + which(src[beg:length(src)] == "}")[1]
 eval(parse(text = paste(src[beg:end], collapse = "\n")))

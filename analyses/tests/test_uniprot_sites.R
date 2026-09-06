@@ -34,18 +34,25 @@ block <- paste(src[beg:end], collapse = "\n")
 
 # Drive the block with a synthetic feature table; returns the three PTM slots
 # plus the site label, exactly as the surrounding code would see them.
-run_block <- function(features, position) {
+run_block <- function(features, position, mut = NULL) {
   e <- new.env(parent = globalenv())
   e$uniprot_data <- features
   e$pos          <- position
+  # queried variant, 1-letter; aa3to1 is identity here so the block's own
+  # parsing of `mut` is what gets exercised
+  e$mut    <- if (is.null(mut)) paste0("A", position, "V") else mut
+  e$aa3to1 <- function(x) x
   e$ptm_info <- ""; e$ptm_acmg <- ""; e$ptm_strength <- ""
   eval(parse(text = block), envir = e)
   list(site = e$uniprot_site_desc, mutagen = e$uniprot_mutagen,
        ptm_acmg = e$ptm_acmg, ptm_info = e$ptm_info)
 }
-ft <- function(type, start, end = start, description = "")
-  data.frame(type = type, start = start, end = end,
-             description = description, stringsAsFactors = FALSE)
+ft <- function(type, start, end = start, description = "", alt_aa = NULL) {
+  d <- data.frame(type = type, start = start, end = end,
+                  description = description, stringsAsFactors = FALSE)
+  if (!is.null(alt_aa)) d$alt_aa <- alt_aa
+  d
+}
 
 # Active site: the criterion's canonical example, exact residue.
 r <- run_block(ft("act_site", 145, 145, "Proton acceptor"), 145)
@@ -59,13 +66,24 @@ stopifnot(run_block(ft("binding", 87, 89, "Binds Ca(2+)"), 90)$site == "")
 # A PTM is not a functional-site hit — it travels the separate PS3 channel.
 stopifnot(run_block(ft("mod_res", 129, 129, "Phosphoserine"), 129)$site == "")
 
-# Mutagenesis: only a reported LOSS is evidence for pathogenicity.
+# Mutagenesis: only a reported LOSS is evidence for pathogenicity, and only
+# when UniProt's tested substitution is the queried one. S50A "Loss of
+# activity" says nothing experimental about S50F.
 damaging <- c("Loss of activity", "Abolishes ligand binding",
               "Strongly reduces receptor signaling", "Impairs trafficking")
 for (d in damaging) {
-  r <- run_block(ft("mutagen", 50, 50, d), 50)
+  r <- run_block(ft("mutagen", 50, 50, d, alt_aa = "A"), 50, mut = "S50A")
   stopifnot(r$ptm_acmg == "PS3_supporting", grepl("Mutagenesis:", r$ptm_info))
+  # same residue, different substitution: text stays visible, no PS3
+  r <- run_block(ft("mutagen", 50, 50, d, alt_aa = "A"), 50, mut = "S50F")
+  stopifnot(r$ptm_acmg == "", grepl("Mutagenesis:", r$ptm_info))
+  # tested alternatives missing from the feature table: cannot verify, no PS3
+  r <- run_block(ft("mutagen", 50, 50, d), 50, mut = "S50A")
+  stopifnot(r$ptm_acmg == "", grepl("Mutagenesis:", r$ptm_info))
 }
+# UniProt lists several tested alternatives as one feature ("A/E/D").
+r <- run_block(ft("mutagen", 50, 50, "Loss of activity", alt_aa = "A/E/D"), 50, mut = "S50E")
+stopifnot(r$ptm_acmg == "PS3_supporting")
 benign_phrasing <- c("No effect on binding", "No loss of activity",
                      "No significant change in signaling", "Does not affect folding")
 for (d in benign_phrasing) {
@@ -73,13 +91,14 @@ for (d in benign_phrasing) {
   stopifnot(r$mutagen == "", r$ptm_acmg == "")
 }
 
-# An existing PTM call must survive alongside a mutagenesis note.
+# An existing PTM marker must survive alongside a mutagenesis note.
 e <- new.env(parent = globalenv())
 e$uniprot_data <- ft("mutagen", 50, 50, "Loss of activity")
-e$pos <- 50; e$ptm_info <- "Phosphoserine"
-e$ptm_acmg <- "PS3_supporting"; e$ptm_strength <- "Strong functional site"
+e$pos <- 50; e$mut <- "S50A"; e$aa3to1 <- function(x) x
+e$ptm_info <- "Phosphoserine"
+e$ptm_acmg <- "PP_PTM"; e$ptm_strength <- "Strong functional site"
 eval(parse(text = block), envir = e)
-stopifnot(grepl("^Phosphoserine; Mutagenesis: ", e$ptm_info))
+stopifnot(grepl("^Phosphoserine; Mutagenesis: ", e$ptm_info), e$ptm_acmg == "PP_PTM")
 
 # No UniProt data at all must be inert, not an error.
 stopifnot(run_block(ft("act_site", 1, 1)[0, ], 145)$site == "")

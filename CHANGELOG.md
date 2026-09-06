@@ -7,6 +7,60 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [2.0.0] - 2026-09-06
+
+Evidence-engine revision after peer review. **Changes classifications.** Every
+`ps_*` run, the manuscript numbers, Figure panels and Supplementary Table S2
+must be regenerated against this engine before being quoted.
+
+### Changed
+
+- **Classification is points-only.** `classify_acmg()` sums Tavtigian 2020
+  points over one module-level table, `ACMG_TAG_PTS`, and bands them
+  (P >= 10, LP 6-9, VUS 0-5 with High/Mid/Low sub-tiers, LB -1..-6, B <= -7),
+  with BA1 stand-alone. The Richards 2015 rule ladder that ran first is gone:
+  it counted tags by prefix (`PS1_supporting + PM2` reached Likely Pathogenic
+  at 3 points; `PS1_moderate + PS2` reached Pathogenic at 6) and matched
+  pathogenic combinations before looking at benign evidence (`PS1 + PS2 + BA1`
+  returned Pathogenic at 0 points). Reduced-strength tags now score the
+  strength they were assigned, and conflicting evidence cancels. The `rule`
+  field reads `"score N pts"` or `"BA1 (stand-alone)"`.
+- **PM2 is Supporting (+1)**, per the ClinGen SVI recommendation of 4 Sep 2020.
+  PVS1 + PM2 = 9 still reaches Likely Pathogenic, as that recommendation
+  specifies.
+- **PP5 and BP6 no longer score** (retired by ClinGen SVI, 2018). They are still
+  emitted and displayed at 0 points.
+- **No PP3 upgrade from predictor agreement.** AlphaMissense >= 0.90 with
+  REVEL >= 0.773 used to promote PP3 to Strong as a "PS3 proxy". Two in-silico
+  predictors are one evidence line; PP3 strength now comes only from the
+  Pejaver 2022 calibrated thresholds. The convergence is still noted in the
+  narrative.
+- **PTM location is not experimental evidence.** A phospho / ubiquitin /
+  acetyl / disulfide annotation at the residue used to emit `PS3_supporting`;
+  it now carries the non-scoring `PP_PTM` marker and stays visible in
+  `PTM_Info` / `PTM_Strength`.
+- **Mutagenesis PS3 requires the tested substitution to match.** The UniProt
+  parser keeps `alternativeSequence` (new `alt_aa` column); `PS3_supporting`
+  fires only when the queried alt residue was the one assayed. S50A "Loss of
+  activity" no longer scores for S50F. Unmatched or unknown: note shown,
+  nothing scored.
+- **MDS corroborates, it does not stack.** Where a pathway PM1 and MDS both
+  fire, the stronger of the two is taken (`max`), never the sum; Moderate PM1 +
+  Moderate MDS stays Moderate. The "release conservation to PP3" step that
+  depended on the sum is removed; `varviz.mds_frees_cons` is accepted as a
+  no-op.
+- **MDS LR tiers are off by default** (`varviz.mds_tiered = FALSE`). The
+  submission configuration is Moderate-only MDS; the +3 / +4 tiers remain
+  available as an exploratory option (`ps_tiered_harness.R`, or
+  `VARVIZ_MDS_TIERED=TRUE` for `ps_final_harness.R`, whose env flags are now
+  validated instead of treating any non-"FALSE" string as TRUE).
+
+### Added
+
+- `analyses/tests/test_acmg_points_only.R`: reviewer cases, SVI PM2 rule,
+  retired criteria, band edges, PP1/PP4 cap. `test_uniprot_sites.R` gains the
+  alt-residue gating cases.
+
 ## [1.1.3] - 2026-09-06
 
 Pipeline audit fixes (analysis scripts and harnesses only). **No classification
