@@ -7,6 +7,53 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [1.1.3] - 2026-09-06
+
+Pipeline audit fixes (analysis scripts and harnesses only). **No classification
+changes** — `classify_acmg()` and `build_variant_table()` are untouched; every
+call the app or a harness produces is identical. What changes is whether a
+failed run can masquerade as a finished one.
+
+### Fixed
+
+- **Harnesses no longer checkpoint a gene whose data sources failed.** New
+  `analyses/lib/harness_guard.R`: `harness_fetch()` wraps the eight gene-level
+  fetches (Pfam, UniProt, gnomAD, ClinVar, CCRS, AlphaFold, mean pathogenicity,
+  gene info) plus the Ensembl exon and dbNSFP pre-loads, records each failure in
+  `options(varviz.harness_fetch_failed)`, and `run_one()` refuses the checkpoint
+  when anything new failed. Applied to the shared `05_classify_harness.R` (all
+  six `ps_*` wrappers), `ps_final_harness.R` (which previously watched only
+  three sentinel families) and `repro/08_casestudy_harness.R`. A run with any
+  aborted gene now exits 1 instead of writing a partial `summary.tsv`.
+- **`summary.tsv` is never overwritten silently.** The shared harness needs
+  `--force`, `ps_final_harness.R` needs `VARVIZ_FORCE=1`. The manuscript numbers
+  were read from those files.
+- **`repro/run_all.sh` propagates a claims mismatch.** `02_reconcile.R`'s exit
+  status was swallowed by `|| true`, so the driver always exited 0.
+- **DOLPHIN failures are no longer cached as answers.** `lib/dolphin.R` stops
+  caching NA (a timeout / 429 / 500 lived for the rest of the session);
+  `lib/dolphin_bulk.R` writes `pm1 = NA` on a failed fetch and retries NA rows
+  on the next run instead of recording `FALSE`. Re-probing the existing
+  per-gene caches showed GCK, KRAS, NUDT15 and PTEN held thousands of HTTP-500s
+  recorded as "no PM1"; those rows are being refetched.
+- **Frozen inputs need `--force` to regenerate.** `01_pull_varibench.R`,
+  `02_pull_mavedb.R`, `25_clinvar_extract.R` refuse to overwrite
+  `varibench_canonical.tsv`, `mavedb_canonical.tsv`,
+  `clinvar_missense_2star.tsv` when they exist, and stop on zero rows.
+- **Empty joins fail loud.** `22_mds_benchmark.R` stops if the VariBench join
+  is empty, under half-matched, or single-class; `24_clinvar_mds_lr.R` prints
+  the rows dropped at each join and stops if either P or B arm is empty.
+- **`17_merge_mane_into_rdata.R` checks that its backup of `VarViz.RData`
+  succeeded** before overwriting the file.
+- **AUROC bootstrap CI is reproducible.** `compute_metric_suite()` gains
+  `seed = 1L` (scoped; caller's RNG restored). `seed = NULL` keeps the old
+  behaviour.
+
+### Added
+
+- Plain-R offline tests: `test_harness_guard.R`, `test_dolphin_bulk_failure.R`,
+  `test_dolphin_failure_cache.R`, `test_metric_suite_seed.R`.
+
 ## [1.1.2] - 2026-08-30
 
 Dead code and dependency removal. **No classification changes** — nothing in this

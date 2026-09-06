@@ -15,12 +15,19 @@ gm  <- fread("analyses/derived/gene_mane.tsv")
 acc_of <- setNames(gm$uniprot_id, gm$gene_name)
 cv <- fread("analyses/tmp/clinvar/clinvar_missense_2star.tsv")
 cv[, entry := entry_of[acc_of[gene]]]
+n_cv0 <- nrow(cv)
 cv <- cv[!is.na(entry) & nzchar(entry)]
+cat(sprintf("ClinVar rows: %d; %d dropped with no gene->UniProt entry (%.1f%%)\n",
+            n_cv0, n_cv0 - nrow(cv), 100*(n_cv0 - nrow(cv))/n_cv0))
+stopifnot(nrow(cv) > 0)
 cv[, vid := .I]
 
 mp <- as.data.table(tbl$map); setkeyv(mp, c("id","residue"))
 hits <- mp[cv, on=.(id=entry, residue=pos), nomatch=0L, allow.cartesian=TRUE]
+n_h0 <- nrow(hits)
 hits <- hits[!is.na(family) & nzchar(family)]
+cat(sprintf("PSSM hits: %d; %d dropped with no Pfam family (%.1f%%)\n",
+            n_h0, n_h0 - nrow(hits), if (n_h0) 100*(n_h0 - nrow(hits))/n_h0 else 0))
 hits[, delta := {
   fam <- as.character(.BY$family)
   M <- if (fam %in% names(tbl$pssm)) tbl$pssm[[fam]] else NULL
@@ -33,6 +40,10 @@ hits[, delta := {
 per <- hits[!is.na(delta), .(mds=min(delta)), by=.(vid,cls)]
 cat(sprintf("MDS scored: %d (P=%d B=%d)\n", nrow(per), sum(per$cls==1), sum(per$cls==0)))
 P <- per[cls==1]$mds; B <- per[cls==0]$mds
+# Both arms must be populated: LR+ = sens/fpr divides by length(B), and the
+# manuscript quotes n=18,570 P / 14,646 B. An empty arm here means an upstream
+# key drift, not a result.
+stopifnot(length(P) > 0, length(B) > 0)
 wil <- function(k,n){p=k/n;z=1.96;d=1+z^2/n;c=(p+z^2/2/n)/d;h=z*sqrt(p*(1-p)/n+z^2/4/n^2)/d;c(c-h,c+h)}
 band <- function(lr) if(!is.finite(lr)) "Strong+" else if(lr<4.3)"Supporting" else if(lr<18.7)"Moderate" else "Strong"
 cat(sprintf("%-9s %6s %6s %8s %-13s %s\n","thresh","sens","spec","LR+","LR+ 95%CI","band"))

@@ -236,7 +236,14 @@ canonical <- vb |>
   filter(!is.na(p_notation), !is.na(gene)) |>
   select(gene, p_notation, hgvs_g, clinvar_alleleid, label, source, set)
 
-write_tsv(canonical, file.path(OUT_DERIVED, "varibench_canonical.tsv"))
+out_canonical <- file.path(OUT_DERIVED, "varibench_canonical.tsv")
+stopifnot(nrow(canonical) > 0)
+# out_canonical is a declared input of the downstream pipeline (REPRODUCIBILITY.md).
+# Re-running this puller regenerates it from live sources; never do that
+# silently over the copy the manuscript numbers were built from.
+if (file.exists(out_canonical) && !("--force" %in% commandArgs(trailingOnly = TRUE)))
+  stop("refusing to overwrite frozen input ", out_canonical, "; pass --force to regenerate it")
+write_tsv(canonical, out_canonical)
 cat("Wrote", nrow(canonical), "canonical rows.\n")
 cat("Label breakdown:\n")
 print(table(canonical$label))

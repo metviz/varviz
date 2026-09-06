@@ -52,6 +52,12 @@ out <- data.table(
 out <- out[!is.na(wt) & !is.na(mut) & wt != mut]          # drop Ter/unknown/synonymous
 out <- unique(out, by = c("gene","pos","wt","mut","cls")) # one row per variant/label
 
+stopifnot(nrow(out) > 0)
+# OUT is a declared input of the downstream pipeline (REPRODUCIBILITY.md).
+# Re-running this puller regenerates it from live sources; never do that
+# silently over the copy the manuscript numbers were built from.
+if (file.exists(OUT) && !("--force" %in% commandArgs(trailingOnly = TRUE)))
+  stop("refusing to overwrite frozen input ", OUT, "; pass --force to regenerate it")
 fwrite(out, OUT, sep = "\t")
 cat(sprintf("wrote %s: %d rows (P/LP=%d, B/LB=%d, genes=%d)\n",
             OUT, nrow(out), sum(out$cls==1L), sum(out$cls==0L), uniqueN(out$gene)))
