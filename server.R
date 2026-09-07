@@ -7096,10 +7096,10 @@ shinyServer(function(input, output, session) {
                 else "Missense variant in gene with high rate of pathogenic missense variants (PP2)",
           PS1 = "Same amino acid change as an established pathogenic variant in ClinVar (PS1)",
           PS3 = if (grepl("Mutagenesis:", ptm_ctx, fixed = TRUE))
-                  paste0("Published mutagenesis at this residue reports loss of function (",
+                  paste0("Published mutagenesis of THIS substitution reports loss of function (",
                          sub("^.*Mutagenesis: ", "", ptm_ctx),
                          "); UniProt-curated experimental evidence (PS3)")
-                else "Variant disrupts a UniProt-annotated functional/PTM site with established functional consequence (PS3)",
+                else "Published experimental evidence that this substitution disrupts function (PS3)",
           PM1 = if (nchar(site_ctx) > 0)
                   paste0("This residue IS a UniProt-annotated functional site (", site_ctx,
                          "), the criterion's canonical example; conservation evidence may upgrade strength (PM1)")
@@ -7116,13 +7116,13 @@ shinyServer(function(input, output, session) {
                        "Applies only when the presentation is characteristic enough that this gene is the expected cause; ",
                        "not appropriate for genetically heterogeneous or non-specific phenotypes. ",
                        "Set via the Phenotype dropdown on this card."),
-          PP5 = "Reported as pathogenic in ClinVar with at least 1-star review (PP5)",
+          PP5 = "Reported as pathogenic in ClinVar with at least 1-star review. Shown for context; not scored (retired by ClinGen SVI) (PP5)",
           BA1 = "Allele frequency >5% in gnomAD, standalone Benign (BA1)",
           BS1 = "Allele frequency above the disease-prevalence-adjusted threshold (BS1)",
           BS2 = "Observed homozygous in gnomAD in healthy individuals (BS2)",
           BP3 = "In-frame indel in a repetitive region without known function (BP3)",
           BP4 = "Multiple computational tools predict a benign/tolerated effect (BP4)",
-          BP6 = "Reported as benign in ClinVar (BP6)",
+          BP6 = "Reported as benign in ClinVar. Shown for context; not scored (retired by ClinGen SVI) (BP6)",
           BP7 = "Synonymous variant with no predicted splice impact (BP7)",
           tag  # fallback: show tag name
         )
@@ -7952,7 +7952,9 @@ shinyServer(function(input, output, session) {
           '<p style="font-size:11px;color:#64748b;margin:0 0 12px;">',
           'Cross-referencing input variants with all tracks + dbNSFP scores (MyVariant.info). ',
           'ACMG evidence tags per ',
-          '<strong>Richards et al. (2015)</strong> + <strong>Tavtigian et al. (2018)</strong> + <strong>Pejaver et al. (2022)</strong>. ',
+          '<strong>Richards et al. (2015)</strong> criteria, scored on the ',
+          '<strong>Tavtigian et al. (2020)</strong> point scale with ',
+          '<strong>Pejaver et al. (2022)</strong> PP3/BP4 calibration. ',
           'Strength tiers shown with arrows: ↑ moderate, ⬆ strong (e.g. PM1_strong, PP3_strong). ',
           'Score verdicts: ',
           '<span style="color:#ef4444;font-weight:700;">dam</span>=damaging &nbsp;',

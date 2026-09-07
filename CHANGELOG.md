@@ -7,6 +7,23 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [2.1.1] - 2026-09-06
+
+User-facing text only. **No classification changes** — no engine code was
+touched, only the strings the app displays.
+
+### Changed
+
+- Landing page, feature list and Variant Summary legend described the engine as
+  "hybrid Richards 2015 rule-based + Tavtigian Bayesian scoring". Classification
+  has been points-only since 2.0.0, so they now read: Richards et al. (2015)
+  criteria, scored on the Tavtigian et al. (2020) point scale with Pejaver et al.
+  (2022) PP3/BP4 calibration and ClinGen SVI strength recommendations.
+- PP5 and BP6 tooltips say the criterion is shown for context and not scored
+  (retired by ClinGen SVI).
+- PS3 tooltip says the published mutagenesis is for *this* substitution, and the
+  site branch no longer implies a PTM annotation alone establishes function.
+
 ## [2.1.0] - 2026-09-06
 
 MDS strength tiers reduced to two. **No change to the default configuration**

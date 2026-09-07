@@ -106,7 +106,7 @@ shinyUI(fluidPage(
                            p(style="font-size:18px; color:#041836; margin:0 0 4px; max-width:640px; margin-left:auto; margin-right:auto;",
                              "Protein-centric gene variant visualization with integrated ACMG/AMP pathogenicity classification."),
                            p(style="font-size:14px; color:#182840; margin:0 0 20px;",
-                             "Align variants to domains, structure, population frequency, 20+ computational predictors, and clinical evidence. Hybrid Richards 2015 rule-based + Tavtigian 2020 Bayesian ACMG scoring with Pejaver 2022 PP3/BP4 calibration. All data fetched live from APIs; results cached in-session."),
+                             "Align variants to domains, structure, population frequency, 20+ computational predictors, and clinical evidence. ACMG/AMP criteria scored on the Tavtigian 2020 point scale with Pejaver 2022 PP3/BP4 calibration and ClinGen SVI strength recommendations. All data fetched live from APIs; results cached in-session."),
                            tags$button(class="vv-cta", onclick="vvGo('protein_view');",
                                        style="font-size:16px; padding:12px 28px; border-radius:12px;",
                                        HTML("&#9654;&ensp;Start Analyzing"))
@@ -184,7 +184,7 @@ shinyUI(fluidPage(
                                     tags$ul(style="margin:0; padding-left:20px; color:#041836; font-size:14px;",
                                       tags$li("Variant Annotation Summary table with 40+ columns across all tracks"),
                                       tags$li(HTML("dbNSFP pathogenicity scores via MyVariant.info - SIFT, PolyPhen2, REVEL, CADD, FATHMM, PROVEAN, MutationTaster & more")),
-                                      tags$li(HTML("ACMG evidence tags auto-computed: hybrid Richards 2015 rule-based + Tavtigian 2020 Bayesian scoring + Pejaver 2022 PP3/BP4 calibration")),
+                                      tags$li(HTML("ACMG evidence tags auto-computed: Tavtigian 2020 point scoring + Pejaver 2022 PP3/BP4 calibration + ClinGen SVI strength recommendations")),
                                       tags$li(HTML("Conservation: ScoreCons (CCRStoAAC), GERP++, PhyloP, PhastCons")),
                                       tags$li("Population frequencies by ancestry (gnomAD, 1000G, ExAC)"),
                                       tags$li("AlphaMissense exact per-variant scores from AlphaFold substitution matrix"),
