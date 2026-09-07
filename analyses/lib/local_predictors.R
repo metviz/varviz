@@ -139,10 +139,18 @@ load_dbnsfp_for_region <- function(chrom, start, end,
     # Genomic key: (pos, ref, alt) — for the rare case the harness has hgvs_g
     g_key <- paste0(p[2], "_", p[3], "_", p[4])
     assign(g_key, p, envir = env)
-    # Protein key: (aapos, aaalt) — primary lookup path for hgvsp queries.
-    # aapos (col 12) can be ";"-separated for multi-transcript variants;
-    # index every value so isoform-specific HGVSp lookups also resolve.
+    # Protein key: (aapos, aaref, aaalt) — primary lookup path for hgvsp
+    # queries. aapos (col 12) can be ";"-separated for multi-transcript
+    # variants, so ONE row is indexed at several positions. Keying on position
+    # and alt alone therefore collides across transcripts: SNCA's canonical
+    # G51D and an alternate-transcript N51D both land on "51_D", and whichever
+    # was read first wins. That returned N51D's scores (MetaSVM tolerated,
+    # REVEL absent) for a G51D query and cost the variant a PP3 tier. The
+    # reference residue disambiguates them. The legacy (aapos, aaalt) key is
+    # still written, first-write-wins, so a caller that cannot supply aaref
+    # keeps the old behaviour.
     if (length(p) >= 12L) {
+      aa_ref <- if (length(p) >= 5L) p[5] else "."
       aa_alt <- if (length(p) >= 6L) p[6] else "."
       aa_pos_raw <- p[12]
       if (!is.na(aa_alt) && nzchar(aa_alt) && aa_alt != "." &&
@@ -150,6 +158,12 @@ load_dbnsfp_for_region <- function(chrom, start, end,
         aa_pos_parts <- unique(strsplit(aa_pos_raw, ";", fixed = TRUE)[[1]])
         aa_pos_parts <- aa_pos_parts[aa_pos_parts != "" & aa_pos_parts != "."]
         for (ap in aa_pos_parts) {
+          if (!is.na(aa_ref) && nzchar(aa_ref) && aa_ref != ".") {
+            ref_key <- paste0(ap, "_", aa_ref, "_", aa_alt)
+            if (!exists(ref_key, envir = env_p, inherits = FALSE)) {
+              assign(ref_key, p, envir = env_p)
+            }
+          }
           p_key <- paste0(ap, "_", aa_alt)
           # First-write-wins; multiple genomic encodings of the same
           # missense produce identical predictor scores in practice.
@@ -239,12 +253,22 @@ lookup_dbnsfp_local <- function(env, chrom, pos, ref, alt) {
 # Protein-key path — the harness's primary lookup since the universe TSV
 # only carries hgvs_g for ~0.8% of variants. aa_pos comes from the HGVS-p
 # (parsed by extract_pos), aa_alt is the one-letter alt code.
-lookup_dbnsfp_by_aa <- function(env, chrom, aa_pos, aa_alt) {
+lookup_dbnsfp_by_aa <- function(env, chrom, aa_pos, aa_alt, aa_ref = NA_character_) {
   if (is.null(env)) return(NULL)
   dt_chrom <- attr(env, "dbnsfp_chrom")
   if (!is.null(dt_chrom) && as.character(chrom) != dt_chrom) return(NULL)
   env_p <- attr(env, "protein_env")
   if (is.null(env_p)) return(NULL)
+  # With a reference residue, demand an exact (pos, ref, alt) match: a row
+  # indexed at this position for a DIFFERENT reference residue is a different
+  # substitution, and its scores must never stand in for this one. Returning
+  # NULL sends the caller to its documented fallback, which is recoverable;
+  # returning the wrong variant's predictors is not.
+  if (!is.na(aa_ref) && nzchar(as.character(aa_ref))) {
+    key <- paste0(as.integer(aa_pos), "_", as.character(aa_ref), "_", as.character(aa_alt))
+    if (!exists(key, envir = env_p, inherits = FALSE)) return(NULL)
+    return(.dbnsfp_row_to_hit(get(key, envir = env_p, inherits = FALSE)))
+  }
   key <- paste0(as.integer(aa_pos), "_", as.character(aa_alt))
   if (!exists(key, envir = env_p, inherits = FALSE)) return(NULL)
   .dbnsfp_row_to_hit(get(key, envir = env_p, inherits = FALSE))

@@ -54,6 +54,9 @@ suppressMessages({
 #   --dry-run    print the resolved configuration and exit without running.
 #   --force      overwrite an existing summary.tsv (refused by default; the
 #                manuscript numbers were read from those files).
+#   --allow-degraded  accept genes whose REVEL / AlphaMissense / UCSC caches did
+#                not fully load. Refused by default: a missing cache lowers PP3
+#                strength without changing the row count.
 #
 # The varviz.* options are read inside classify_acmg() at call time, so setting
 # them after server.R is sourced is equivalent to setting them before.
@@ -75,6 +78,7 @@ local({
   for (a in argv) {
     if (identical(a, "--dry-run")) { HARNESS_DRYRUN <<- TRUE; next }
     if (identical(a, "--force"))   { HARNESS_FORCE  <<- TRUE; next }
+    if (identical(a, "--allow-degraded")) { HARNESS_ALLOW_DEGRADED <<- TRUE; next }
     if (!grepl("^--[a-z-]+=", a)) stop("unrecognised argument: ", a)
     k <- sub("^--([a-z-]+)=.*$", "\\1", a)
     v <- sub("^--[a-z-]+=", "", a)
@@ -93,6 +97,7 @@ local({
 })
 if (!exists("HARNESS_DRYRUN")) HARNESS_DRYRUN <- FALSE
 if (!exists("HARNESS_FORCE"))  HARNESS_FORCE  <- FALSE
+if (!exists("HARNESS_ALLOW_DEGRADED")) HARNESS_ALLOW_DEGRADED <- FALSE
 
 UNIVERSE_IN    <- HARNESS_UNIVERSE
 CHECKPOINT_DIR <- if (is.null(HARNESS_OUTDIR)) "analyses/classifications" else file.path(HARNESS_OUTDIR, "classifications")
@@ -257,12 +262,18 @@ classify_gene <- function(gene_name) {
               else "NA",
               if (!is.null(am_dt_local)) sprintf("%d", nrow(am_dt_local)) else "NA",
               length(ls(ucsc_cons_env))))
+  record_cache_degradation(gene_name, dbnsfp_env_local, revel_dt_local, am_dt_local,
+                           length(ls(ucsc_cons_env)), prot_length_for_gene)
 
   fetch_dbnsfp_remote <- get("fetch_dbnsfp", envir = globalenv())
   patched_fetch_dbnsfp <- function(gn, hgvsp) {
     aa_pos_int <- suppressWarnings(as.integer(sub("^p\\.[A-Z*]([0-9]+).*$", "\\1", hgvsp)))
     alt_aa_chr <- sub("^p\\.[A-Z*][0-9]+([A-Z*])$", "\\1", hgvsp)
     if (!nzchar(alt_aa_chr) || identical(alt_aa_chr, hgvsp)) alt_aa_chr <- NA_character_
+    # Reference residue disambiguates rows that share (aapos, aaalt) across
+    # transcripts -- without it a G51D query can be served an N51D row.
+    ref_aa_chr <- sub("^p\\.([A-Z*])[0-9]+[A-Z*]$", "\\1", hgvsp)
+    if (!nzchar(ref_aa_chr) || identical(ref_aa_chr, hgvsp)) ref_aa_chr <- NA_character_
 
     # PRIMARY PATH: single-source dbNSFP 4.9a lookup. Returns the full raw
     # MyVariant-shaped hit (all 458 dbNSFP cols → SIFT, PP2 HDIV/HVAR, LRT,
@@ -271,7 +282,8 @@ classify_gene <- function(gene_name) {
     # with the live app's MyVariant→dbNSFP path.
     if (!is.null(dbnsfp_env_local) && !is.na(aa_pos_int) && !is.na(alt_aa_chr)) {
       hit <- tryCatch(
-        lookup_dbnsfp_by_aa(dbnsfp_env_local, chrom_for_gene, aa_pos_int, alt_aa_chr),
+        lookup_dbnsfp_by_aa(dbnsfp_env_local, chrom_for_gene, aa_pos_int, alt_aa_chr,
+                            aa_ref = ref_aa_chr),
         error = function(e) NULL
       )
       if (!is.null(hit)) return(hit)
@@ -354,6 +366,33 @@ classify_gene <- function(gene_name) {
   hl <- hl[!is.na(hl$prot_pos), , drop = FALSE]
   if (nrow(hl) == 0) return(NULL)
 
+  # Per-gene analysis parameters. Defaults are the app defaults the manuscript
+  # reports (Supplementary S1): monoallelic, prevalence 1 in 2,000, allelic
+  # heterogeneity 0.2, genetic heterogeneity 1.0, penetrance 0.5 -> maximum
+  # credible allele frequency 1.0e-4 (Whiffin 2017) and, over 251,496 alleles
+  # at the 95% Poisson bound, maximum credible allele count 34. pop_size is an
+  # ALLELE number (2N), not a count of individuals. A universe may override any
+  # of these per gene with a column of the same name; SNCA, for example, is run
+  # at prevalence 1 in 10,000 (max AF 2.0e-5, max AC 9).
+  .col <- function(name, default) {
+    if (!name %in% names(universe)) return(default)
+    v <- universe[[name]][universe$gene == gene_name]
+    v <- v[!is.na(v) & nzchar(as.character(v))]
+    if (length(v) == 0) default else v[1]
+  }
+  .p <- list(
+    inh_param         = as.character(.col("inh_param", "monoallelic")),
+    af_cutoff         = as.numeric(.col("af_cutoff", 0.0001)),
+    ac_cutoff         = as.numeric(.col("ac_cutoff", 34)),
+    prevalence_1_in_n = as.numeric(.col("prevalence_1_in_n", 2000)),
+    allelic_het       = as.numeric(.col("allelic_het", 0.2)),
+    genetic_het       = as.numeric(.col("genetic_het", 1.0)),
+    penetrance        = as.numeric(.col("penetrance", 0.5))
+  )
+  cat(sprintf("  [%s] params: inh=%s af_cutoff=%.3g ac_cutoff=%g prev=1/%s hetA=%s hetG=%s pen=%s\n",
+              gene_name, .p$inh_param, .p$af_cutoff, .p$ac_cutoff,
+              .p$prevalence_1_in_n, .p$allelic_het, .p$genetic_het, .p$penetrance))
+
   cat(sprintf("  [%s] uid=%s, %d variants, calling build_variant_table()...\n",
               gene_name, uid, nrow(hl)))
   t1 <- Sys.time()
@@ -361,14 +400,15 @@ classify_gene <- function(gene_name) {
     build_variant_table(
       hl, af_d, mean_d, afs_d, gnomad_d, clinvar_d,
       pfam_d, uniprot_d, ccrs_d,
-      af_cutoff = 0.0001, ac_cutoff = 13,
+      af_cutoff = .p$af_cutoff, ac_cutoff = .p$ac_cutoff,
       clinvar_missense = NULL, consurf_data = NULL,
       denovo_status     = "not_denovo",
-      inh_param         = "monoallelic",
+      inh_param         = .p$inh_param,
       cutoff_method     = "calc_af",
-      prevalence_1_in_n = 2000,
-      allelic_het = 0.5, genetic_het = 1.0, penetrance = 1.0,
-      pop_size = 125748, conf_interval = 0.95,
+      prevalence_1_in_n = .p$prevalence_1_in_n,
+      allelic_het = .p$allelic_het, genetic_het = .p$genetic_het,
+      penetrance = .p$penetrance,
+      pop_size = 251496, conf_interval = 0.95,
       clingen_disease_param = clingen_d$disease %||% "",
       clingen_moi_param     = clingen_d$moi     %||% "",
       consurf_file_name     = ""
@@ -449,6 +489,22 @@ if (length(all_results) < length(genes)) {
   cat(sprintf("[harness] FAIL: %d of %d genes aborted or skipped; summary NOT written (re-run to retry them)\n",
               length(genes) - length(all_results), length(genes)))
   quit(status = 1)
+}
+
+# A degraded predictor cache does not abort the gene -- dbNSFP often carries the
+# same scores -- but it silently changes PP3 strength, so it must never pass
+# unnoticed. --allow-degraded is the explicit opt-in.
+.degraded <- cache_degradations()
+if (length(.degraded)) {
+  cat("[harness] DEGRADED PREDICTOR CACHES:\n")
+  for (d in .degraded) cat("  - ", d, "\n", sep = "")
+  if (!HARNESS_ALLOW_DEGRADED) {
+    cat("[harness] REFUSE: predictor caches were incomplete for the genes above;\n",
+        "          PP3 strength may be under-called. Fix the caches, or pass\n",
+        "          --allow-degraded to accept and record this.\n", sep = "")
+    quit(status = 1)
+  }
+  cat("[harness] --allow-degraded set: proceeding with the gaps above recorded.\n")
 }
 
 summary_df <- bind_rows(all_results)
