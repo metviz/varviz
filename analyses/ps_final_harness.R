@@ -215,6 +215,8 @@ classify_gene <- function(gene_name) {
               else "NA",
               if (!is.null(am_dt_local)) sprintf("%d", nrow(am_dt_local)) else "NA",
               length(ls(ucsc_cons_env))))
+  record_cache_degradation(gene_name, dbnsfp_env_local, revel_dt_local, am_dt_local,
+                           length(ls(ucsc_cons_env)), prot_length_for_gene)
 
   # Silent-degradation guard, third vector (after the two UniProt fetches).
   # fetch_ensembl_exons() failing -- rest.ensembl.org times out under parallel
@@ -464,6 +466,20 @@ if (nzchar(.shard)) {
   cat(sprintf("[harness] SHARD done (%s); summary.tsv left for the final pass\n", .shard))
   quit(status = 0)
 }
+# A degraded predictor cache lowers PP3 strength without changing the row count,
+# so it must never pass unnoticed. VARVIZ_ALLOW_DEGRADED=1 is the explicit opt-in.
+.degraded <- cache_degradations()
+if (length(.degraded)) {
+  cat("[harness] DEGRADED PREDICTOR CACHES:\n")
+  for (d in .degraded) cat("  - ", d, "\n", sep = "")
+  if (!identical(Sys.getenv("VARVIZ_ALLOW_DEGRADED", ""), "1")) {
+    cat("[harness] REFUSE: predictor caches were incomplete for the genes above;\n",
+        "          set VARVIZ_ALLOW_DEGRADED=1 to accept and record this.\n", sep = "")
+    quit(status = 1)
+  }
+  cat("[harness] VARVIZ_ALLOW_DEGRADED=1: proceeding with the gaps above recorded.\n")
+}
+
 if (file.exists(SUMMARY_OUT) && !.force) {
   cat(sprintf("[harness] REFUSE: %s already exists; set VARVIZ_FORCE=1 to overwrite\n", SUMMARY_OUT))
   quit(status = 1)
