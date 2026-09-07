@@ -7,6 +7,71 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [3.0.0] - 2026-09-07
+
+### Fixed
+
+- **Protein length is now taken from UniProt, not from the variant set.** The
+  three classification harnesses resolved a gene's protein length as "the
+  highest position in the AlphaMissense CSV, otherwise the highest variant
+  position in the universe". `fetch_conservation_scores()` builds its
+  PhyloP/PhastCons arrays to exactly that length, so the second branch
+  truncated every position-indexed annotation past the last curated variant.
+  On the 226-variant ClinGen RASopathy expert-panel cohort, where 15 of 16
+  genes had no AlphaMissense file, all 15 were truncated: SOS1 to 1237 aa
+  instead of 1333, MRAS to 71 instead of 208, RRAS2 to 72 instead of 204.
+  UniProt's sequence length, already fetched as `pfam_d$length`, now leads;
+  AlphaMissense is the fallback; the universe maximum is the last resort and
+  now prints a warning naming what it truncates.
+
+  **This moves calls.** Re-running the RASopathy cohort changed 18 of 226
+  Pass-Full classifications, all upward, all in SOS1, and all driven by ClinVar
+  evidence (PM1 hotspot, PS1, PM5) that the truncated conservation array had
+  suppressed. Pass-Full sensitivity against expert-panel truth went from 94.2%
+  to 100.0% (121/121); benign-called-pathogenic went from 7/61 to 8/61 (13.1%).
+  Pass-Blind is unchanged at 77.7% and 11.5%, as expected for a change whose
+  effect runs entirely through ClinVar-derived evidence.
+
+  The 14-gene benchmark is unaffected: every one of its genes has an
+  AlphaMissense file, so the length was already correct. DDR2, SLC13A5 and
+  BAP1 re-run under the fixed harness reproduce their existing checkpoints
+  byte for byte.
+
+- **Checkpoint concatenation is idempotent again.** A concat pass re-reads each
+  cached gene's TSV and writes them back as `summary.tsv`. `read_tsv()`'s
+  default `na = "NA"` turned the empty `pm1_pathway` of a no-PM1 variant into a
+  real NA, which `write_tsv()` then wrote as the literal string `"NA"` --
+  defeating the `nchar(x) > 0` filter every PM1-pathway tally uses. Passing
+  `na = character()` is not sufficient on its own: a column blank for every row
+  of a gene is type-guessed as logical and serialised as `"NA"` again, so
+  logical columns are now coerced back to the empty strings on disk.
+
+  **No call changed.** Only the `pm1_pathway` column was affected:
+  `ps_pm2moderate_v221` carried 5,620 corrupted cells and `ps_pp3proxy_v221`
+  5,722, both built through a shard-and-concatenate path; `ps_final_v221`
+  carried 8. All four summaries have been rebuilt and carry none. The published
+  PM1-pathway distribution is unchanged -- the eight affected cells in the main
+  run were all BRCA1 and had been counted in a spurious `NA` bucket.
+
+### Added
+
+- **AlphaMissense coverage for 16 previously missing proteins.** TSHR (P16473)
+  and the 15 RASopathy accessions had no per-protein CSV, so AlphaMissense --
+  the only path by which it reaches the engine, since the local dbNSFP build
+  carries no AlphaMissense column -- was silently absent from every PP3/BP4
+  tally in those genes. Extracted from the AlphaMissense bulk release into
+  `analyses/raw/alphamissense/`, which is gitignored: the data is CC BY-NC-SA
+  4.0 and is not redistributed here.
+
+  TSHR's four variants are unchanged by this. AlphaMissense scores them all
+  benign, consistent with their VariBench Benign labels, but PP3 takes
+  precedence over BP4 whenever both would fire, and PP3 was already firing for
+  p.D36H from other predictors.
+
+- `analyses/tests/test_checkpoint_roundtrip.R` and
+  `analyses/tests/test_prot_length.R` cover both defects, including the
+  all-blank-column shape and the curated-cohort truncation.
+
 ## [2.3.1] - 2026-09-07
 
 ### Added

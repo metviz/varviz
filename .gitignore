@@ -68,3 +68,9 @@ analyses/cache/
 analyses/raw_archive/
 analyses/repro/out/
 *.bak.20*
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Analysis run outputs live outside the repo; only the code that makes them is tracked.
+analyses/ras_vcep_*/
