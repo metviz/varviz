@@ -57,11 +57,19 @@ suppressMessages(source("server.R"))
   if (!v %in% c("TRUE", "FALSE")) stop(name, " must be TRUE or FALSE, got: ", Sys.getenv(name))
   v == "TRUE"
 }
+# PM2 weight sensitivity: 1 = ClinGen SVI Supporting (default), 2 = Richards
+# 2015 Moderate. Lets the SVI change be measured with everything else fixed.
+.pm2_pts <- suppressWarnings(as.integer(Sys.getenv("VARVIZ_PM2_POINTS", "1")))
+if (is.na(.pm2_pts) || !.pm2_pts %in% c(1L, 2L))
+  stop("VARVIZ_PM2_POINTS must be 1 or 2, got: ", Sys.getenv("VARVIZ_PM2_POINTS"))
+options(varviz.pm2_points = .pm2_pts)
+
 .mds_on     <- .env_flag("VARVIZ_MDS_PM1",    "TRUE")   # MDS scored for every variant
 .mds_tiered <- .env_flag("VARVIZ_MDS_TIERED", "FALSE")  # exploratory +3/+4 tiers; off for submission
 options(varviz.mds_pm1    = .mds_on)
 options(varviz.mds_tiered = .mds_on && .mds_tiered)
-cat(sprintf("[harness] varviz.mds_pm1 = %s ; varviz.mds_tiered = %s\n", .mds_on, .mds_on && .mds_tiered))
+cat(sprintf("[harness] varviz.mds_pm1 = %s ; varviz.mds_tiered = %s ; PM2 = %d pt\n",
+            .mds_on, .mds_on && .mds_tiered, .pm2_pts))
 cat(sprintf("[harness] Sourced server.R in %.1f sec\n",
             as.numeric(Sys.time() - t0, units = "secs")))
 

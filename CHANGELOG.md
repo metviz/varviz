@@ -7,6 +7,21 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [2.3.0] - 2026-09-07
+
+### Added
+
+- **PM2 weight sensitivity knob.** `options(varviz.pm2_points = 2)`, or
+  `VARVIZ_PM2_POINTS=2` for `ps_final_harness.R`, restores the Richards 2015
+  Moderate weight; the default stays 1 (ClinGen SVI Supporting, 2020-09-04).
+  Added to measure the effect of the SVI change with every other criterion held
+  constant. In the v2.2.1 regeneration, 15,523 of the 21,420 variants that moved
+  from Likely Pathogenic to VUS-High did so on this single point, with a
+  byte-identical tag set and no PP5 or BP6 involvement. The ClinGen RASopathy
+  VCEP adopted the same change and reported no major classification shifts
+  across 147 curated variants (Wilcox et al., Genet Med Open 2025;3:103430),
+  so the effect appears to depend on how much other evidence a variant carries.
+
 ## [2.2.1] - 2026-09-06
 
 ### Fixed
