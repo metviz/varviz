@@ -5772,6 +5772,12 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         # only: two in-silico predictors are one evidence line (PP3), so this
         # no longer upgrades PP3 to Strong as a "PS3 proxy". PP3 strength is
         # set solely by the Pejaver 2022 calibrated thresholds above.
+        #
+        # options(varviz.pp3_ps3_proxy = TRUE) restores the retired upgrade so
+        # its effect can be measured on the current engine. Default FALSE; the
+        # shipped configuration never applies it.
+        if (isTRUE(getOption("varviz.pp3_ps3_proxy", FALSE)) &&
+            pp3_level(acmg_tags) < 3L) add_pp3("3")
         ps3_proxy_fired <- TRUE
       } else if (am_low && revel_ben) {
         # Convergent benign structural + ensemble evidence — BS3_supporting proxy
