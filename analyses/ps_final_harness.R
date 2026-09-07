@@ -189,14 +189,35 @@ classify_gene <- function(gene_name) {
              error = function(e) NULL)
   } else NULL
 
-  # Protein length: prefer AM CSV max position, fall back to universe max.
-  prot_length_for_gene <- if (!is.null(am_dt_local) && nrow(am_dt_local) > 0) {
-    suppressWarnings(max(as.integer(sub("^[A-Z*]([0-9]+).*$", "\\1",
-                                        am_dt_local$protein_variant)),
-                         na.rm = TRUE))
-  } else {
-    universe_pos <- extract_pos(universe$p_notation[universe$gene == gene_name])
-    if (length(universe_pos) > 0L) max(universe_pos, na.rm = TRUE) else NA_integer_
+  # Protein length. UniProt's sequence length is authoritative and pfam_d is
+  # already fetched above; the AlphaMissense CSV agrees with it because it holds
+  # every substitution of every residue. The old order tried AM first and then
+  # fell back to the highest variant position in the universe, which equals the
+  # protein length only by accident. On the 226-variant RASopathy cohort, where
+  # 15 of 16 genes had no AlphaMissense file, that truncated every one of them
+  # (SOS1 to 1237 aa instead of 1333, MRAS to 71 instead of 208), and
+  # fetch_conservation_scores() then built its conservation array to the wrong
+  # length. Fall back to the universe maximum only when both real sources are
+  # gone, and say so loudly, because everything downstream is position-indexed.
+  prot_length_for_gene <- {
+    len_uniprot <- suppressWarnings(as.integer(
+      if (is.null(pfam_d) || is.null(pfam_d$length)) NA else pfam_d$length))[1]
+    len_am <- if (!is.null(am_dt_local) && nrow(am_dt_local) > 0) {
+      suppressWarnings(max(as.integer(sub("^[A-Z*]([0-9]+).*$", "\\1",
+                                          am_dt_local$protein_variant)),
+                           na.rm = TRUE))
+    } else NA_integer_
+    if (isTRUE(!is.na(len_uniprot) && len_uniprot > 0)) {
+      len_uniprot
+    } else if (isTRUE(is.finite(len_am) && len_am > 0)) {
+      len_am
+    } else {
+      universe_pos <- extract_pos(universe$p_notation[universe$gene == gene_name])
+      len_universe <- if (length(universe_pos) > 0L) max(universe_pos, na.rm = TRUE) else NA_integer_
+      cat(sprintf("    [%s] WARNING: no UniProt or AlphaMissense protein length; using the universe maximum (%s aa), which truncates every position-indexed annotation past it\n",
+                  gene_name, as.character(len_universe)))
+      len_universe
+    }
   }
 
   ucsc_cons_df_local <- if (is.finite(prot_length_for_gene) && prot_length_for_gene > 0) {
@@ -434,7 +455,20 @@ run_one <- function(gene_name) {
   ckpt <- file.path(CHECKPOINT_DIR, paste0(gene_name, "__dual.tsv"))
   if (file.exists(ckpt)) {
     cat(sprintf("  [%s] cached -> %s\n", gene_name, ckpt))
-    return(read_tsv(ckpt, show_col_types = FALSE))
+    # na = character(): a cached gene must round-trip unchanged. read_tsv's
+    # default turns the empty pm1_pathway of a no-PM1 variant into NA, and
+    # write_tsv then serialises it as the literal "NA" -- so a concatenation
+    # pass silently rewrote 5,714 empty cells and broke the nchar() > 0 filter
+    # every PM1-pathway tally uses. Keeping "" as "" makes the pass idempotent.
+    df <- read_tsv(ckpt, show_col_types = FALSE, na = character())
+    # A column that is blank for every row of this gene (pm1_pathway when the
+    # gene has no PM1 evidence anywhere) is type-guessed as logical, and
+    # write_tsv then serialises it as the literal "NA". Every column written
+    # here is character or integer and integers are never blank, so any logical
+    # column is that artefact: restore the empty strings that are on disk.
+    lg <- vapply(df, is.logical, logical(1))
+    if (any(lg)) df[lg] <- lapply(df[lg], function(x) rep("", length(x)))
+    return(df)
   }
   before <- sentinel_snapshot()          # all four sentinel families
   result <- classify_gene(gene_name)
