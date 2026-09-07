@@ -3994,6 +3994,12 @@ ACMG_TAG_PTS <- c(
 
 classify_acmg <- function(tags_vec) {
   tag_pts_map <- ACMG_TAG_PTS
+  # Sensitivity knob for the PM2 weight, default the ClinGen SVI value of 1
+  # (Supporting). options(varviz.pm2_points = 2) restores the Richards 2015
+  # Moderate weight so the effect of the SVI change can be measured with every
+  # other criterion held constant. Nothing else reads this.
+  .pm2 <- suppressWarnings(as.integer(getOption("varviz.pm2_points", 1L)))
+  if (!is.na(.pm2)) tag_pts_map[["PM2"]] <- .pm2
   tags <- trimws(tags_vec)
   pts  <- sum(tag_pts_map[intersect(tags, names(tag_pts_map))], na.rm = TRUE)
 
