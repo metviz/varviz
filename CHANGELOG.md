@@ -7,6 +7,55 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [2.2.0] - 2026-09-06
+
+Predictor-lookup correctness and run-integrity guards. **Changes
+classifications** wherever the dbNSFP protein-key collision below applied: every
+`ps_*` run and every case-study export produced before this release must be
+regenerated.
+
+### Fixed
+
+- **dbNSFP protein lookup returned a different substitution.**
+  `load_dbnsfp_for_region()` indexed rows by `(aapos, aaalt)` only. A dbNSFP row
+  carries a `;`-separated multi-transcript `aapos` list, so one row is indexed at
+  several positions and first-write-wins across substitutions that collide.
+  SNCA's canonical `G51D` and an alternate-transcript `N51D` both key to `51_D`;
+  a `G51D` query was served the `N51D` row (REVEL absent, MetaSVM and MetaLR
+  tolerated) instead of its own (REVEL 0.72, both damaging). PP3 stayed
+  Supporting instead of reaching Moderate, costing a point and moving the call
+  from Pathogenic to Likely Pathogenic. The index now also carries an
+  `(aapos, aaref, aaalt)` key; `lookup_dbnsfp_by_aa()` gains `aa_ref` and, when
+  given one, requires an exact match, returning `NULL` on mismatch so the caller
+  falls back rather than scoring another variant's predictors. All three
+  harnesses now pass the reference residue.
+
+### Added
+
+- **Degraded predictor caches are reported and refused.** REVEL, AlphaMissense
+  and UCSC conservation load independently of dbNSFP, and a missing one lowers
+  PP3 strength without changing the row count. `record_cache_degradation()`
+  records any gene missing a cache or below 95% UCSC coverage; the run lists
+  them and exits non-zero unless `--allow-degraded` is passed.
+- `analyses/tests/test_dbnsfp_aa_lookup.R`, built on the real G51D/N51D
+  collision.
+
+### Changed
+
+- **Analysis parameters match the manuscript.** The harnesses hardcoded allelic
+  heterogeneity 0.5, penetrance 1.0, 125,748 alleles and `ac_cutoff` 13, giving a
+  maximum credible allele frequency of 1.25e-4. Supplementary S1 states 1.0e-4,
+  which comes from the app defaults (0.2 / 0.5 / 251,496 / 34). All three
+  harnesses now use those, and read per-gene overrides from the universe so SNCA
+  runs at its own prevalence 1 in 10,000, allelic heterogeneity 0.5 and
+  penetrance 0.6 (max AF 4.17e-5, max AC 16).
+- Headless plots save on white. `densityplot()` and `clinvar_ccrsplot()` add only
+  `theme()` overrides, so their background is transparent; the app paints white
+  through plotly but a PNG device writes RGB without alpha and flattened it to
+  black, making half of every headless figure black.
+- The CCRS panel's y-axis title read `ClinVar/PTMs/CCRs/PS`. The row label was
+  renamed to Hot in 1.1.0 but the axis title was missed.
+
 ## [2.1.1] - 2026-09-06
 
 User-facing text only. **No classification changes** — no engine code was

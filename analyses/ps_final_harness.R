@@ -236,6 +236,10 @@ classify_gene <- function(gene_name) {
     aa_pos_int <- suppressWarnings(as.integer(sub("^p\\.[A-Z*]([0-9]+).*$", "\\1", hgvsp)))
     alt_aa_chr <- sub("^p\\.[A-Z*][0-9]+([A-Z*])$", "\\1", hgvsp)
     if (!nzchar(alt_aa_chr) || identical(alt_aa_chr, hgvsp)) alt_aa_chr <- NA_character_
+    # Reference residue disambiguates rows that share (aapos, aaalt) across
+    # transcripts -- without it a G51D query can be served an N51D row.
+    ref_aa_chr <- sub("^p\\.([A-Z*])[0-9]+[A-Z*]$", "\\1", hgvsp)
+    if (!nzchar(ref_aa_chr) || identical(ref_aa_chr, hgvsp)) ref_aa_chr <- NA_character_
 
     # PRIMARY PATH: single-source dbNSFP 4.9a lookup. Returns the full raw
     # MyVariant-shaped hit (all 458 dbNSFP cols → SIFT, PP2 HDIV/HVAR, LRT,
@@ -244,7 +248,8 @@ classify_gene <- function(gene_name) {
     # with the live app's MyVariant→dbNSFP path.
     if (!is.null(dbnsfp_env_local) && !is.na(aa_pos_int) && !is.na(alt_aa_chr)) {
       hit <- tryCatch(
-        lookup_dbnsfp_by_aa(dbnsfp_env_local, chrom_for_gene, aa_pos_int, alt_aa_chr),
+        lookup_dbnsfp_by_aa(dbnsfp_env_local, chrom_for_gene, aa_pos_int, alt_aa_chr,
+                            aa_ref = ref_aa_chr),
         error = function(e) NULL
       )
       if (!is.null(hit)) return(hit)
@@ -344,9 +349,9 @@ classify_gene <- function(gene_name) {
     inh_param         = as.character(.col("inh_param", "monoallelic")),
     af_cutoff         = as.numeric(.col("af_cutoff", 0.0001)),
     prevalence_1_in_n = as.numeric(.col("prevalence_1_in_n", 2000)),
-    allelic_het       = as.numeric(.col("allelic_het", 0.5)),
+    allelic_het       = as.numeric(.col("allelic_het", 0.2)),
     genetic_het       = as.numeric(.col("genetic_het", 1.0)),
-    penetrance        = as.numeric(.col("penetrance", 1.0))
+    penetrance        = as.numeric(.col("penetrance", 0.5))
   )
   cat(sprintf("  [%s] params: inh=%s af_cutoff=%.3g prev=1/%s hetA=%s hetG=%s pen=%s\n",
               gene_name, .p$inh_param, .p$af_cutoff, .p$prevalence_1_in_n,
@@ -359,7 +364,7 @@ classify_gene <- function(gene_name) {
     build_variant_table(
       hl, af_d, mean_d, afs_d, gnomad_d, clinvar_d,
       pfam_d, uniprot_d, ccrs_d,
-      af_cutoff = .p$af_cutoff, ac_cutoff = 13,
+      af_cutoff = .p$af_cutoff, ac_cutoff = 34,
       clinvar_missense = NULL, consurf_data = NULL,
       denovo_status     = "not_denovo",
       inh_param         = .p$inh_param,
@@ -367,7 +372,9 @@ classify_gene <- function(gene_name) {
       prevalence_1_in_n = .p$prevalence_1_in_n,
       allelic_het = .p$allelic_het, genetic_het = .p$genetic_het,
       penetrance = .p$penetrance,
-      pop_size = 125748, conf_interval = 0.95,
+      # pop_size is an ALLELE number (2N) over 125,748 gnomAD exomes, not a
+      # count of individuals; with af_cutoff 1.0e-4 it gives max credible AC 34.
+      pop_size = 251496, conf_interval = 0.95,
       clingen_disease_param = clingen_d$disease %||% "",
       clingen_moi_param     = clingen_d$moi     %||% "",
       consurf_file_name     = ""

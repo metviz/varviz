@@ -218,8 +218,13 @@ if (nzchar(p$plot)) {
 
   aligned <- cowplot::align_plots(plotlist = panels, align = "v", axis = "lr")
   gg <- cowplot::plot_grid(plotlist = aligned, ncol = 1)
+  # bg = "white": densityplot() and clinvar_ccrsplot() add only theme() overrides
+  # with no base theme, so their panel background is transparent. The app renders
+  # them through plotly, which paints its own white ground, but a PNG device
+  # writes RGB without alpha and flattens transparent to BLACK -- which is why
+  # headless renders came out half black. Paint the ground explicitly.
   ggplot2::ggsave(p$plot, gg, width = p$width, height = p$height, dpi = p$dpi,
-                  limitsize = FALSE)
+                  limitsize = FALSE, bg = "white")
   cat("wrote ", p$plot, " (", length(panels), " panels, ", p$width, "x", p$height,
       " in @ ", p$dpi, " dpi)\n", sep = "")
 }

@@ -3403,7 +3403,8 @@ clinvar_ccrsplot <- function(pfam_data,uniprot_data,gene_clinvar_data,gene_ptm_d
   p <- ggplot2::ggplot()
   p <- p + ggplot2::ylim(0, 2.1)
   p <- p + scale_x_continuous(limits = c(0, L + L * 0.01), expand = c(0,0))
-  p <- p + ggplot2::labs(y = "ClinVar/PTMs/\nCCRs/PS")
+  # Row order matches the track labels drawn below: Mis, LOF, PTM, RS, Hot.
+  p <- p + ggplot2::labs(y = "ClinVar/PTMs/\nCCRs/Hot")
   p <- p + ggplot2::theme(
     axis.title.y = element_text(size = vv_medium, face = "bold"),
     axis.text.y = element_blank(),
