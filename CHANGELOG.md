@@ -7,6 +7,18 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [2.3.1] - 2026-09-07
+
+### Added
+
+- **PP3 proxy toggle for sensitivity analysis.** `options(varviz.pp3_ps3_proxy = TRUE)`,
+  or `VARVIZ_PP3_PROXY=TRUE` for `ps_final_harness.R`, restores the
+  AlphaMissense >= 0.90 plus REVEL >= 0.773 upgrade of PP3 to Strong that 2.0.0
+  retired. Default FALSE, so no shipped call changes. Added so the effect of
+  retiring it can be measured against the current engine rather than inferred
+  from a comparison with pre-2.2.0 runs, whose predictor evidence was drawn
+  from the wrong dbNSFP rows.
+
 ## [2.3.0] - 2026-09-07
 
 ### Added

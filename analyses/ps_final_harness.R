@@ -64,6 +64,10 @@ if (is.na(.pm2_pts) || !.pm2_pts %in% c(1L, 2L))
   stop("VARVIZ_PM2_POINTS must be 1 or 2, got: ", Sys.getenv("VARVIZ_PM2_POINTS"))
 options(varviz.pm2_points = .pm2_pts)
 
+# Restores the retired AlphaMissense+REVEL PP3->Strong upgrade for sensitivity
+# analysis. FALSE in the shipped configuration.
+options(varviz.pp3_ps3_proxy = .env_flag("VARVIZ_PP3_PROXY", "FALSE"))
+
 .mds_on     <- .env_flag("VARVIZ_MDS_PM1",    "TRUE")   # MDS scored for every variant
 .mds_tiered <- .env_flag("VARVIZ_MDS_TIERED", "FALSE")  # exploratory +3/+4 tiers; off for submission
 options(varviz.mds_pm1    = .mds_on)
