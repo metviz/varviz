@@ -7,6 +7,20 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [2.2.1] - 2026-09-06
+
+### Fixed
+
+- **`PM1_Derivation` was scoped inside the BS1 branch.** `pm1_deriv_val` was
+  initialised inside `if (!bs1_fires)`, but the export reads it for every
+  variant. When BS1 fires the PM1 ladder is skipped, so the variable is either
+  undefined (`object 'pm1_deriv_val' not found`, aborting the gene when the
+  first variant of that gene is common) or, worse, still holds the PREVIOUS
+  variant's derivation string and reports it as this variant's provenance. Now
+  initialised per variant alongside `pm1_pathway_val`. Found when CASR
+  p.Ala986Ser (gnomAD AF 0.134) aborted a full-universe run; the same latent
+  fault predates 2.2.0.
+
 ## [2.2.0] - 2026-09-06
 
 Predictor-lookup correctness and run-integrity guards. **Changes

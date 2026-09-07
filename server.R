@@ -5194,6 +5194,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # original pathway — the helper strips PM1 only when pathway is purely
     # circular ("clinvar_hotspot"); the strong upgrade itself is not undone.
     pm1_pathway_val <- ""
+    # Initialised per variant, NOT inside the !bs1_fires block below: when BS1
+    # fires the PM1 ladder is skipped, and a value scoped to that block either
+    # errors at export ("object 'pm1_deriv_val' not found", first variant of a
+    # gene) or silently carries the PREVIOUS variant's derivation string.
+    pm1_deriv_val <- ""
     
     # ── ACMG Tag Computation ──────────────────────────────────────────────────
     # Based on Richards et al. (2015) + Tavtigian et al. (2018) Bayesian framework
@@ -5325,7 +5330,6 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       # actually decided. It cannot be reconstructed downstream: the ladder caps at
       # 4, so a final PM1_strong is ambiguous between "base 2 + MDS 2" and "base 4,
       # MDS added nothing".
-      pm1_deriv_val <- ""
       if (nchar(uniprot_site_desc) > 0) {
         # Path 0 — exact hit on a UniProt residue-level functional site
         # (computed above, next to the PTM lookup). "Active site of an enzyme"
