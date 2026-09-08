@@ -24,7 +24,7 @@ source("typography.R", local = FALSE)
 # against its historical deltas. The runtime pathway is now MDS, below.
 source("analyses/lib/dolphin.R", local = FALSE)
 
-# Missense Disfavour Score (MDS) — offline PM1 Path 4. Reads a prebuilt Pfam
+# Missense Disfavor Score (MDS) — offline PM1 Path 4. Reads a prebuilt Pfam
 # PSSM table instead of the (now unreachable) DOLPHIN API; reproduces its deltas.
 source("analyses/lib/pssm_lookup.R", local = FALSE)
 # Loaded once at startup (~50 MB on disk / ~600 MB RAM). NULL if absent, in which
@@ -4470,7 +4470,7 @@ pm1_base_label <- function(pathway) {
     "uniprot_domain"   = "inside a curated UniProt domain",
     "ccrs"             = "constrained coding region (CCRS)",
     "clinvar_hotspot"  = "ClinVar pathogenic hotspot",
-    "mds"              = "Missense Disfavour Score",
+    "mds"              = "Missense Disfavor Score",
     "mds_unavailable"  = "no Pfam alignment for this residue",
     if (nzchar(pathway)) pathway else "gene-level evidence")
 }
@@ -5370,7 +5370,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         pm1_pathway_val <- "uniprot_domain"
       }
 
-      # Path 4 — Missense Disfavour Score (MDS). An offline domain-level PSSM that
+      # Path 4 — Missense Disfavor Score (MDS). An offline domain-level PSSM that
       # follows the domain-constraint idea of DOLPHIN (Corcuff et al. 2023, Front.
       # Bioinform. 3:1127341) but improves on it: a per-column PSSM built from the
       # Pfam full alignment scores

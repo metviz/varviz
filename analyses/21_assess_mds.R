@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# 21_assess_mds.R — does the Missense Disfavour Score separate pathogenic from
+# 21_assess_mds.R — does the Missense Disfavor Score separate pathogenic from
 # benign, and where should the PM1 threshold sit?
 #
 # Until now MDS was assessed only two ways: it reproduces DOLPHIN's deltas on 5

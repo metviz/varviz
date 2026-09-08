@@ -1,4 +1,4 @@
-# Self-check for the MDS (Missense Disfavour Score) PM1 Path 4 wiring in server.R.
+# Self-check for the MDS (Missense Disfavor Score) PM1 Path 4 wiring in server.R.
 # Run: Rscript test_mds_pm1.R
 #
 # Three parts: (1) server.R is wired to use MDS as Path 4 with two tiers
