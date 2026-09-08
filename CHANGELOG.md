@@ -7,6 +7,35 @@ PATCH for fixes that leave every call unchanged.
 Because this tool assigns ACMG classifications, each entry states explicitly
 whether it can move a variant's call.
 
+## [3.0.1] - 2026-09-08
+
+### Changed
+
+- **PP5 and BP6 are no longer emitted as tags.** Both criteria were retired by
+  the ClinGen SVI in 2018 and have scored zero points since 2.0.0, but the tags
+  were still rendered in the variant card, the tag string and the TSV export,
+  where they sat beside scored criteria and invited a reader to count them. The
+  conditions are still evaluated as flags: a ClinVar pathogenic assertion at the
+  exact substitution still suppresses BP1, which previously tested for the PP5
+  tag. Both flags are initialised beside the other per-variant flags rather than
+  only where they are computed, because `&&` short-circuits the BP1 test and an
+  undefined value would surface only for the genes where BP1 applies.
+
+  **No call changes.** Neither criterion contributed points, and the CASR case
+  cohort reclassifies identically. The ClinVar assertion driving them remains
+  visible in the ClinVar column, its review-star count, and the variant card.
+
+- **Help page corrected to match the engine.** The PP5 and BP6 entries are
+  replaced by an explanation of why the criteria were retired, what carries
+  ClinVar evidence in their place (PS1, PM5, PM1 via hotspot), and the one place
+  a ClinVar pathogenic assertion still has an effect. Three further passages
+  were stale rather than merely incomplete: the FAQ still described a hybrid
+  engine in which "Richards 2015 rule-based classification fires first", the PM1
+  section still documented the `PM1_moderate_plus` tier deleted in 2.1.0 and the
+  MDS strong tier as enabled, and PM2 was still shown as Moderate at +2 points.
+  All three now describe the shipped behaviour, and the PM1 section states that
+  the four pathways do not stack.
+
 ## [3.0.0] - 2026-09-07
 
 ### Fixed
