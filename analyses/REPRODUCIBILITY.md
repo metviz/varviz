@@ -1,6 +1,6 @@
 # VarViz MDS / benchmark reproducibility
 
-Every manuscript number for the Missense Disfavour Score (MDS) and the
+Every manuscript number for the Missense Disfavor Score (MDS) and the
 triangulated non-circular benchmark, mapped to the script that produces it.
 Paths are repo-relative. Committed scripts live under `analyses/`;
 `data/pfam_pssm_human.rds` is bundled.

@@ -17,6 +17,22 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [1.1.14] - 2026-09-08
+
+### Changed
+
+- **"Missense Disfavour Score" renamed to "Missense Disfavor Score."** The
+  metric is our own coinage, and the manuscript is written in American English
+  for a US journal, so the British spelling in the application text and help
+  page was the odd one out. The `MDS` acronym, the `MDS_Score` export column,
+  the `varviz.mds_pm1` and `varviz.mds_tiered` options, and every threshold are
+  unchanged.
+
+  **No call changes.** The rename touches display strings and documentation
+  only. Archived run snapshots under `analyses/raw_archive/`,
+  `analyses/ps_final/_bogus/` and `analyses/tmp/` keep the old spelling: they
+  are frozen records of past runs, and editing them would falsify the record.
+
 ## [1.1.13] - 2026-09-08
 
 ### Changed
