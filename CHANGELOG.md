@@ -1,18 +1,28 @@
 # Changelog
 
-VarViz follows [semantic versioning](https://semver.org): MAJOR for changes that
-alter classifications, MINOR for new evidence sources or user-facing features,
-PATCH for fixes that leave every call unchanged.
+Releases increment the PATCH number, one step at a time. The version is a
+release counter, not a compatibility signal.
 
 Because this tool assigns ACMG classifications, each entry states explicitly
-whether it can move a variant's call.
+whether it can move a variant's call. That statement, not the version number,
+is what tells a reader whether a release changes their results.
 
-## [3.0.1] - 2026-09-08
+**Renumbering note (2026-09-08).** Releases after 1.1.2 were briefly numbered
+2.0.0 through 3.0.1 under an earlier semantic-versioning policy that raised the
+MAJOR number whenever a change altered classifications. They were renumbered to
+the patch sequence 1.1.4 through 1.1.13 before any of them was published; 1.1.2
+and earlier are unaffected. Session exports and figures produced during that
+window carry the old string in their `varviz_version` header, and map as
+2.0.0 -> 1.1.4, 2.0.1 -> 1.1.5, 2.1.0 -> 1.1.6, 2.1.1 -> 1.1.7, 2.2.0 -> 1.1.8,
+2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
+3.0.1 -> 1.1.13.
+
+## [1.1.13] - 2026-09-08
 
 ### Changed
 
 - **PP5 and BP6 are no longer emitted as tags.** Both criteria were retired by
-  the ClinGen SVI in 2018 and have scored zero points since 2.0.0, but the tags
+  the ClinGen SVI in 2018 and have scored zero points since 1.1.4, but the tags
   were still rendered in the variant card, the tag string and the TSV export,
   where they sat beside scored criteria and invited a reader to count them. The
   conditions are still evaluated as flags: a ClinVar pathogenic assertion at the
@@ -31,12 +41,12 @@ whether it can move a variant's call.
   a ClinVar pathogenic assertion still has an effect. Three further passages
   were stale rather than merely incomplete: the FAQ still described a hybrid
   engine in which "Richards 2015 rule-based classification fires first", the PM1
-  section still documented the `PM1_moderate_plus` tier deleted in 2.1.0 and the
+  section still documented the `PM1_moderate_plus` tier deleted in 1.1.6 and the
   MDS strong tier as enabled, and PM2 was still shown as Moderate at +2 points.
   All three now describe the shipped behaviour, and the PM1 section states that
   the four pathways do not stack.
 
-## [3.0.0] - 2026-09-07
+## [1.1.12] - 2026-09-07
 
 ### Fixed
 
@@ -101,19 +111,19 @@ whether it can move a variant's call.
   `analyses/tests/test_prot_length.R` cover both defects, including the
   all-blank-column shape and the curated-cohort truncation.
 
-## [2.3.1] - 2026-09-07
+## [1.1.11] - 2026-09-07
 
 ### Added
 
 - **PP3 proxy toggle for sensitivity analysis.** `options(varviz.pp3_ps3_proxy = TRUE)`,
   or `VARVIZ_PP3_PROXY=TRUE` for `ps_final_harness.R`, restores the
-  AlphaMissense >= 0.90 plus REVEL >= 0.773 upgrade of PP3 to Strong that 2.0.0
+  AlphaMissense >= 0.90 plus REVEL >= 0.773 upgrade of PP3 to Strong that 1.1.4
   retired. Default FALSE, so no shipped call changes. Added so the effect of
   retiring it can be measured against the current engine rather than inferred
-  from a comparison with pre-2.2.0 runs, whose predictor evidence was drawn
+  from a comparison with pre-1.1.8 runs, whose predictor evidence was drawn
   from the wrong dbNSFP rows.
 
-## [2.3.0] - 2026-09-07
+## [1.1.10] - 2026-09-07
 
 ### Added
 
@@ -121,14 +131,14 @@ whether it can move a variant's call.
   `VARVIZ_PM2_POINTS=2` for `ps_final_harness.R`, restores the Richards 2015
   Moderate weight; the default stays 1 (ClinGen SVI Supporting, 2020-09-04).
   Added to measure the effect of the SVI change with every other criterion held
-  constant. In the v2.2.1 regeneration, 15,523 of the 21,420 variants that moved
+  constant. In the v1.1.9 regeneration, 15,523 of the 21,420 variants that moved
   from Likely Pathogenic to VUS-High did so on this single point, with a
   byte-identical tag set and no PP5 or BP6 involvement. The ClinGen RASopathy
   VCEP adopted the same change and reported no major classification shifts
   across 147 curated variants (Wilcox et al., Genet Med Open 2025;3:103430),
   so the effect appears to depend on how much other evidence a variant carries.
 
-## [2.2.1] - 2026-09-06
+## [1.1.9] - 2026-09-06
 
 ### Fixed
 
@@ -140,9 +150,9 @@ whether it can move a variant's call.
   variant's derivation string and reports it as this variant's provenance. Now
   initialised per variant alongside `pm1_pathway_val`. Found when CASR
   p.Ala986Ser (gnomAD AF 0.134) aborted a full-universe run; the same latent
-  fault predates 2.2.0.
+  fault predates 1.1.8.
 
-## [2.2.0] - 2026-09-06
+## [1.1.8] - 2026-09-06
 
 Predictor-lookup correctness and run-integrity guards. **Changes
 classifications** wherever the dbNSFP protein-key collision below applied: every
@@ -191,7 +201,7 @@ regenerated.
 - The CCRS panel's y-axis title read `ClinVar/PTMs/CCRs/PS`. The row label was
   renamed to Hot in 1.1.0 but the axis title was missed.
 
-## [2.1.1] - 2026-09-06
+## [1.1.7] - 2026-09-06
 
 User-facing text only. **No classification changes** — no engine code was
 touched, only the strings the app displays.
@@ -200,7 +210,7 @@ touched, only the strings the app displays.
 
 - Landing page, feature list and Variant Summary legend described the engine as
   "hybrid Richards 2015 rule-based + Tavtigian Bayesian scoring". Classification
-  has been points-only since 2.0.0, so they now read: Richards et al. (2015)
+  has been points-only since 1.1.4, so they now read: Richards et al. (2015)
   criteria, scored on the Tavtigian et al. (2020) point scale with Pejaver et al.
   (2022) PP3/BP4 calibration and ClinGen SVI strength recommendations.
 - PP5 and BP6 tooltips say the criterion is shown for context and not scored
@@ -208,7 +218,7 @@ touched, only the strings the app displays.
 - PS3 tooltip says the published mutagenesis is for *this* substitution, and the
   site branch no longer implies a PTM annotation alone establishes function.
 
-## [2.1.0] - 2026-09-06
+## [1.1.6] - 2026-09-06
 
 MDS strength tiers reduced to two. **No change to the default configuration**
 (`varviz.mds_tiered = FALSE`, MDS at Moderate); the opt-in tiered configuration
@@ -227,7 +237,7 @@ now yields Strong instead of Moderate-plus for MDS ≤ −8 to −12.
   `repro/07_regenerate.R` so summaries written by earlier versions still
   demote and tabulate correctly.
 
-## [2.0.1] - 2026-09-06
+## [1.1.5] - 2026-09-06
 
 Analysis scripts only. **No classification changes.**
 
@@ -245,7 +255,7 @@ Analysis scripts only. **No classification changes.**
   "Exploratory"): Strong replicates on 1-star-only variants (LR+ 32.1,
   95% CI 20.6–50.2 at MDS ≤ −12). Not a manuscript number; defaults unchanged.
 
-## [2.0.0] - 2026-09-06
+## [1.1.4] - 2026-09-06
 
 Evidence-engine revision. **Changes classifications.** Every
 `ps_*` run, the manuscript numbers, Figure panels and Supplementary Table S2
