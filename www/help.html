@@ -482,14 +482,13 @@
     <tr><th>Tag(s)</th><th>Category</th><th>Points</th></tr>
     <tr><td><span class="tag pvs">PVS1</span></td><td>Very Strong Pathogenic</td><td style="color:#7c3aed;font-weight:700;">+8</td></tr>
     <tr><td><span class="tag ps">PS1&ndash;4</span> &nbsp;<span class="tag pm">PM1_strong</span> &nbsp;<span class="tag pp">PP3_strong</span></td><td>Strong Pathogenic (or PS-equivalent)</td><td style="color:#b91c1c;font-weight:700;">+4 each</td></tr>
-    <tr><td><span class="tag pm">PM1_moderate_plus</span></td><td>Moderate-plus (MDS &le; &minus;8 tier, LR+ &asymp; 11)</td><td style="color:#dc2626;font-weight:700;">+3</td></tr>
-    <tr><td><span class="tag pm">PM1&ndash;6</span> &nbsp;<span class="tag pp">PP3_moderate</span></td><td>Moderate Pathogenic (or PM-equivalent)</td><td style="color:#dc2626;font-weight:700;">+2 each</td></tr>
-    <tr><td><span class="tag pp">PP1&ndash;5</span></td><td>Supporting Pathogenic</td><td style="color:#f97316;font-weight:700;">+1 each</td></tr>
+       <tr><td><span class="tag pm">PM1&ndash;6</span> &nbsp;<span class="tag pp">PP3_moderate</span></td><td>Moderate Pathogenic (or PM-equivalent)</td><td style="color:#dc2626;font-weight:700;">+2 each</td></tr>
+    <tr><td><span class="tag pp">PP1&ndash;4</span></td><td>Supporting Pathogenic</td><td style="color:#f97316;font-weight:700;">+1 each</td></tr>
     <tr><td><span class="tag ba">BA1</span></td><td>Stand-alone Benign</td><td style="color:#1e293b;font-weight:700;">&minus;8</td></tr>
-    <tr><td><span class="tag bs">BS1&ndash;4</span> &nbsp;<span class="tag bp">BP6</span></td><td>Strong Benign (or BS-equivalent)</td><td style="color:#047857;font-weight:700;">&minus;4 each</td></tr>
+    <tr><td><span class="tag bs">BS1&ndash;4</span></td><td>Strong Benign (or BS-equivalent)</td><td style="color:#047857;font-weight:700;">&minus;4 each</td></tr>
     <tr><td><span class="tag bp">BP1&ndash;5</span> &nbsp;<span class="tag bp">BP7</span></td><td>Supporting Benign</td><td style="color:#10b981;font-weight:700;">&minus;1 each</td></tr>
   </table>
-  <p style="margin-top:10px; font-size:13.5px;"><strong>PM1_strong</strong> = PM1 upgraded to PS-equivalent when in a structural domain + strong conservation hit, or when the Missense Disfavour Score reaches its strong tier (MDS &le; &minus;12, LR+ &asymp; 39). <strong>PM1_moderate_plus</strong> = the intermediate MDS tier (MDS &le; &minus;8, LR+ &asymp; 11), scored at +3. <strong>PP3_strong</strong> = REVEL &ge; 0.932 only.</p>
+  <p style="margin-top:10px; font-size:13.5px;"><strong>PM1_strong</strong> = PM1 upgraded to PS-equivalent when in a structural domain + strong conservation hit, or when a moderate PM1 converges with a permutation-significant ClinVar focal hotspot. <strong>PP3_strong</strong> = REVEL &ge; 0.932 only.</p>
 </div>
 
 <div class="card">
@@ -530,13 +529,13 @@
       <tr><td>&#9734;</td><td>No assertion criteria provided</td><td>PS1_supporting</td><td>+1</td></tr>
     </table>
     <p><strong>Rationale:</strong> A 0-star ClinVar assertion without assertion criteria carries far less evidentiary weight than a 4-star expert panel classification. Star-weighting follows GeneBe implementation (Maj et al. (2023) [18]).</p>
-    <p><strong>Exclusions:</strong> Mutually exclusive with PM5 and BP6. If ClinVar significance is only <em>Likely Pathogenic</em>, PS1 is downgraded to PM5, which is itself star-weighted (+2 at &ge;2 stars, +1 below). Suppressed when BA1 or BS1 fires.</p>
+    <p><strong>Exclusions:</strong> Mutually exclusive with PM5. If ClinVar significance is only <em>Likely Pathogenic</em>, PS1 is downgraded to PM5, which is itself star-weighted (+2 at &ge;2 stars, +1 below). Suppressed when BA1 or BS1 fires.</p>
     <p><strong>Data source:</strong> NCBI ClinVar via E-utilities.</p>
   </div>
 
   <div class="group-box">
-    <div class="group-box-title">PM1 - Moderate / Moderate-plus / Strong Pathogenic &nbsp;<span class="tag pm">PM1</span>&nbsp;<span class="tag pm">PM1_moderate_plus</span>&nbsp;<span class="tag ps">PM1_strong</span>&nbsp; +2 / +3 / +4 pts</div>
-    <p><strong>Trigger (any pathway):</strong></p>
+    <div class="group-box-title">PM1 - Moderate / Strong Pathogenic &nbsp;<span class="tag pm">PM1</span>&nbsp;<span class="tag ps">PM1_strong</span>&nbsp; +2 / +3 / +4 pts</div>
+    <p><strong>Trigger (any pathway).</strong> The pathways <em>do not stack</em>: PM1 strength is the strongest single pathway that fires, never the sum, so a second pathway agreeing with the first corroborates it without raising the score.</p>
     <ol>
       <li><strong>UniProt functional residue (new):</strong> The variant position <em>is</em> a curated active site, ligand/metal/cofactor binding site, or other annotated functional site (UniProt feature types <code>act_site</code>, <code>binding</code>, <code>site</code>). Checked first, because &ldquo;the active site of an enzyme&rdquo; is the criterion&rsquo;s own worked example in Richards et al. 2015 and a residue that <em>is</em> the catalytic or contact position is more specific than one merely inside a constrained region. UniProt curates these to single-residue resolution (McGarvey et al. 2019 [30]; curation standard: Famiglietti et al. 2014 [31]). The site label (e.g. <em>Binds Ca(2+)</em>) is named in the generated comment and recorded in the <code>UniProt_Site</code> column.</li>
       <li><strong>CCRS constraint:</strong> Variant falls in a constrained coding region (&ge;90th percentile CCRs score).</li>
@@ -545,27 +544,27 @@
       <li><strong>Missense Disfavour Score: MDS (Path 4):</strong> Consulted only when none of the pathways above fire. A domain-level position-specific scoring matrix built offline from the full Pfam alignment (Mistry et al. 2021) scores how disfavoured the substitution is at the residue&rsquo;s aligned column: <code>MDS = M(column, mut) &minus; M(column, wt)</code>. A strongly negative score means the amino-acid change is rarely seen at that conserved column across the protein family. MDS follows the domain-constraint idea of DOLPHIN (Corcuff et al. 2023, <em>Front. Bioinform.</em> 3:1127341) but improves on it with a domain-level PSSM that runs fully offline from a local 6,534-family table (no network call, no rate limit), so it also applies during high-throughput benchmarking. It reproduces DOLPHIN&rsquo;s deltas within the quantisation step (&rho; = 1.000 on the SNCA/CASR validation set) and covers the ~45% of proteome residues that lie inside a Pfam domain.
         <p style="margin:6px 0 2px 0;"><strong>Likelihood-ratio-tiered PM1</strong> (calibrated on 33,216 genome-wide 2&#9733; ClinVar missense; VariBench AUC 0.785; on by default, disable with <code>options(varviz.mds_tiered = FALSE)</code>):</p>
         <ul style="margin-top:2px;">
-          <li>MDS &le; &minus;4 &rarr; <span class="tag pm">PM1</span> Moderate (+2), LR+ &asymp; 5.4</li>
-          <li>MDS &le; &minus;8 &rarr; <span class="tag pm">PM1_moderate_plus</span> Moderate-plus (+3), LR+ &asymp; 11</li>
-          <li>MDS &le; &minus;12 &rarr; <span class="tag ps">PM1_strong</span> Strong / PS-equivalent (+4), LR+ &asymp; 39</li>
+          <li>MDS &le; &minus;4 &rarr; <span class="tag pm">PM1</span> Moderate (+2), LR+ &asymp; 5.4. This is the operating tier.</li>
+          <li>A stronger tier at MDS &le; &minus;12 is computed but <strong>off by default</strong>: its likelihood ratio holds against ClinVar but does not replicate against a ClinVar-independent benign control set, so enabling it would import the curation bias it is meant to avoid.</li>
         </ul>
-        Orthogonal to gnomAD frequency and ClinVar. The score is reported in the <code>MDS_Score</code> column. Disable the whole pathway with <code>options(varviz.mds_pm1 = FALSE)</code>.</li>
+        Orthogonal to gnomAD frequency and ClinVar, which is why it survives into the Pass-Blind run when the ClinVar hotspot pathway does not. The score is reported in the <code>MDS_Score</code> column. Disable the whole pathway with <code>options(varviz.mds_pm1 = FALSE)</code>.</li>
     </ol>
     <p><strong>Upgrade to PM1_strong (PS-equivalent, +4 pts):</strong></p>
     <ul>
       <li>UniProt functional residue <em>or</em> domain hit, <em>and</em> strong conservation: ConSurf &ge;8, PhyloP 100V &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8.</li>
       <li>UniProt domain hit <em>and</em> neighborhood hotspot (pathways 3+4 combined).</li>
-      <li>MDS reaches its strong tier (&le; &minus;12, LR+ &asymp; 39); see Path 4 above.</li>
-      <li>A moderate PM1 (any pathway, including MDS <span class="tag pm">PM1_moderate_plus</span>) converges with a permutation-significant &plusmn;15 aa ClinVar focal hotspot.</li>
+      <li>A moderate PM1 from any pathway converges with a permutation-significant &plusmn;15 aa ClinVar focal hotspot.</li>
     </ul>
     <p><strong>Not applied when:</strong> gnomAD AF &gt; 1% (BS1/BA1 range).</p>
     <p><strong>Data sources:</strong> CCRS local file, UniProt features API (domains, plus <code>act_site</code>/<code>binding</code>/<code>site</code> for the functional-residue pathway), ClinVar (neighborhood), ConSurf upload, UCSC REST API, MyVariant.info (GERP++), CCRStoAAC (ScoreCons), local Pfam PSSM table (MDS, last-resort pathway).</p>
   </div>
 
   <div class="group-box">
-    <div class="group-box-title">PM2 - Moderate Pathogenic &nbsp;<span class="tag pm">PM2</span>&nbsp; +2 pts</div>
-    <p><strong>Trigger:</strong> gnomAD AF &lt; 0.0001 (0.01%) or absent from gnomAD.</p>
-    <p><strong>Data source:</strong> gnomAD GraphQL API (v4; v2 fallback).</p>
+    <div class="group-box-title">PM2 - Supporting Pathogenic &nbsp;<span class="tag pp">PM2</span>&nbsp; +1 pt</div>
+    <p><strong>Trigger:</strong> gnomAD AF below the prevalence-derived maximum credible allele frequency, or absent from gnomAD.</p>
+    <p><strong>Strength:</strong> Supporting, +1 point &mdash; not the Moderate +2 of ACMG/AMP 2015. The ClinGen Sequence Variant Interpretation Working Group reduced PM2 to Supporting in September 2020, on the reasoning that rarity is expected of almost every candidate disease variant and so discriminates weakly on its own. The criterion keeps its <code>PM2</code> name for continuity with the guidelines; only its weight changed.</p>
+    <p><strong>Why it matters.</strong> PM2 fires for nearly every rare variant, so the one-point difference decides the class for any variant whose case rests on rarity plus a gene-level prior plus predictor support and nothing else. It moves far fewer calls for variants that also carry functional, segregation or case-level evidence.</p>
+    <p><strong>Data source:</strong> gnomAD GraphQL API (v4; v2 fallback), with the threshold derived from the prevalence, heterogeneity and penetrance parameters you set.</p>
   </div>
 
   <div class="group-box">
@@ -676,9 +675,17 @@
   </div>
 
   <div class="group-box">
-    <div class="group-box-title">PP5 - Supporting Pathogenic &nbsp;<span class="tag pp">PP5</span>&nbsp; +1 pt</div>
-    <p><strong>Trigger:</strong> ClinVar exact match is Pathogenic or Likely Pathogenic (complementary supporting evidence alongside PS1/PM5).</p>
-    <p><strong>Requires:</strong> Exact protein change match. Gated off when BA1 or BS1 fires.</p>
+    <div class="group-box-title">PP5 and BP6 - retired, not used</div>
+    <p>PP5 (&ldquo;reputable source reports pathogenic&rdquo;) and BP6 (&ldquo;reputable source reports benign&rdquo;) were <strong>retired by the ClinGen Sequence Variant Interpretation Working Group in 2018</strong>. VarViz neither scores them nor shows them as tags, so you will not see PP5 or BP6 anywhere in a variant card, the tag string, or the TSV export.</p>
+    <p><strong>Why they were retired.</strong> Both criteria award points for someone else&rsquo;s conclusion rather than for evidence. A ClinVar submission is itself the product of an ACMG/AMP assessment, so counting it as an additional criterion adds the same underlying data twice &mdash; once through the criteria the original submitter applied, and again through PP5 or BP6. That is the double-counting the point system exists to prevent.</p>
+    <p><strong>What replaced them.</strong> ClinVar evidence still reaches the classification, but only where it is tied to a specific observation rather than to a verdict:</p>
+    <ul>
+      <li><strong>PS1</strong> &mdash; the identical amino acid change is already a known pathogenic variant.</li>
+      <li><strong>PM5</strong> &mdash; a different substitution at the same residue is a known pathogenic variant.</li>
+      <li><strong>PM1 (hotspot pathway)</strong> &mdash; the residue sits inside a dense cluster of ClinVar pathogenic variants.</li>
+    </ul>
+    <p><strong>You still see the assertion.</strong> The ClinVar significance, its review-star count, and the accession are shown in the ClinVar column and on the variant card. They inform your reading of the variant; they simply do not add points on their own.</p>
+    <p><strong>One place it still has an effect.</strong> A ClinVar pathogenic assertion at this exact substitution suppresses BP1, since a gene-level argument that missense is not the disease mechanism cannot stand against a specific pathogenic assertion at the variant itself.</p>
   </div>
 
   <div class="group-box">
@@ -722,13 +729,13 @@
   <div class="group-box" style="margin-top:14px;">
     <div class="group-box-title">BA1 - Stand-alone Benign &nbsp;<span class="tag ba">BA1</span>&nbsp; &minus;8 pts</div>
     <p><strong>Trigger:</strong> gnomAD AF &gt; 5%.</p>
-    <p><strong>Effect:</strong> Immediately classifies as <strong>Benign</strong>. Removes all pathogenic tags (PM1, PM2, PM4, PM5, PP2, PP3, PS1, PP5). Overrides all other evidence.</p>
+    <p><strong>Effect:</strong> Immediately classifies as <strong>Benign</strong>. Removes all pathogenic tags (PM1, PM2, PM4, PM5, PP2, PP3, PS1). Overrides all other evidence.</p>
   </div>
 
   <div class="group-box">
     <div class="group-box-title">BS1 - Strong Benign &nbsp;<span class="tag bs">BS1</span>&nbsp; &minus;4 pts</div>
     <p><strong>Trigger:</strong> gnomAD AF &gt; 1% (up to 5%; beyond that is BA1).</p>
-    <p><strong>Effect:</strong> Removes pathogenic moderate/supporting tags (PM1, PP2, PP3, PM5, PS1, PP5).</p>
+    <p><strong>Effect:</strong> Removes pathogenic moderate/supporting tags (PM1, PP2, PP3, PM5, PS1).</p>
   </div>
 
   <div class="group-box">
@@ -741,7 +748,7 @@
     <div class="group-box-title">BP1 - Supporting Benign &nbsp;<span class="tag bp">BP1</span>&nbsp; &minus;1 pt</div>
     <p><strong>Trigger:</strong> Missense variant in a gene where population genetics evidence indicates missense variation is <em>tolerated</em>; <strong>GeVIR percentile &gt;75</strong> (gene accumulates missense variants freely in gnomAD).</p>
     <p>This operationalizes the ACMG/AMP definition of BP1 ("missense variant in a gene for which primarily truncating variants are known to cause disease") using gene-level missense constraint data rather than a curated list, avoiding circular use of ClinVar evidence.</p>
-    <p><strong>Suppressed when:</strong> BA1 or BS1 fires (frequency evidence supersedes mechanism evidence); PS1 or PP5 fires (ClinVar pathogenic at this exact position contradicts BP1); ClinGen Gene-Disease Validity is Definitive or Strong for this gene.</p>
+    <p><strong>Suppressed when:</strong> BA1 or BS1 fires (frequency evidence supersedes mechanism evidence); PS1 fires, or ClinVar reports this exact substitution pathogenic (ClinVar pathogenic at this exact position contradicts BP1); ClinGen Gene-Disease Validity is Definitive or Strong for this gene.</p>
     <p><strong>Data source:</strong> GeVIR gene ranking table (Abramovs et al., 2020 [17]): <a href="https://www.gevirank.org" target="_blank">gevirank.org</a>.</p>
     <p><strong>Hover tooltip:</strong> All ACMG criterion cards show the GeVIR percentile on mouse hover, including the exact score used for PP2 and BP1 decisions.</p>
   </div>
@@ -756,12 +763,6 @@
     <div class="group-box-title">BP4 - Supporting Benign &nbsp;<span class="tag bp">BP4</span>&nbsp; &minus;1 pt</div>
     <p><strong>Trigger:</strong> &ge;2 benign predictor votes AND PP3 has <em>not</em> fired. See per-tool thresholds in PP3 section above.</p>
     <p><strong>Suppressed when:</strong> Any PP3 tier is active (mutual exclusion).</p>
-  </div>
-
-  <div class="group-box">
-    <div class="group-box-title">BP6 - Supporting Benign (BS-equivalent in Tavtigian) &nbsp;<span class="tag bp">BP6</span>&nbsp; &minus;4 pts</div>
-    <p><strong>Trigger:</strong> ClinVar exact match is Benign (not conflicting, not just Likely Benign).</p>
-    <p><strong>Requires:</strong> Exact protein change match. <strong>Mutually exclusive with PS1</strong> - if PS1 has fired, BP6 is blocked.</p>
   </div>
 
   <div class="group-box">
@@ -796,7 +797,7 @@
       <td><strong>Exact</strong></td>
       <td>User&rsquo;s protein change (3-letter and 1-letter) found verbatim in ClinVar variant name</td>
       <td>&ldquo;<em>&lt;sig&gt;</em>&rdquo; with the matched record hyperlinked to its ClinVar page</td>
-      <td>PS1, PP5, BP6</td>
+      <td>PS1, PM5</td>
     </tr>
     <tr>
       <td><strong>Position</strong></td>
@@ -1111,7 +1112,9 @@
 
 <div class="card">
   <h3>How are ACMG tags computed?</h3>
-  <p>VarViz uses a hybrid engine: Richards 2015 rule-based classification fires first; if no rule matches, the Tavtigian 2020 Bayesian point system applies. PP3/BP4 use Pejaver et al. (2022) [13] calibrated predictor thresholds. PS1/BP6 require exact ClinVar protein change matches; PM5 fires for position-only matches. See <a href="#acmg">ACMG Overview</a> and <a href="#acmg-criteria">Criteria Details</a>. Always review tags with clinical context.</p>
+  <p>Classification is by points alone. Every criterion that fires contributes its assigned strength on the Tavtigian 2020 Bayesian scale, the contributions are summed, and the total decides the class: Pathogenic at &ge;10, Likely Pathogenic 6&ndash;9, VUS 0&ndash;5 (split into VUS-Low, VUS-Mid and VUS-High), Likely Benign &minus;1 to &minus;6, Benign &le;&minus;7. BA1 is the one stand-alone criterion and returns Benign whatever the total.</p>
+  <p>Earlier releases ran the Richards 2015 combinatorial rules first and fell through to points only when no rule matched. That ordering had two defects: it matched rules by criterion name rather than by assigned strength, so a reduced-strength criterion could satisfy a rule written for its full-strength form; and it tested pathogenic combinations before reading benign evidence, so a variant carrying both could be returned Pathogenic at a net score of zero. Summation fixes both &mdash; the assigned strength is what scores, and opposing evidence cancels.</p>
+  <p>PP3/BP4 use Pejaver et al. (2022) [13] calibrated predictor thresholds, and the two are mutually exclusive: where both would fire, PP3 wins at its assigned strength and BP4 is dropped, so you never see a self-cancelling PP3 + BP4 pair. PS1 requires an exact ClinVar protein-change match; PM5 fires for position-only matches. See <a href="#acmg">ACMG Overview</a> and <a href="#acmg-criteria">Criteria Details</a>. Always review tags with clinical context.</p>
 </div>
 
 <div class="card">
@@ -1120,8 +1123,9 @@
 </div>
 
 <div class="card">
-  <h3>What are the PM1 tiers (PM1 / PM1_moderate_plus / PM1_strong)?</h3>
-  <p>PM1 is scored at three strengths. <strong>PM1</strong> (+2, Moderate) is the standard fire. <strong>PM1_moderate_plus</strong> (+3) is an intermediate tier reached only via the Missense Disfavour Score at MDS &le; &minus;8 (LR+ &asymp; 11). <strong>PM1_strong</strong> (+4, PS-equivalent) fires when the variant is in a structurally critical UniProt domain <em>and</em> at least one strong conservation signal is present (ConSurf &ge;8, PhyloP &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8); when MDS reaches its strong tier (&le; &minus;12, LR+ &asymp; 39); or when a moderate PM1 converges with a permutation-significant &plusmn;15 aa ClinVar hotspot. The MDS tiers are likelihood-ratio-calibrated on 33,216 genome-wide 2&#9733; ClinVar missense and are on by default (<code>options(varviz.mds_tiered = FALSE)</code> to disable).</p>
+  <h3>What are the PM1 tiers (PM1 / PM1_strong)?</h3>
+  <p>PM1 is scored at two strengths. <strong>PM1</strong> (+2, Moderate) is the standard fire. <strong>PM1_strong</strong> (+4, PS-equivalent) fires when the variant is in a structurally critical UniProt domain <em>and</em> at least one strong conservation signal is present (ConSurf &ge;8, PhyloP &gt;4.0, PhastCons &gt;0.9, GERP++ &gt;4.4, or ScoreCons &gt;0.8), or when a moderate PM1 converges with a permutation-significant &plusmn;15 aa ClinVar hotspot.</p>
+  <p>Four pathways can raise PM1: a CCRS percentile above the 90th, a UniProt domain or residue-level functional site, a &plusmn;15 aa ClinVar hotspot, and the Missense Disfavour Score (MDS) from the Pfam alignment. <strong>They do not stack.</strong> A variant&rsquo;s PM1 strength is the strongest single pathway that fires, not the sum of them, so MDS can corroborate a pathway that has already fired without inflating the score, and can originate PM1 where no other pathway reaches the residue. MDS supports PM1 at Moderate strength from a delta of &minus;4 (LR+ &asymp; 5.4), calibrated on genome-wide 2&#9733; ClinVar missense. A stronger MDS tier is computed but is <strong>off by default</strong>, because it does not replicate against a ClinVar-independent benign control set.</p>
 </div>
 
 <div class="card">

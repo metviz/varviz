@@ -3293,7 +3293,8 @@ classify_pred <- function(tool, score, pred) {
 # inline inside build_variant_table() where CCRS, domain, ClinVar match type, ConSurf,
 # UniProt repeats, and all dbNSFP scores are all in scope together.
 # Criteria covered: PM1/PM1_strong, PM2, PM4, PM5, PP2, PP3/PP3_moderate/PP3_strong,
-#                   PP5, PS1, BP3, BP4, BP6, BP7, BS1, BS2
+#                   PS1, BP3, BP4, BP7, BS1, BS2. PP5 and BP6 were retired by the
+#                   ClinGen SVI in 2018 and are neither scored nor emitted.
 
 
 
@@ -4304,12 +4305,10 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
     s(paste0("Same nucleotide change resulting in same amino acid change has been previously reported to be associated with ", disease_str, cite_str, "."))
   }
 
-  # PP5: ClinVar pathogenic
-  if ("PP5" %in% tags && !"PS1" %in% tags) {
-    cite     <- vcv_cite(clinvar_vcv)
-    cite_str <- if (nchar(cite) > 0) paste0(" (", cite, ")") else ""
-    s(paste0("This variant has been reported as pathogenic in ClinVar", cite_str, ", associated with ", disease_str, "."))
-  }
+  # PP5 and BP6 had a sentence each here. Both criteria were retired by the
+  # ClinGen SVI in 2018 and are no longer emitted as tags, so neither branch
+  # could fire. The ClinVar assertion they described is still shown to the
+  # reviewer in the ClinVar column, its review-star count, and the variant card.
 
   # PM5: different AA at same codon — MUST match variant's own position
   if ("PM5" %in% tags) {
@@ -4364,13 +4363,6 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
   # BP3
   if ("BP3" %in% tags)
     s("The in-frame indel is located in a repetitive region with no known functional importance (BP3).")
-
-  # BP6
-  if ("BP6" %in% tags) {
-    cite     <- vcv_cite(clinvar_vcv)
-    cite_str <- if (nchar(cite) > 0) paste0(" (", cite, ")") else ""
-    s(paste0("This variant has been classified as benign or likely benign by a reputable source", cite_str, " (BP6)."))
-  }
 
   # BP7
   if ("BP7" %in% tags)
@@ -5261,7 +5253,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       any(qualifies)
     }
 
-    # Pre-compute benign AF flags — used by PM1, PP2, PM5, PS1, PP5, PP3 below
+    # Pre-compute benign AF flags — used by PM1, PP2, PM5, PS1, PP3 below
     # Thresholds are inheritance-aware (Roberts 2024 / Ware 2018 framework):
     #   Monoallelic (dominant):  BA1 > 5%, BS1 > 1%,  PM2 < 0.0001
     #   Biallelic  (recessive):  BA1 > 5%, BS1 > 5%,  PM2 < 0.01
@@ -5609,6 +5601,12 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
 
     ps1_fired <- FALSE
     pm5_fired <- FALSE
+    # Initialised here, beside the other per-variant flags, because the BP1 rule
+    # near the end of this block reads it and `&&` short-circuits: a variant that
+    # never reaches the assignment below would fail only for the genes where BP1
+    # applies, which is how an undefined per-variant value hides in testing.
+    clinvar_reports_pathogenic <- FALSE
+    clinvar_reports_benign     <- FALSE
 
     if (!bs1_fires && nchar(clinvar_sig) > 0 &&
         grepl("pathogenic", clinvar_sig, ignore.case = TRUE) &&
@@ -5652,17 +5650,17 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       }
     }
 
-    # PP5: Reputable source (ClinVar) reports pathogenic — exact match
-    # Suppressed when PS1 fires: both use the same ClinVar assertion (double-dipping).
-    # PP5 fires only when PS1 has NOT fired — i.e. when ClinVar has a pathogenic
-    # assertion but it is not the exact same AA change (PS1 requires exact match).
-    # In practice PP5 fires alongside PM5 (position match) or for multi-star LP variants.
-    if (!bs1_fires && !ps1_fired &&
+    # PP5 was retired by the ClinGen SVI in 2018 and scores nothing, so the tag
+    # is no longer emitted: listing an unscored criterion beside scored ones in
+    # the card, the tag string and the TSV export invites a reader to count it.
+    # The condition is still evaluated, because two things downstream need it —
+    # the BP1 suppression below, which must still know that ClinVar calls this
+    # exact substitution pathogenic. The assertion itself remains visible to the
+    # reviewer in the ClinVar column, its review-star count, and the card.
+    clinvar_reports_pathogenic <- (!bs1_fires && !ps1_fired &&
         clinvar_match_type == "exact" &&
         nchar(clinvar_sig) > 0 && grepl("pathogenic", clinvar_sig, ignore.case = TRUE) &&
-        !grepl("conflicting|uncertain|benign", clinvar_sig, ignore.case = TRUE)) {
-      acmg_tags <- c(acmg_tags, "PP5")
-    }
+        !grepl("conflicting|uncertain|benign", clinvar_sig, ignore.case = TRUE))
 
     # PP3 / BP4: Computational evidence — Pejaver 2022 calibrated thresholds
     # Priority order: REVEL (best calibrated) → MetaSVM/MetaLR/MetaRNN → CADD → DANN → vote
@@ -5885,7 +5883,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       acmg_tags <- c(acmg_tags, "BA1")
       acmg_tags <- acmg_tags[!acmg_tags %in% c(
         "PM1", "PM1_strong", "PM2", "PM4", "PM5",
-        "PP2", "PP3", "PP3_moderate", "PP3_strong", "PS1", "PS1_moderate", "PS1_supporting", "PP5"
+        "PP2", "PP3", "PP3_moderate", "PP3_strong", "PS1", "PS1_moderate", "PS1_supporting"
       )]
     }
 
@@ -5894,7 +5892,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # Also remove pathogenic moderate/supporting tags — a common variant cannot be PM/PP.
     if (bs1_fires && !ba1_fires) {
       acmg_tags <- c(acmg_tags, "BS1")
-      acmg_tags <- acmg_tags[!acmg_tags %in% c("PM1", "PM1_strong", "PP2", "PP3", "PP3_moderate", "PP3_strong", "PM5", "PS1", "PS1_moderate", "PS1_supporting", "PP5")]
+      acmg_tags <- acmg_tags[!acmg_tags %in% c("PM1", "PM1_strong", "PP2", "PP3", "PP3_moderate", "PP3_strong", "PM5", "PS1", "PS1_moderate", "PS1_supporting")]
     }
 
     # BS2: Observed in unaffected adults (gnomAD homozygotes > 0, or AF > 5% as proxy)
@@ -5903,18 +5901,15 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       acmg_tags <- c(acmg_tags, "BS2")
     }
 
-    # BP6: Reputable source (ClinVar) reports benign — exact match
-    # Mutual exclusion with PS1/PP5: if ClinVar has conflicting submissions,
-    # neither PS1/PP5 nor BP6 should fire (already blocked upstream by
-    # grepl("conflicting") guards, but make explicit here).
-    # BP6 also cannot co-exist with PS1 — if PS1 fired, ClinVar said Pathogenic.
-    if (clinvar_match_type == "exact" &&
+    # BP6 was retired alongside PP5 and is likewise no longer emitted. Nothing
+    # downstream consumes this flag today; it is kept next to its PP5 counterpart
+    # so the pair of retired criteria stays visible as one decision, and so a
+    # future benign-side rule has the condition already written and tested.
+    clinvar_reports_benign <- (clinvar_match_type == "exact" &&
         nchar(clinvar_sig) > 0 &&
         grepl("benign", clinvar_sig, ignore.case = TRUE) &&
         !grepl("pathogenic|conflicting", clinvar_sig, ignore.case = TRUE) &&
-        !ps1_fired) {   # PS1 and BP6 are mutually exclusive
-      acmg_tags <- c(acmg_tags, "BP6")
-    }
+        !ps1_fired)
 
     # BP7: Synonymous variant with no predicted splice impact
     # Detect from variant name: same ref and alt AA (e.g. p.Pro72Pro)
@@ -5931,12 +5926,14 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # Suppressed when:
     #   - BA1/BS1 already fire (frequency evidence supersedes mechanism evidence)
     #   - PS1 fired (ClinVar confirms pathogenic at this exact position)
-    #   - PP5 fired (ClinVar reports pathogenic — contradicts BP1)
+    #   - ClinVar reports this exact substitution pathogenic (contradicts BP1).
+    #     This used to test for the PP5 tag; PP5 is no longer emitted, so it
+    #     reads the flag the same condition now sets.
     #   - ClinGen validity is Definitive/Strong (missense IS established mechanism)
     if (bp1_gene_applies &&
         !ba1_fires && !bs1_fires &&
         !any(c("PS1","PS1_moderate","PS1_supporting") %in% acmg_tags) &&
-        !"PP5" %in% acmg_tags) {
+        !isTRUE(clinvar_reports_pathogenic)) {
       acmg_tags <- c(acmg_tags, "BP1")
       message("[BP1] Fired for ", mut, " — GeVIR_pct=", round(gevir_pct, 1))
     }
@@ -7064,12 +7061,12 @@ shinyServer(function(input, output, session) {
         if (grepl("_moderate$", tag))   return("Moderate")
         if (grepl("_supporting$", tag)) return("Supporting")
         if (tag %in% c("PVS1"))        return("Very Strong")
-        if (tag %in% c("PS1","PS2","PS3","PS4","BS1","BS2","BS3","BS4","BP6")) return("Strong")
+        if (tag %in% c("PS1","PS2","PS3","PS4","BS1","BS2","BS3","BS4")) return("Strong")
         if (tag %in% c("PM1","PM2","PM4","PM5","PM6")) return("Moderate")
         if (tag == "PM3_strong")   return("Strong")
         if (tag == "PM3_moderate") return("Moderate")
         if (tag == "PM3")          return("Supporting")
-        if (tag %in% c("PP1","PP2","PP3","PP4","PP5","BP1","BP2","BP3","BP4","BP5","BP7")) return("Supporting")
+        if (tag %in% c("PP1","PP2","PP3","PP4","BP1","BP2","BP3","BP4","BP5","BP7")) return("Supporting")
         if (tag == "BA1") return("Stand Alone")
         return("Supporting")
       }
@@ -7133,13 +7130,11 @@ shinyServer(function(input, output, session) {
                        "Applies only when the presentation is characteristic enough that this gene is the expected cause; ",
                        "not appropriate for genetically heterogeneous or non-specific phenotypes. ",
                        "Set via the Phenotype dropdown on this card."),
-          PP5 = "Reported as pathogenic in ClinVar with at least 1-star review. Shown for context; not scored (retired by ClinGen SVI) (PP5)",
           BA1 = "Allele frequency >5% in gnomAD, standalone Benign (BA1)",
           BS1 = "Allele frequency above the disease-prevalence-adjusted threshold (BS1)",
           BS2 = "Observed homozygous in gnomAD in healthy individuals (BS2)",
           BP3 = "In-frame indel in a repetitive region without known function (BP3)",
           BP4 = "Multiple computational tools predict a benign/tolerated effect (BP4)",
-          BP6 = "Reported as benign in ClinVar. Shown for context; not scored (retired by ClinGen SVI) (BP6)",
           BP7 = "Synonymous variant with no predicted splice impact (BP7)",
           tag  # fallback: show tag name
         )
