@@ -74,3 +74,7 @@ analyses/repro/out/
 
 # Analysis run outputs live outside the repo; only the code that makes them is tracked.
 analyses/ras_vcep_*/
+
+# Manuscript sources: prose destined for a journal, never published from this repo
+# (see rules/common/publishing.md). docs/ is already ignored above.
+analyses/humu/
