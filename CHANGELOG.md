@@ -17,6 +17,34 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [1.2.1] - 2026-09-13
+
+**This release moves calls.** AlphaMissense may now raise a PP3 level that
+another tool has already set, which changes 1.15% of Pass-Full and 2.16% of
+Pass-Blind classifications over the 54,454-variant benchmark. No variant loses
+actionable status; 135 gain it under Pass-Full.
+
+### Changed
+
+- `varviz.am_hybrid` now defaults to TRUE. AlphaMissense keeps its developer
+  threshold (0.564) at the supporting rung and stays last-resort there, but its
+  Bergquist 2025 calibrated rungs at moderate (0.906), 3-point (0.972) and
+  strong (0.990) may now raise a level another tool already assigned.
+
+  The evidence for the change is a Pass-Blind comparison against ClinVar
+  labels, which that pass withholds and so can serve as independent truth.
+  Against 1,258 pathogenic and 183 benign 1-star labels, sensitivity rises from
+  0.840 to 0.884 and MCC from 0.564 to 0.632, with the false positive count
+  unchanged at 19; none of the 183 ClinVar-benign variants changes bin.
+
+  Adopting the full Bergquist ladder instead was measured and rejected. It
+  moves 20.26% of Pass-Full calls for 57 true positives rather than 55, and its
+  effect lands where it cannot be checked: +0.1 points of actionable share among
+  the 4,404 variants ClinVar has reviewed, against +10.6 among the 49,567 it has
+  never seen. Requiring corroboration inverts that to +4.0 and +0.8.
+
+  Set `options(varviz.am_hybrid = FALSE)` to restore the previous behaviour.
+
 ## [1.2.0] - 2026-09-12
 
 ### Added
