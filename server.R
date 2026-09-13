@@ -4004,6 +4004,10 @@ ACMG_TAG_PTS <- c(
   PS1=4, PS1_moderate=2, PS1_supporting=1, PS2=4, PS3=4, PS3_supporting=1, PS4=4,
   PM5_supporting=1,
   PM1_strong=4, PP3_strong=4, PP1_strong=4,
+  # 3-point evidence sits between Moderate and Strong. The 2015 guidelines have
+  # no such level, but Pejaver 2022 and Bergquist 2025 both report calibrated
+  # 3-point intervals because the point-based system is expected to adopt one.
+  PP3_moderate_plus=3,
   PM1=2, PM2=1, PM3=1, PM3_moderate=2, PM3_strong=4, PM4=2, PM5=2, PM6=2, PP3_moderate=2, PP1_moderate=2,
   PP1=1, PP2=1, PP3=1, PP4=1,
   BA1=-8,
@@ -4112,14 +4116,15 @@ apply_calib_override <- function(tags_vec, ovr, r) {
                   error = function(e) NULL)
   opt <- if (!is.null(cal)) cal$predictors[[ovr$predictor]]$optimal else NULL
   if (is.null(opt) || is.na(opt$threshold) || score < opt$threshold) return(tags_vec)
-  lvl <- unname(c(Supporting = "1", Moderate = "2", Strong = "3",
-                  `Very strong` = "3")[opt$gene_tier])
+  lvl <- unname(c(Supporting = "1", Moderate = "2", Strong = "4",
+                  `Very strong` = "4")[opt$gene_tier])
   # Compute the replacement level FIRST. When the (LOO) gene-optimal tier is "None"
   # (or any value with no PP3 mapping) there is nothing to put back, so leave the
   # existing Pejaver PP3 tag intact — never strip evidence with no replacement.
   if (is.na(lvl)) return(tags_vec)
   tags_vec <- tags_vec[!grepl("^PP3", tags_vec)]
-  c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[lvl]))
+  c(tags_vec, unname(c("1" = "PP3", "2" = "PP3_moderate",
+                       "3" = "PP3_moderate_plus", "4" = "PP3_strong")[lvl]))
 }
 
 # ============================================================
@@ -4299,8 +4304,8 @@ generate_acmg_comment <- function(acmg_tags_str, gene, mut, gnomad_af, gnomad_ac
     if (nchar(metasvm_v) > 0 && metasvm_v != "NA")
       scores <- c(scores, paste0("MetaSVM: ", metasvm_v))
     score_str <- if (length(scores) > 0) paste0(" (", paste(scores, collapse = "; "), ")") else ""
-    strength  <- if ("PP3_strong" %in% tags)   " at strong evidence strength" else if ("PP3_moderate" %in% tags) " at moderate evidence strength" else ""
-    pp3_name  <- if ("PP3_strong" %in% tags) " (PP3_Strong)" else if ("PP3_moderate" %in% tags) " (PP3_Moderate)" else " (PP3_Supporting)"
+    strength  <- if ("PP3_strong" %in% tags)   " at strong evidence strength" else if ("PP3_moderate_plus" %in% tags) " at 3-point evidence strength" else if ("PP3_moderate" %in% tags) " at moderate evidence strength" else ""
+    pp3_name  <- if ("PP3_strong" %in% tags) " (PP3_Strong)" else if ("PP3_moderate_plus" %in% tags) " (PP3_Moderate_Plus)" else if ("PP3_moderate" %in% tags) " (PP3_Moderate)" else " (PP3_Supporting)"
     if (has_pp3)
       s(paste0("In silico tool predictions suggest damaging effect of the variant on the gene or gene product", strength, score_str, pp3_name, ".")) else
       s(paste0("In silico tool predictions suggest the variant is likely tolerated", score_str, " (BP4)."))
@@ -5709,27 +5714,47 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       if (!is.na(raw)) raw else am_exact_score   # am_exact_score initialised to NA_real_ above
     }
 
-    # Helper: pick highest PP3 level seen so far
+    # Helper: highest PP3 level seen so far. The level number equals the points
+    # the tag awards, so a comparison like pp3_level(acmg_tags) < 2L reads as
+    # "nothing has yet given 2 points or more".
     pp3_level <- function(tags) {
-      if (isTRUE(any(tags == "PP3_strong")))   return(3L)
-      if (isTRUE(any(tags == "PP3_moderate"))) return(2L)
-      if (isTRUE(any(tags == "PP3")))          return(1L)
+      if (isTRUE(any(tags == "PP3_strong")))        return(4L)
+      if (isTRUE(any(tags == "PP3_moderate_plus"))) return(3L)
+      if (isTRUE(any(tags == "PP3_moderate")))      return(2L)
+      if (isTRUE(any(tags == "PP3")))               return(1L)
       return(0L)
     }
+    # The 3-point rung is gated: it changes classifications, so it is measured
+    # before it is adopted. With it off, a score that falls in a 3-point interval
+    # is awarded the moderate tag below it, which is what the engine did before.
+    .pp3_3pt <- isTRUE(getOption("varviz.pp3_3pt", FALSE))
     add_pp3 <- function(level) {
-      tag <- c("1" = "PP3", "2" = "PP3_moderate", "3" = "PP3_strong")[level]
+      if (identical(as.character(level), "3") && !.pp3_3pt) level <- "2"
+      tag <- c("1" = "PP3", "2" = "PP3_moderate",
+               "3" = "PP3_moderate_plus", "4" = "PP3_strong")[as.character(level)]
       acmg_tags <<- unique(c(acmg_tags[!grepl("^PP3", acmg_tags)], tag))
     }
 
     # 1. REVEL — best single calibrated predictor (Pejaver 2022 Table 2)
     if (!is.na(revel_sc)) {
-      if      (revel_sc >= 0.932) add_pp3("3") else if (revel_sc >= 0.773) add_pp3("2") else if (revel_sc >= 0.644) add_pp3("1")
+      if      (revel_sc >= 0.932) add_pp3("4")
+      else if (revel_sc >= 0.879) add_pp3("3")
+      else if (revel_sc >= 0.773) add_pp3("2")
+      else if (revel_sc >= 0.644) add_pp3("1")
     }
 
     # 2. MetaSVM / MetaLR / MetaRNN — consensus meta-predictors
-    # Per Pejaver 2022: 2/3 meta-predictors = moderate ONLY when a calibrated
-    # predictor (REVEL ≥ 0.644 or CADD ≥ 28.1) corroborates.
-    # Without calibrated corroboration, cap at PP3 supporting regardless of meta count.
+    # A 2-of-3 meta-predictor agreement raises PP3 to moderate when a calibrated
+    # predictor (REVEL >= 0.644 or CADD >= 28.1) corroborates; without that
+    # corroboration it is capped at supporting regardless of the meta count.
+    #
+    # This branch is a consensus rule, and Pejaver et al. 2022 name the ACMG/AMP
+    # recommendations requiring consensus of multiple predictors as lacking
+    # quantitative support, calibrating each of thirteen tools individually
+    # instead. The branch predates that calibration and is retained pending the
+    # ablation that measures what it contributes; options(varviz.pp3_meta_consensus
+    # = FALSE) disables it so the contribution can be measured with everything
+    # else held constant. Nothing else reads this option.
     meta_dam <- sum(c(
       isTRUE(!is.na(metasvm_pd) && grepl("^[Dd]", metasvm_pd)),
       isTRUE(!is.na(metalr_pd)  && grepl("^[Dd]", metalr_pd)),
@@ -5737,7 +5762,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     ))
     calibrated_sc <- isTRUE((!is.na(revel_sc) && revel_sc >= 0.644) ||
                              (!is.na(cadd_sc)  && cadd_sc  >= 28.1))
-    if      (meta_dam >= 2 && calibrated_sc  && pp3_level(acmg_tags) < 2L) add_pp3("2") else if (meta_dam >= 1                   && pp3_level(acmg_tags) < 1L) add_pp3("1")
+    .meta_ok <- !identical(getOption("varviz.pp3_meta_consensus", TRUE), FALSE)
+    if      (.meta_ok && meta_dam >= 2 && calibrated_sc  && pp3_level(acmg_tags) < 2L) add_pp3("2") else if (meta_dam >= 1                   && pp3_level(acmg_tags) < 1L) add_pp3("1")
 
     # 3. CADD (Pejaver 2022: ≥ 28.1 = supporting; ≥ 35 = moderate)
     if (!is.na(cadd_sc)) {
@@ -5747,8 +5773,30 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # 4. DANN (≥ 0.96 = supporting)
     if (!is.na(dann_sc) && dann_sc >= 0.96 && pp3_level(acmg_tags) < 1L) add_pp3("1")
 
-    # 5. AlphaMissense (≥ 0.564 = supporting)
-    if (!is.na(am_sc) && am_sc >= 0.564 && pp3_level(acmg_tags) < 1L) add_pp3("1")
+    # 5. AlphaMissense.
+    # Default (varviz.am_calibrated = FALSE): the developer threshold of 0.564
+    # awards PP3 at supporting. Bergquist et al. 2025 (Genet Med 27:101402,
+    # ClinGen SVI Working Group) calibrated AlphaMissense by the same local
+    # posterior method as Pejaver 2022 and report that 0.564 does not reach the
+    # supporting level for pathogenicity or benignity: it falls inside their
+    # indeterminate interval of 0.170-0.791. Their calibrated intervals are
+    # supporting 0.792-0.905, moderate 0.906-0.971, +3 0.972-0.989, strong >=0.990.
+    #
+    # Adopting them moves calls in both directions, so the option exists to
+    # measure that before changing the default: variants between 0.564 and 0.791
+    # lose a point they should not have had, while variants above 0.906 gain the
+    # moderate-or-better strength the calibration supports and the developer
+    # threshold never expressed.
+    if (!is.na(am_sc)) {
+      if (isTRUE(getOption("varviz.am_calibrated", FALSE))) {
+        if      (am_sc >= 0.990 && pp3_level(acmg_tags) < 4L) add_pp3("4")
+        else if (am_sc >= 0.972 && pp3_level(acmg_tags) < 3L) add_pp3("3")
+        else if (am_sc >= 0.906 && pp3_level(acmg_tags) < 2L) add_pp3("2")
+        else if (am_sc >= 0.792 && pp3_level(acmg_tags) < 1L) add_pp3("1")
+      } else {
+        if (am_sc >= 0.564 && pp3_level(acmg_tags) < 1L) add_pp3("1")
+      }
+    }
 
     # ── PS3 / BS3: Functional evidence ───────────────────────────────────────
     # PS3: well-established functional studies show damaging effect (+4 pts, Strong Pathogenic)
@@ -5793,7 +5841,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         # its effect can be measured on the current engine. Default FALSE; the
         # shipped configuration never applies it.
         if (isTRUE(getOption("varviz.pp3_ps3_proxy", FALSE)) &&
-            pp3_level(acmg_tags) < 3L) add_pp3("3")
+            pp3_level(acmg_tags) < 4L) add_pp3("4")
         ps3_proxy_fired <- TRUE
       } else if (am_low && revel_ben) {
         # Convergent benign structural + ensemble evidence — BS3_supporting proxy
@@ -5806,6 +5854,11 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # BP4 votes must be tallied here so the conservation gate can check whether
     # benign predictors are contradicting pathogenic conservation evidence.
     # Actual BP4 tag assignment happens after conservation (see below).
+    # AlphaMissense benign cut: 0.34 is the developer's ambiguous boundary; the
+    # Bergquist 2025 calibration puts BP4 supporting at <= 0.169 and leaves
+    # 0.170-0.791 indeterminate. Tied to the same option as the PP3 side so a
+    # run cannot use a calibrated pathogenic ladder with an uncalibrated benign cut.
+    .am_bp4_cut <- if (isTRUE(getOption("varviz.am_calibrated", FALSE))) 0.169 else 0.34
     bp4_votes <- sum(c(
       isTRUE(!is.na(revel_sc)   && revel_sc   <= 0.290),
       isTRUE(!is.na(metasvm_pd) && grepl("^[Tt]", metasvm_pd)),
@@ -5813,7 +5866,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       isTRUE(!is.na(metarnn_pd) && grepl("^[Tt]", metarnn_pd)),
       isTRUE(!is.na(cadd_sc)    && cadd_sc    < 15),
       isTRUE(!is.na(dann_sc)    && dann_sc    < 0.5),
-      isTRUE(!is.na(am_sc)      && am_sc      <= 0.34)
+      isTRUE(!is.na(am_sc)      && am_sc      <= .am_bp4_cut)
     ))
     benign_predictors_active <- bp4_votes >= 2   # would BP4 fire?
 
@@ -7075,6 +7128,9 @@ shinyServer(function(input, output, session) {
       # Same table classify_acmg() scores with, so the card grid cannot drift.
       tag_pts_map <- ACMG_TAG_PTS
       strength_label <- function(tag) {
+        # Checked before _moderate, since "_moderate_plus" also ends in a
+        # strength word and would otherwise be labelled Moderate.
+        if (grepl("_moderate_plus$", tag)) return("Moderate+")
         if (grepl("_strong$", tag))     return("Strong")
         if (grepl("_moderate$", tag))   return("Moderate")
         if (grepl("_supporting$", tag)) return("Supporting")
@@ -7092,7 +7148,7 @@ shinyServer(function(input, output, session) {
       # _supporting case, PS1_supporting / PS3_supporting / PM5_supporting render
       # as raw tag names on the badge AND miss the tooltip switch below, which
       # keys on the base tag.
-      tag_display <- function(tag) sub("_(strong|moderate|supporting)$", "", tag)
+      tag_display <- function(tag) sub("_(strong|moderate_plus|moderate|supporting)$", "", tag)
       tag_color <- function(tag, is_path) {
         if (!is_path) return(list(bg="#dcfce7", border="#16a34a", text="#14532d", badge_bg="#16a34a"))
         if (grepl("^PVS",tag)||grepl("_strong$",tag)) return(list(bg="#fee2e2",border="#dc2626",text="#7f1d1d",badge_bg="#dc2626"))
