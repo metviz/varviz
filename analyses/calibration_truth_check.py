@@ -24,7 +24,8 @@ import collections, csv, math, sys
 
 RUNS = [("release", "analyses/ps_final_v221"),
         ("calibrated (no override)", "analyses/ps_amdefer_v221"),
-        ("calibrated + override", "analyses/ps_amcalib_v221")]
+        ("calibrated + override", "analyses/ps_amcalib_v221"),
+        ("hybrid", "analyses/ps_amhybrid_v221")]
 CLINVAR = "analyses/tmp/clinvar_14genes_all.tsv"
 ACTIONABLE = {"Pathogenic", "Likely Pathogenic"}
 
@@ -119,7 +120,7 @@ def main():
     print(f"\n{'='*78}")
     print("Prior test: actionable share by ClinVar exposure (Pass-Blind)")
     print(f"{'='*78}")
-    print(f"{'stratum':<34}{'n':>9}{'release':>11}{'calibrated':>12}{'shift':>9}")
+    print(f"{'stratum / mode':<50}{'n':>8}{'release':>9}{'mode':>10}{'shift':>8}")
     for label, keys in (("ClinVar-reviewed (>=1 star)", reviewed),
                         ("never in ClinVar", unseen)):
         if not keys:
@@ -128,8 +129,10 @@ def main():
             r = runs[run]
             return sum(1 for k in keys
                        if r[k]["varviz_classification_blind"] in ACTIONABLE) / len(keys)
-        a, b = share("release"), share("calibrated (no override)")
-        print(f"{label:<34}{len(keys):>9,}{100*a:>10.1f}%{100*b:>11.1f}%{100*(b-a):>+8.1f}")
+        a = share("release")
+        for run in ("calibrated (no override)", "hybrid"):
+            b = share(run)
+            print(f"{label+' / '+run:<50}{len(keys):>8,}{100*a:>9.1f}%{100*b:>10.1f}%{100*(b-a):>+8.1f}")
 
 
 if __name__ == "__main__":
