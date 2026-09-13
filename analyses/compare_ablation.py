@@ -16,10 +16,27 @@ is the signature of an incomplete run, not of a criterion change.
 
   python3 analyses/compare_ablation.py BASE_DIR ABLATION_DIR [--label NAME]
 """
-import argparse, collections, csv, os, sys
+import argparse, collections, csv, os, re, sys
 
 ACTIONABLE = {"Pathogenic", "Likely Pathogenic"}
 BENIGN     = {"Benign", "Likely Benign"}
+
+
+def tags(field):
+    """Split a tag column.
+
+    tags_full is written comma-space separated and tags_blind comma separated,
+    so a split on ", " silently returns one unparsed string for the blind
+    column and every tag test against it quietly fails. Split on either.
+    """
+    return [t.strip() for t in re.split(r",\s*", field or "") if t.strip()]
+
+
+def partition(field, prefix):
+    """(tags matching prefix, all other tags) — the ablated criterion vs the rest."""
+    ts = tags(field)
+    return (sorted(t for t in ts if t.startswith(prefix)),
+            sorted(t for t in ts if not t.startswith(prefix)))
 
 
 def load(path):
@@ -43,11 +60,18 @@ def load(path):
     return rows, dupes
 
 
-def compare(base, abl, pas):
-    """Transitions for one pass ('full' or 'blind'), base -> ablation."""
+def compare(base, abl, pas, prefix=None):
+    """Transitions for one pass ('full' or 'blind'), base -> ablation.
+
+    With `prefix`, a changed call is counted as attributable only when every
+    tag outside that prefix is identical between the runs. Two runs made days
+    apart see different ClinVar content, so criteria like PM5 and PS1 move on
+    their own; those calls changed, but not because of the ablated option.
+    """
     col = f"varviz_classification_{pas}"
+    tcol = f"tags_{pas}"
     moves = collections.Counter()
-    changed = 0
+    changed = drift = 0
     gained = lost = 0          # actionable status crossing, ablation vs base
     for k, b in base.items():
         a = abl.get(k)
@@ -57,12 +81,15 @@ def compare(base, abl, pas):
         if bc == ac:
             continue
         changed += 1
+        if prefix and partition(b[tcol], prefix)[1] != partition(a[tcol], prefix)[1]:
+            drift += 1
+            continue
         moves[(bc, ac)] += 1
         if bc not in ACTIONABLE and ac in ACTIONABLE:
             gained += 1
         elif bc in ACTIONABLE and ac not in ACTIONABLE:
             lost += 1
-    return changed, moves, gained, lost
+    return changed, moves, gained, lost, drift
 
 
 def main():
@@ -70,6 +97,10 @@ def main():
     ap.add_argument("base"); ap.add_argument("ablation")
     ap.add_argument("--label", default="")
     ap.add_argument("--top", type=int, default=8)
+    ap.add_argument("--attribute-to", metavar="PREFIX", default=None,
+                    help="tag prefix the ablation targets (e.g. PP3, PM1, PM2). "
+                         "Separates the option's effect from ClinVar drift between "
+                         "runs made on different dates.")
     a = ap.parse_args()
 
     bp = os.path.join(a.base, "summary.tsv") if os.path.isdir(a.base) else a.base
@@ -95,10 +126,22 @@ def main():
 
     n = len(shared)
     for pas in ("full", "blind"):
-        changed, moves, gained, lost = compare(
-            {k: base[k] for k in shared}, abl, pas)
+        changed, moves, gained, lost, drift = compare(
+            {k: base[k] for k in shared}, abl, pas, a.attribute_to)
         pct = 100.0 * changed / n if n else 0.0
         print(f"\nPass-{pas.capitalize()}: {changed:,} of {n:,} calls change ({pct:.2f}%)")
+        if a.attribute_to:
+            att = changed - drift
+            print(f"  attributable to {a.attribute_to}: {att:,} ({100.0*att/n:.2f}%);"
+                  f" {drift:,} also differ in another criterion (ClinVar drift)")
+            # Tag-level count: how many variants the option retags at all, which
+            # is larger than the number whose bin moves.
+            pc = f"tags_{pas}"
+            retag = sum(1 for k in shared
+                        if partition(base[k][pc], a.attribute_to)[0]
+                        != partition(abl[k][pc], a.attribute_to)[0])
+            print(f"  {a.attribute_to} tag changes: {retag:,} variants "
+                  f"({100.0*retag/n:.2f}%)")
         print(f"  actionable status: {gained:,} gained, {lost:,} lost")
         for (frm, to), c in moves.most_common(a.top):
             print(f"    {frm:>18}  ->  {to:<18} {c:7,}")
