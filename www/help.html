@@ -675,6 +675,14 @@
   </div>
 
   <div class="group-box">
+    <div class="group-box-title">Every call is reported twice: with and without ClinVar evidence</div>
+    <p>Four criteria read a ClinVar assertion: <strong>PS1</strong> (same amino acid change already classified pathogenic), <strong>PM5</strong> (a different substitution at the same residue), and <strong>PM1</strong> when it fired from the &plusmn;15 aa ClinVar hotspot rather than from CCRS, a UniProt annotation, or MDS. Those criteria import someone else&rsquo;s conclusion, so a call that leans on them is only as good as the assertion behind it.</p>
+    <p>VarViz therefore scores every variant a second time with those criteria withheld. The TSV export carries both results in <code>Final_Classification</code> / <code>Final_Points</code> and <code>Blind_Classification</code> / <code>Blind_Points</code>, plus <code>ClinVar_Withheld</code> naming exactly which criteria were removed.</p>
+    <p>In the variant card, the second result appears under the score as <em>without ClinVar: N pts</em> &mdash; but only when withholding the evidence actually changes the call. If nothing was withheld, or the class and points are unchanged, the line is omitted rather than repeated. Hovering it lists the withheld criteria.</p>
+    <p><strong>How to read it.</strong> A variant whose two results agree rests on evidence the engine derived itself: population frequency, predictors, constraint, domain annotation, Pfam alignment. A variant that drops a class or more depends on a prior clinical assertion, which is worth checking before relying on it. This is the same dual-pass construction used for the published benchmark, where it separates the engine&rsquo;s own discrimination from agreement with the ClinVar labels the benchmark is scored against.</p>
+  </div>
+
+  <div class="group-box">
     <div class="group-box-title">PP5 and BP6 - retired, not used</div>
     <p>PP5 (&ldquo;reputable source reports pathogenic&rdquo;) and BP6 (&ldquo;reputable source reports benign&rdquo;) were <strong>retired by the ClinGen Sequence Variant Interpretation Working Group in 2018</strong>. VarViz neither scores them nor shows them as tags, so you will not see PP5 or BP6 anywhere in a variant card, the tag string, or the TSV export.</p>
     <p><strong>Why they were retired.</strong> Both criteria award points for someone else&rsquo;s conclusion rather than for evidence. A ClinVar submission is itself the product of an ACMG/AMP assessment, so counting it as an additional criterion adds the same underlying data twice &mdash; once through the criteria the original submitter applied, and again through PP5 or BP6. That is the double-counting the point system exists to prevent.</p>
