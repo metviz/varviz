@@ -67,6 +67,22 @@ options(varviz.pm2_points = .pm2_pts)
 # Restores the retired AlphaMissense+REVEL PP3->Strong upgrade for sensitivity
 # analysis. FALSE in the shipped configuration.
 options(varviz.pp3_ps3_proxy = .env_flag("VARVIZ_PP3_PROXY", "FALSE"))
+# VARVIZ_META_CONSENSUS=FALSE disables the 2-of-3 MetaSVM/MetaLR/MetaRNN branch
+# that raises PP3 to moderate, so its contribution can be measured against a run
+# that is otherwise identical.
+options(varviz.pp3_meta_consensus = .env_flag("VARVIZ_META_CONSENSUS", "TRUE"))
+# VARVIZ_AM_CALIBRATED=TRUE replaces AlphaMissense's developer threshold (0.564
+# supporting, 0.34 benign) with the Bergquist 2025 ClinGen SVI calibration
+# (supporting 0.792, moderate 0.906, strong 0.990; BP4 supporting 0.169).
+options(varviz.am_calibrated = .env_flag("VARVIZ_AM_CALIBRATED", "FALSE"))
+# VARVIZ_AM_NO_OVERRIDE=TRUE keeps the calibrated thresholds but restores the
+# old precedence: AlphaMissense speaks only when no other tool has given PP3.
+# The difference against the plain calibrated run is the override's share.
+options(varviz.am_no_override = .env_flag("VARVIZ_AM_NO_OVERRIDE", "FALSE"))
+# VARVIZ_PP3_3PT=TRUE enables the 3-point PP3 rung between Moderate and Strong,
+# reported as a calibrated interval by Pejaver 2022 and Bergquist 2025 and
+# expected to enter a future edition of the guidelines.
+options(varviz.pp3_3pt = .env_flag("VARVIZ_PP3_3PT", "FALSE"))
 
 .mds_on     <- .env_flag("VARVIZ_MDS_PM1",    "TRUE")   # MDS scored for every variant
 .mds_tiered <- .env_flag("VARVIZ_MDS_TIERED", "FALSE")  # exploratory +3/+4 tiers; off for submission
