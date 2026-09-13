@@ -27,6 +27,10 @@ source("analyses/lib/dolphin.R", local = FALSE)
 # Missense Disfavor Score (MDS) — offline PM1 Path 4. Reads a prebuilt Pfam
 # PSSM table instead of the (now unreachable) DOLPHIN API; reproduces its deltas.
 source("analyses/lib/pssm_lookup.R", local = FALSE)
+# strip_clinvar_tags(): withholds the ClinVar-derived criteria so the same tag
+# vector can be scored a second time without them. Written for the dual-pass
+# benchmark; the application now reports both passes per variant.
+source("analyses/lib/clinvar_blind.R", local = FALSE)
 # Loaded once at startup (~50 MB on disk / ~600 MB RAM). NULL if absent, in which
 # case Path 4 is simply skipped.
 MDS_TABLE <- tryCatch(pssm_table_load("data/pfam_pssm_human.rds"),
@@ -3954,6 +3958,20 @@ pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,fo
 # Evidence Strength (OddsPath) is prior-free; prior_p enters exactly ONCE, here at
 # the posterior. C = 350^(1/8) = 2.0813 (Tavtigian 2018/2020 very-strong OddsPath = 350).
 # Sanity: 0 pts -> posterior == prior; 6 pts -> 0.90 (LP cutpoint); 10 pts -> ~0.99.
+# Pass-Blind: the same tag vector scored again with the ClinVar-derived
+# criteria withheld (PS1, PM5, and PM1 when it fired from the ClinVar hotspot).
+# The difference between the two scores is the part of a call that rests on a
+# prior clinical assertion rather than on evidence the engine derived itself.
+# pm1_pathway is required: it is what tells strip_clinvar_tags() whether PM1
+# came from a circular pathway or from CCRS/UniProt/MDS.
+acmg_blind <- function(tags_vec, pm1_pathway = "") {
+  blind_tags <- strip_clinvar_tags(tags_vec, pm1_pathway)
+  res <- classify_acmg(blind_tags)
+  res$tags <- blind_tags
+  res$withheld <- setdiff(tags_vec, blind_tags)
+  res
+}
+
 acmg_posterior <- function(points, prior_p = 0.10, C = 2.0813) {
   if (length(points) != 1 || !is.finite(points)) return(NA_real_)
   prior_odds <- prior_p / (1 - prior_p)
@@ -7255,6 +7273,11 @@ shinyServer(function(input, output, session) {
         }
         acmg_res <- classify_acmg(tags_vec)
         pts      <- acmg_res$pts
+        # Same tags scored again without the ClinVar-derived criteria, so the card
+        # can show how much of this call depends on a prior clinical assertion.
+        blind_res <- tryCatch(
+          acmg_blind(tags_vec, if ("ACMG_PM1_Pathway" %in% names(r)) as.character(r$ACMG_PM1_Pathway) else ""),
+          error = function(e) NULL)
 
         # ── gnomAD AF color — uses same inheritance-aware thresholds as ACMG engine ─
         # Re-derive thresholds from current UI inputs for display consistency
@@ -7359,6 +7382,22 @@ shinyServer(function(input, output, session) {
                      'title="calibrated posterior at prior_P=0.10 (OddsPath; Tavtigian 2018)">',
                      'P(path) &#8776; ', formatC(pp, format = "f", digits = 2), '</span>')
             else ""
+          }),
+          # Pass-Blind line. Printed only when withholding ClinVar evidence
+          # changes something: if nothing was withheld, or the call is identical,
+          # a second identical line is noise. When it does change, naming the
+          # withheld criteria is what makes the delta readable, since the numeric
+          # breakdown above is unlabelled.
+          local({
+            if (is.null(blind_res) || length(blind_res$withheld) == 0) return("")
+            same <- identical(as.character(blind_res$classification),
+                              as.character(acmg_res$classification)) &&
+                    identical(as.integer(blind_res$pts), as.integer(acmg_res$pts))
+            if (same) return("")
+            paste0('<br><span style="font-size:10px;color:#fbbf24;letter-spacing:0.2px;" ',
+                   'title="', esc(paste("withheld:", paste(blind_res$withheld, collapse = ", "))),
+                   '">without ClinVar: ', blind_res$pts, ' pts &middot; ',
+                   esc(as.character(blind_res$classification)), '</span>')
           }),
           '</span>',
           '</td></tr>'
@@ -8107,6 +8146,23 @@ shinyServer(function(input, output, session) {
                 else character(0)
         tryCatch(classify_acmg(tags)$pts, error = function(e) NA_integer_)
       })
+
+      # Pass-Blind: the same call with ClinVar-derived criteria withheld. Exported
+      # alongside the full call so a reader can see how much of the verdict rests
+      # on a prior clinical assertion rather than on independent evidence.
+      .blind <- lapply(seq_len(nrow(vtbl)), function(i) {
+        tags <- if (nchar(vtbl$Final_ACMG_Tags[i]) > 0)
+                  trimws(strsplit(vtbl$Final_ACMG_Tags[i], ",")[[1]])
+                else character(0)
+        pw <- if ("ACMG_PM1_Pathway" %in% names(vtbl)) as.character(vtbl$ACMG_PM1_Pathway[i]) else ""
+        tryCatch(acmg_blind(tags, pw),
+                 error = function(e) list(classification = NA_character_, pts = NA_integer_,
+                                          tags = character(0), withheld = character(0)))
+      })
+      vtbl$Blind_ACMG_Tags     <- vapply(.blind, function(b) paste(b$tags, collapse = ", "), character(1))
+      vtbl$Blind_Classification <- vapply(.blind, function(b) as.character(b$classification)[1], character(1))
+      vtbl$Blind_Points        <- vapply(.blind, function(b) as.integer(b$pts)[1], integer(1))
+      vtbl$ClinVar_Withheld    <- vapply(.blind, function(b) paste(b$withheld, collapse = ", "), character(1))
 
       # Export all columns except internal ones
       exclude_cols <- c("dbNSFP_JSON", "SIFT_V", "PP2_HDIV_V", "PP2_HVAR_V", "LRT_V",

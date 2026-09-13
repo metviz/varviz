@@ -17,6 +17,36 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [1.2.0] - 2026-09-12
+
+### Added
+
+- **Every call is now reported twice: with and without ClinVar-derived evidence.**
+  The dual-pass construction existed only in the benchmark harness. Inside the
+  application `strip_clinvar_tags()` appeared four times, all of them in comments
+  describing what the harness does with `pm1_pathway_val`; it was never called,
+  and `analyses/lib/clinvar_blind.R` was not sourced. The application reported a
+  single classification.
+
+  `acmg_blind()` now scores the same tag vector a second time with PS1, PM5, and
+  PM1-from-the-ClinVar-hotspot withheld. The TSV export gains
+  `Blind_ACMG_Tags`, `Blind_Classification`, `Blind_Points` and
+  `ClinVar_Withheld`; the variant card prints *without ClinVar: N pts* beneath
+  the score, suppressed when nothing was withheld or the call is unchanged, with
+  the withheld criteria on hover. `analyses/run_single_variant.R` writes the same
+  columns, so a headless export can now be compared with an app export column for
+  column — it previously emitted no verdict at all.
+
+  **No call changes.** The full-evidence classification is computed exactly as
+  before; the second pass is additional output. On the *CASR* case cohort:
+  p.Thr676Arg drops Likely Pathogenic (6 pts) to VUS-High (4 pts) when its
+  hotspot-derived PM1 is withheld, p.Ser296Asn loses one point with PM5_supporting
+  withheld but keeps its class, and p.Thr111Ile is identical under both passes
+  because it has no ClinVar record.
+
+  Documented in the help page, and covered by
+  `analyses/tests/test_acmg_blind.R`.
+
 ## [1.1.14] - 2026-09-08
 
 ### Changed

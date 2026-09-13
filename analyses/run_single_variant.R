@@ -170,6 +170,24 @@ if (nzchar(p$out)) {
     "clingen_moi"           = hdr_val("ClinGen_MOI"),
     "clingen_classification"= hdr_val("ClinGen_Class"))
   meta <- meta[nzchar(meta)]
+  # Classification columns, matching what the application's TSV download writes.
+  # The runner previously emitted the evidence table without a verdict, so a
+  # headless export could not be compared with an app export column for column.
+  .tags <- lapply(seq_len(nrow(vtbl)), function(i) {
+    t <- trimws(strsplit(as.character(vtbl$ACMG_Tags[i]), ",")[[1]]); t[nzchar(t)]
+  })
+  .pw <- if ("ACMG_PM1_Pathway" %in% names(vtbl)) as.character(vtbl$ACMG_PM1_Pathway) else rep("", nrow(vtbl))
+  .full  <- lapply(.tags, function(t) tryCatch(classify_acmg(t), error = function(e) NULL))
+  .blind <- Map(function(t, w) tryCatch(acmg_blind(t, w), error = function(e) NULL), .tags, .pw)
+  pick <- function(l, f, default) vapply(l, function(x) if (is.null(x)) default else f(x), default)
+  vtbl$Final_ACMG_Tags      <- vapply(.tags, paste, character(1), collapse = ", ")
+  vtbl$Final_Classification <- pick(.full,  function(x) as.character(x$classification)[1], NA_character_)
+  vtbl$Final_Points         <- pick(.full,  function(x) as.integer(x$pts)[1], NA_integer_)
+  vtbl$Blind_ACMG_Tags      <- pick(.blind, function(x) paste(x$tags, collapse = ", "), NA_character_)
+  vtbl$Blind_Classification <- pick(.blind, function(x) as.character(x$classification)[1], NA_character_)
+  vtbl$Blind_Points         <- pick(.blind, function(x) as.integer(x$pts)[1], NA_integer_)
+  vtbl$ClinVar_Withheld     <- pick(.blind, function(x) paste(x$withheld, collapse = ", "), NA_character_)
+
   con <- file(p$out, open = "wt"); on.exit(close(con), add = TRUE)
   writeLines(c("# VarViz variant summary",
                if (length(meta)) paste0("# ", names(meta), ": ", unname(meta)), "#"), con)
