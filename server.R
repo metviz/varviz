@@ -5813,7 +5813,9 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     if (!is.na(am_sc)) {
       .am_cal    <- isTRUE(getOption("varviz.am_calibrated", FALSE))
       .am_defer  <- isTRUE(getOption("varviz.am_no_override", FALSE))
-      .am_hybrid <- isTRUE(getOption("varviz.am_hybrid", FALSE))
+      # Default since 1.2.1. Set FALSE to restore the pre-1.2.1 behaviour, in
+      # which AlphaMissense could only award supporting and only as a last resort.
+      .am_hybrid <- isTRUE(getOption("varviz.am_hybrid", TRUE))
       if (.am_hybrid) {
         if (pp3_level(acmg_tags) == 0L) {
           if (am_sc >= 0.564) add_pp3("1")
