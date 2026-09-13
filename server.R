@@ -5782,17 +5782,26 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # indeterminate interval of 0.170-0.791. Their calibrated intervals are
     # supporting 0.792-0.905, moderate 0.906-0.971, +3 0.972-0.989, strong >=0.990.
     #
-    # Adopting them moves calls in both directions, so the option exists to
-    # measure that before changing the default: variants between 0.564 and 0.791
-    # lose a point they should not have had, while variants above 0.906 gain the
-    # moderate-or-better strength the calibration supports and the developer
-    # threshold never expressed.
+    # Measured over the 54,454-variant benchmark, adopting the calibration moves
+    # 20.26% of Pass-Full calls and almost all of them upward: 8,153 variants
+    # reach PP3_strong. The rise is not the thresholds alone. The uncalibrated
+    # branch below fires only at pp3_level < 1, so AlphaMissense could never do
+    # more than break a tie no other tool had settled; the calibrated ladder
+    # tests against each rung and so can raise a level REVEL already set.
+    #
+    # varviz.am_no_override restores the old precedence — AlphaMissense speaks
+    # only when no other tool has given PP3 — while keeping the calibrated
+    # thresholds. The difference between the two is the override's contribution,
+    # which is otherwise inseparable from the calibration's.
     if (!is.na(am_sc)) {
       if (isTRUE(getOption("varviz.am_calibrated", FALSE))) {
-        if      (am_sc >= 0.990 && pp3_level(acmg_tags) < 4L) add_pp3("4")
-        else if (am_sc >= 0.972 && pp3_level(acmg_tags) < 3L) add_pp3("3")
-        else if (am_sc >= 0.906 && pp3_level(acmg_tags) < 2L) add_pp3("2")
-        else if (am_sc >= 0.792 && pp3_level(acmg_tags) < 1L) add_pp3("1")
+        .am_defer <- isTRUE(getOption("varviz.am_no_override", FALSE))
+        if (!.am_defer || pp3_level(acmg_tags) == 0L) {
+          if      (am_sc >= 0.990 && pp3_level(acmg_tags) < 4L) add_pp3("4")
+          else if (am_sc >= 0.972 && pp3_level(acmg_tags) < 3L) add_pp3("3")
+          else if (am_sc >= 0.906 && pp3_level(acmg_tags) < 2L) add_pp3("2")
+          else if (am_sc >= 0.792 && pp3_level(acmg_tags) < 1L) add_pp3("1")
+        }
       } else {
         if (am_sc >= 0.564 && pp3_level(acmg_tags) < 1L) add_pp3("1")
       }
