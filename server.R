@@ -5793,9 +5793,36 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # only when no other tool has given PP3 — while keeping the calibrated
     # thresholds. The difference between the two is the override's contribution,
     # which is otherwise inseparable from the calibration's.
+    # varviz.am_hybrid keeps only the half of the calibration that pays. Scored
+    # on Pass-Blind against ClinVar labels, which that pass withholds and so can
+    # serve as independent truth, the two halves behave very differently:
+    #
+    #   calibrated thresholds alone   14,740 retagged  ->  +2 true positives
+    #   raising a level another tool set  1,501 retagged  ->  +55 true positives
+    #
+    # The productive case is agreement, but stronger: another tool has already
+    # called the variant damaging and AlphaMissense is more confident than it.
+    # The unproductive case is disagreement, where REVEL gives nothing and
+    # AlphaMissense is confident alone; that fires on 14,740 variants, adds two
+    # verifiable true positives, and accounts for the whole +10.6-point shift in
+    # actionable share among variants ClinVar has never reviewed.
+    #
+    # So the supporting rung keeps the developer threshold and stays last-resort,
+    # exactly as the release behaves, and only the calibrated rungs at moderate
+    # and above may raise a level another tool already set.
     if (!is.na(am_sc)) {
-      if (isTRUE(getOption("varviz.am_calibrated", FALSE))) {
-        .am_defer <- isTRUE(getOption("varviz.am_no_override", FALSE))
+      .am_cal    <- isTRUE(getOption("varviz.am_calibrated", FALSE))
+      .am_defer  <- isTRUE(getOption("varviz.am_no_override", FALSE))
+      .am_hybrid <- isTRUE(getOption("varviz.am_hybrid", FALSE))
+      if (.am_hybrid) {
+        if (pp3_level(acmg_tags) == 0L) {
+          if (am_sc >= 0.564) add_pp3("1")
+        } else {
+          if      (am_sc >= 0.990 && pp3_level(acmg_tags) < 4L) add_pp3("4")
+          else if (am_sc >= 0.972 && pp3_level(acmg_tags) < 3L) add_pp3("3")
+          else if (am_sc >= 0.906 && pp3_level(acmg_tags) < 2L) add_pp3("2")
+        }
+      } else if (.am_cal) {
         if (!.am_defer || pp3_level(acmg_tags) == 0L) {
           if      (am_sc >= 0.990 && pp3_level(acmg_tags) < 4L) add_pp3("4")
           else if (am_sc >= 0.972 && pp3_level(acmg_tags) < 3L) add_pp3("3")
@@ -5867,7 +5894,10 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # Bergquist 2025 calibration puts BP4 supporting at <= 0.169 and leaves
     # 0.170-0.791 indeterminate. Tied to the same option as the PP3 side so a
     # run cannot use a calibrated pathogenic ladder with an uncalibrated benign cut.
-    .am_bp4_cut <- if (isTRUE(getOption("varviz.am_calibrated", FALSE))) 0.169 else 0.34
+    # Hybrid deliberately leaves this at the developer cut: BP4 moved only 105
+    # variants under the full calibration, so the benign side is untested here.
+    .am_bp4_cut <- if (isTRUE(getOption("varviz.am_calibrated", FALSE)) &&
+                       !isTRUE(getOption("varviz.am_hybrid", FALSE))) 0.169 else 0.34
     bp4_votes <- sum(c(
       isTRUE(!is.na(revel_sc)   && revel_sc   <= 0.290),
       isTRUE(!is.na(metasvm_pd) && grepl("^[Tt]", metasvm_pd)),

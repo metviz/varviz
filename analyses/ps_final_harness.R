@@ -79,6 +79,10 @@ options(varviz.am_calibrated = .env_flag("VARVIZ_AM_CALIBRATED", "FALSE"))
 # old precedence: AlphaMissense speaks only when no other tool has given PP3.
 # The difference against the plain calibrated run is the override's share.
 options(varviz.am_no_override = .env_flag("VARVIZ_AM_NO_OVERRIDE", "FALSE"))
+# VARVIZ_AM_HYBRID=TRUE keeps the developer threshold at the supporting rung and
+# lets only the calibrated moderate-and-above rungs raise a level another tool
+# already set - the half of the calibration that gains true positives.
+options(varviz.am_hybrid = .env_flag("VARVIZ_AM_HYBRID", "FALSE"))
 # VARVIZ_PP3_3PT=TRUE enables the 3-point PP3 rung between Moderate and Strong,
 # reported as a calibrated interval by Pejaver 2022 and Bergquist 2025 and
 # expected to enter a future edition of the guidelines.
