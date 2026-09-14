@@ -212,6 +212,9 @@ UNIPROT_OVERRIDE_DIR <- getOption("varviz.uniprot_override_dir",
                                   "analyses/cache/uniprot")
 ENSEMBL_OVERRIDE_DIR <- getOption("varviz.ensembl_override_dir",
                                   "analyses/cache/ensembl")
+CLINVAR_OVERRIDE_DIR <- getOption("varviz.clinvar_override_dir",
+                                  Sys.getenv("VARVIZ_CLINVAR_DIR",
+                                             "analyses/cache/clinvar"))
 
 # --- Orphadata prevalence lookup (OMIM -> ORPHAcode -> prevalence) -----------
 # Enriches the UniProt "Involvement in Disease" table. Best-effort only: any
@@ -1039,6 +1042,24 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
    ck <- paste0(gene_name, ":", clinsig)
    cached <- cache_get("clinvar", ck)
    if (!is.null(cached)) { message("[ClinVar] Cache hit for: ", ck); return(cached) }
+
+   # A primed copy stands in for the API. eutils truncates under concurrent load
+   # rather than erroring: a gene comes back with a fraction of its records and
+   # the run continues, so PM5 and PS1 thin out and the ClinVar density feeding
+   # the PM1 hotspot pathway collapses with the row count intact. Six concurrent
+   # runs produced five different record counts for PTEN. Priming once and
+   # reading from disk also pins every run to one ClinVar snapshot, which is
+   # what makes two runs comparable at all.
+   ov <- file.path(CLINVAR_OVERRIDE_DIR, paste0(gene_name, "_", clinsig, ".rds"))
+   if (file.exists(ov)) {
+     got <- tryCatch(readRDS(ov), error = function(e) NULL)
+     if (!is.null(got) && nrow(got) > 0) {
+       message("[ClinVar] Using primed table: ", ov, " (", nrow(got), " rows)")
+       cache_set("clinvar", ck, got)
+       return(got)
+     }
+     message("[ClinVar] Primed table unreadable or empty, falling back to API: ", ov)
+   }
    tryCatch({
      message("[ClinVar] Fetching variants for gene: ", gene_name, " (", clinsig, ")")
 
