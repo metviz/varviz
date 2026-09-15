@@ -32,11 +32,16 @@ def tags(field):
     return [t.strip() for t in re.split(r",\s*", field or "") if t.strip()]
 
 
-def partition(field, prefix):
-    """(tags matching prefix, all other tags) — the ablated criterion vs the rest."""
+def partition(field, prefixes):
+    """(tags matching any prefix, all other tags) — the ablated criteria vs the rest.
+
+    Takes a tuple because one option can move more than one criterion: the
+    AlphaMissense calibration shifts the PP3 ladder and the BP4 cut together,
+    and excluding only one of them would score the other as drift.
+    """
     ts = tags(field)
-    return (sorted(t for t in ts if t.startswith(prefix)),
-            sorted(t for t in ts if not t.startswith(prefix)))
+    return (sorted(t for t in ts if t.startswith(prefixes)),
+            sorted(t for t in ts if not t.startswith(prefixes)))
 
 
 def load(path):
@@ -97,8 +102,8 @@ def main():
     ap.add_argument("base"); ap.add_argument("ablation")
     ap.add_argument("--label", default="")
     ap.add_argument("--top", type=int, default=8)
-    ap.add_argument("--attribute-to", metavar="PREFIX", default=None,
-                    help="tag prefix the ablation targets (e.g. PP3, PM1, PM2). "
+    ap.add_argument("--attribute-to", metavar="PREFIX[,PREFIX...]", default=None,
+                    help="tag prefixes the ablation targets (e.g. PP3, PM1, PP3,BP4). "
                          "Separates the option's effect from ClinVar drift between "
                          "runs made on different dates.")
     a = ap.parse_args()
@@ -107,6 +112,7 @@ def main():
     xp = os.path.join(a.ablation, "summary.tsv") if os.path.isdir(a.ablation) else a.ablation
     base, bd = load(bp)
     abl,  xd = load(xp)
+    prefixes = tuple(p.strip() for p in a.attribute_to.split(",")) if a.attribute_to else None
 
     shared = base.keys() & abl.keys()
     only_b = base.keys() - abl.keys()
@@ -127,20 +133,20 @@ def main():
     n = len(shared)
     for pas in ("full", "blind"):
         changed, moves, gained, lost, drift = compare(
-            {k: base[k] for k in shared}, abl, pas, a.attribute_to)
+            {k: base[k] for k in shared}, abl, pas, prefixes)
         pct = 100.0 * changed / n if n else 0.0
         print(f"\nPass-{pas.capitalize()}: {changed:,} of {n:,} calls change ({pct:.2f}%)")
         if a.attribute_to:
             att = changed - drift
-            print(f"  attributable to {a.attribute_to}: {att:,} ({100.0*att/n:.2f}%);"
+            print(f"  attributable to {'+'.join(prefixes)}: {att:,} ({100.0*att/n:.2f}%);"
                   f" {drift:,} also differ in another criterion (ClinVar drift)")
             # Tag-level count: how many variants the option retags at all, which
             # is larger than the number whose bin moves.
             pc = f"tags_{pas}"
             retag = sum(1 for k in shared
-                        if partition(base[k][pc], a.attribute_to)[0]
-                        != partition(abl[k][pc], a.attribute_to)[0])
-            print(f"  {a.attribute_to} tag changes: {retag:,} variants "
+                        if partition(base[k][pc], prefixes)[0]
+                        != partition(abl[k][pc], prefixes)[0])
+            print(f"  {'+'.join(prefixes)} tag changes: {retag:,} variants "
                   f"({100.0*retag/n:.2f}%)")
         print(f"  actionable status: {gained:,} gained, {lost:,} lost")
         for (frm, to), c in moves.most_common(a.top):

@@ -21,9 +21,16 @@ suppressMessages(source("server.R"))
 DIR <- CLINVAR_OVERRIDE_DIR
 dir.create(DIR, recursive = TRUE, showWarnings = FALSE)
 
-genes <- c("BAP1","BRCA1","CASR","DDR2","GCK","KCNH2","KCNQ1","KRAS",
-           "LDLR","NUDT15","PTEN","SLC13A5","TP53","TSHR")
-ATTEMPTS <- 3
+# VARVIZ_PRIME_GENES overrides the default benchmark list, so the RASopathy and
+# external-163 cohorts can be primed with the same guarantees. Already-primed
+# genes are skipped, so overlapping lists cost nothing.
+.env_genes <- Sys.getenv("VARVIZ_PRIME_GENES", "")
+genes <- if (nzchar(.env_genes)) {
+  trimws(strsplit(.env_genes, "[,[:space:]]+")[[1]])
+} else c("BAP1","BRCA1","CASR","DDR2","GCK","KCNH2","KCNQ1","KRAS",
+         "LDLR","NUDT15","PTEN","SLC13A5","TP53","TSHR")
+genes <- genes[nzchar(genes)]
+ATTEMPTS <- as.integer(Sys.getenv("VARVIZ_PRIME_ATTEMPTS", "3"))
 
 disagreed <- character(0)
 for (g in genes) for (sig in c("path", "benign")) {
