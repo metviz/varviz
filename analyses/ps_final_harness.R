@@ -83,6 +83,9 @@ options(varviz.am_no_override = .env_flag("VARVIZ_AM_NO_OVERRIDE", "FALSE"))
 # lets only the calibrated moderate-and-above rungs raise a level another tool
 # already set - the half of the calibration that gains true positives.
 options(varviz.am_hybrid = .env_flag("VARVIZ_AM_HYBRID", "TRUE"))
+# VARVIZ_AM_CAP_PATH=FALSE lets an AlphaMissense raise carry a variant into
+# Pathogenic, which is the 1.2.1 behaviour the cap replaces.
+options(varviz.am_cap_pathogenic = .env_flag("VARVIZ_AM_CAP_PATH", "TRUE"))
 # VARVIZ_PP3_3PT=TRUE enables the 3-point PP3 rung between Moderate and Strong,
 # reported as a calibrated interval by Pejaver 2022 and Bergquist 2025 and
 # expected to enter a future edition of the guidelines.

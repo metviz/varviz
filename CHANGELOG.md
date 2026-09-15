@@ -17,6 +17,34 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [1.2.2] - 2026-09-15
+
+**This release moves calls.** AlphaMissense corroboration may no longer carry a
+variant across the Pathogenic threshold on its own.
+
+### Changed
+
+- `varviz.am_cap_pathogenic` defaults to TRUE. AlphaMissense may still raise a
+  PP3 level another tool assigned, as in 1.2.1, but where that raise is the
+  evidence taking the variant from Likely Pathogenic to Pathogenic, the level
+  reverts to what the other tool assigned. A raise that leaves the variant in
+  the same bin, or moves it between lower bins, is unaffected.
+
+  The reason is population-genetic rather than curatorial. Under 1.2.1 the
+  variants the raise promoted into Pathogenic under Pass-Blind are depleted of
+  gnomAD singletons rather than enriched, with CAPS -0.135 against +0.269 for
+  variants Pathogenic under both releases, and the bin ordering that held under
+  1.2.0 broke: Spearman rho between bin rank and CAPS fell from 0.955 to 0.847,
+  with the Pathogenic bin scoring below Likely Pathogenic. Sensitivity against
+  curated ClinVar labels rose over the same change, so the raise is kept where
+  it helps and withheld at the boundary where an independent axis disputes it.
+
+  Only 59 of the promoted variants appear in gnomAD at all, so this rests on a
+  minority of them; the remainder are absent from gnomAD, which CAPS cannot
+  evaluate.
+
+  Set `options(varviz.am_cap_pathogenic = FALSE)` to restore 1.2.1 behaviour.
+
 ## [1.2.1] - 2026-09-13
 
 **This release moves calls.** AlphaMissense may now raise a PP3 level that
