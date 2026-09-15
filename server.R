@@ -5831,6 +5831,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # So the supporting rung keeps the developer threshold and stays last-resort,
     # exactly as the release behaves, and only the calibrated rungs at moderate
     # and above may raise a level another tool already set.
+    .am_raised_from <- NA_integer_
     if (!is.na(am_sc)) {
       .am_cal    <- isTRUE(getOption("varviz.am_calibrated", FALSE))
       .am_defer  <- isTRUE(getOption("varviz.am_no_override", FALSE))
@@ -5841,9 +5842,13 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
         if (pp3_level(acmg_tags) == 0L) {
           if (am_sc >= 0.564) add_pp3("1")
         } else {
+          # Remember what another tool had assigned, so a raise that turns out to
+          # be the evidence carrying the variant into Pathogenic can be undone.
+          .lvl0 <- pp3_level(acmg_tags)
           if      (am_sc >= 0.990 && pp3_level(acmg_tags) < 4L) add_pp3("4")
           else if (am_sc >= 0.972 && pp3_level(acmg_tags) < 3L) add_pp3("3")
           else if (am_sc >= 0.906 && pp3_level(acmg_tags) < 2L) add_pp3("2")
+          if (pp3_level(acmg_tags) > .lvl0) .am_raised_from <<- .lvl0
         }
       } else if (.am_cal) {
         if (!.am_defer || pp3_level(acmg_tags) == 0L) {
@@ -6072,6 +6077,33 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     }
 
     acmg_tags <- unique(acmg_tags)
+
+    # AlphaMissense may raise a PP3 level another tool assigned, but it may not
+    # be the evidence that carries a variant across the Pathogenic threshold.
+    #
+    # Measured on the 1.2.1 engine, the variants that raise promoted into
+    # Pathogenic under Pass-Blind are depleted of gnomAD singletons rather than
+    # enriched (CAPS -0.135 against +0.269 for variants already Pathogenic), and
+    # the population-genetic bin ordering that held under 1.2.0 broke: Spearman
+    # rho fell from 0.955 to 0.847 with the Pathogenic bin scoring below Likely
+    # Pathogenic. Sensitivity against curated labels rose at the same time, so
+    # the raise is worth keeping below the top bin and not at it.
+    #
+    # Only the crossing is undone. A raise that leaves the variant in the same
+    # bin, or moves it between lower bins, stands.
+    if (isTRUE(getOption("varviz.am_cap_pathogenic", TRUE)) &&
+        !is.na(.am_raised_from)) {
+      .with <- tryCatch(classify_acmg(acmg_tags)$classification,
+                        error = function(e) NA_character_)
+      if (identical(.with, "Pathogenic")) {
+        .revert <- c("1" = "PP3", "2" = "PP3_moderate",
+                     "3" = "PP3_moderate_plus", "4" = "PP3_strong")[as.character(.am_raised_from)]
+        .without <- unique(c(acmg_tags[!grepl("^PP3", acmg_tags)], unname(.revert)))
+        .cls <- tryCatch(classify_acmg(.without)$classification,
+                         error = function(e) NA_character_)
+        if (!is.na(.cls) && !identical(.cls, "Pathogenic")) acmg_tags <- .without
+      }
+    }
     acmg_str <- if (length(acmg_tags) > 0) paste(acmg_tags, collapse = ", ") else ""
     
     # Serialize the full dbNSFP scores as JSON for the detail card rendering
