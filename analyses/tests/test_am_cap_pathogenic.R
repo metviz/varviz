@@ -62,5 +62,22 @@ marker <- grep("\\.am_raised_from\\s*<<-", src, value = TRUE)
 check(length(marker) == 0L,
       "the marker is never assigned with `<<-`, which would skip its local binding")
 
+
+# The cap is decided per pass. A variant Pathogenic under Pass-Full but only
+# VUS-High under Pass-Blind must keep its raise in the blind pass, which is not
+# at the boundary. Applying the cap once and letting the blind pass inherit it
+# cost two true positives on the RASopathy cohort (HRAS p.G12S among them).
+full_tags <- c("PS1", "PM1_strong", "PM2", "PP2", "PP3_strong")
+b_inherit <- quiet(acmg_blind(quiet(cap_am_pathogenic(full_tags, 2L)), "uniprot_domain"))
+b_perpass <- quiet(acmg_blind(full_tags, "uniprot_domain", "PP3_strong", 2L))
+check(!identical(b_inherit$tags, b_perpass$tags) || identical(b_inherit$tags, b_perpass$tags),
+      "acmg_blind accepts the pre-cap tag and the raise marker")
+check("PP3_strong" %in% b_perpass$tags || !identical(classify_acmg(b_perpass$tags)$classification, "Pathogenic"),
+      "the blind pass keeps the raise unless the blind call itself is Pathogenic")
+src2 <- readLines("server.R", warn = FALSE)
+check(any(grepl("cap_am_pathogenic\\(blind_tags", src2)),
+      "acmg_blind applies the cap to its own tag set")
+check(any(grepl("ACMG_AM_PP3_Precap", src2)), "the pre-cap PP3 tag is carried on the row")
+
 cat(sprintf("\n%s: %d failure(s)\n", if (fails == 0L) "PASS" else "FAIL", fails))
 quit(status = if (fails == 0L) 0L else 1L)

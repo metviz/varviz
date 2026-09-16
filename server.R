@@ -3985,8 +3985,15 @@ pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,fo
 # prior clinical assertion rather than on evidence the engine derived itself.
 # pm1_pathway is required: it is what tells strip_clinvar_tags() whether PM1
 # came from a circular pathway or from CCRS/UniProt/MDS.
-acmg_blind <- function(tags_vec, pm1_pathway = "") {
+acmg_blind <- function(tags_vec, pm1_pathway = "", am_pp3_precap = "", am_raised_from = NA_integer_) {
+  # Start from the evidence before the full pass's cap, so this pass applies the
+  # Pathogenic-boundary rule to its own classification rather than inheriting a
+  # reversion decided against a different one.
+  if (nzchar(am_pp3_precap)) {
+    tags_vec <- unique(c(tags_vec[!grepl("^PP3", tags_vec)], am_pp3_precap))
+  }
   blind_tags <- strip_clinvar_tags(tags_vec, pm1_pathway)
+  blind_tags <- cap_am_pathogenic(blind_tags, am_raised_from)
   res <- classify_acmg(blind_tags)
   res$tags <- blind_tags
   res$withheld <- setdiff(tags_vec, blind_tags)
@@ -6115,7 +6122,21 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
 
     acmg_tags <- unique(acmg_tags)
 
+    # The cap is decided per pass. Applying it once here and letting the blind
+    # pass inherit the result withholds the raise from a pass that was never at
+    # the Pathogenic boundary: HRAS p.G12S is Pathogenic under Pass-Full and
+    # VUS-High under Pass-Blind, and a single application dropped the blind call
+    # to VUS-Mid for a crossing that only happened in the other pass. Keep the
+    # pre-cap PP3 tag so acmg_blind() can start from the unreverted evidence.
+    .am_pp3_precap <- {
+      p <- acmg_tags[grepl("^PP3", acmg_tags)]
+      if (length(p)) p[1] else ""
+    }
     acmg_tags <- cap_am_pathogenic(acmg_tags, .am_raised_from)
+    .am_pp3_precap <- if (!is.na(.am_raised_from) &&
+                          !identical(.am_pp3_precap,
+                                     { p <- acmg_tags[grepl("^PP3", acmg_tags)]
+                                       if (length(p)) p[1] else "" })) .am_pp3_precap else ""
     acmg_str <- if (length(acmg_tags) > 0) paste(acmg_tags, collapse = ", ") else ""
     
     # Serialize the full dbNSFP scores as JSON for the detail card rendering
@@ -6233,6 +6254,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       # ── ACMG + Comment + JSON ──
       ACMG_Tags = acmg_str,
       ACMG_PM1_Pathway = pm1_pathway_val,
+      ACMG_AM_PP3_Precap = .am_pp3_precap,
+      ACMG_AM_Raised_From = if (is.na(.am_raised_from)) "" else as.character(.am_raised_from),
       PM1_Derivation   = pm1_deriv_val,
       MDS_Score = if (exists("mds_val") && !is.na(mds_val)) round(mds_val, 2) else NA_real_,
       Comment = acmg_comment,
@@ -7438,7 +7461,11 @@ shinyServer(function(input, output, session) {
         # Same tags scored again without the ClinVar-derived criteria, so the card
         # can show how much of this call depends on a prior clinical assertion.
         blind_res <- tryCatch(
-          acmg_blind(tags_vec, if ("ACMG_PM1_Pathway" %in% names(r)) as.character(r$ACMG_PM1_Pathway) else ""),
+          acmg_blind(tags_vec,
+                     if ("ACMG_PM1_Pathway" %in% names(r)) as.character(r$ACMG_PM1_Pathway) else "",
+                     if ("ACMG_AM_PP3_Precap" %in% names(r)) as.character(r$ACMG_AM_PP3_Precap) else "",
+                     if ("ACMG_AM_Raised_From" %in% names(r) && nzchar(as.character(r$ACMG_AM_Raised_From)))
+                       as.integer(r$ACMG_AM_Raised_From) else NA_integer_),
           error = function(e) NULL)
 
         # ── gnomAD AF color — uses same inheritance-aware thresholds as ACMG engine ─
@@ -8317,7 +8344,10 @@ shinyServer(function(input, output, session) {
                   trimws(strsplit(vtbl$Final_ACMG_Tags[i], ",")[[1]])
                 else character(0)
         pw <- if ("ACMG_PM1_Pathway" %in% names(vtbl)) as.character(vtbl$ACMG_PM1_Pathway[i]) else ""
-        tryCatch(acmg_blind(tags, pw),
+        pc <- if ("ACMG_AM_PP3_Precap" %in% names(vtbl)) as.character(vtbl$ACMG_AM_PP3_Precap[i]) else ""
+        rf <- if ("ACMG_AM_Raised_From" %in% names(vtbl) && nzchar(as.character(vtbl$ACMG_AM_Raised_From[i])))
+                as.integer(vtbl$ACMG_AM_Raised_From[i]) else NA_integer_
+        tryCatch(acmg_blind(tags, pw, pc, rf),
                  error = function(e) list(classification = NA_character_, pts = NA_integer_,
                                           tags = character(0), withheld = character(0)))
       })
