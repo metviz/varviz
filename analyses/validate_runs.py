@@ -43,6 +43,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--baseline", required=True)
     ap.add_argument("runs", nargs="+")
+    # NOTE on coupling: since 1.2.2 the Pathogenic-boundary cap is decided on a
+    # variant's total points, so any ablation that changes points can flip a cap
+    # decision and with it a PP3 tag. That is a real downstream effect, not
+    # contamination, and PP3 must be added to --ignore for such ablations. On the
+    # RASopathy cohort, moving PM2 from 1 to 2 points changed 11 PP3 tags this
+    # way: at 11 points reverting the raise drops the variant below Pathogenic so
+    # the cap fires, at 12 it does not and the cap correctly declines.
     ap.add_argument("--tolerance", type=float, default=2.0,
                     help="percent of a gene's variants an untargeted criterion may move (default 2)")
     ap.add_argument("--ignore", default="",

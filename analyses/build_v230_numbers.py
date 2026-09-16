@@ -10,8 +10,8 @@ run directory it came from and nothing is written by hand.
 """
 import csv, collections, math, os, re, subprocess, sys
 
-OUT = "analyses/humu/build_v230"
-BASE = "analyses/ps_final_v230"
+OUT  = os.environ.get("VZ_OUT", "analyses/humu/build_v231")
+BASE = os.environ.get("VZ_BASE", "analyses/ps_final_v231")
 OLD  = "analyses/ps_final_v221"
 ORDER = ["Pathogenic","Likely Pathogenic","VUS-High","VUS-Mid","VUS-Low","Likely Benign","Benign"]
 ACT = {"Pathogenic","Likely Pathogenic"}
@@ -102,11 +102,11 @@ def main():
     rec("S6", "moving toward pathogenic", f"{toward}", BASE)
 
     # ---- criterion-weight ablations ------------------------------------------
-    for label, run, pref in (("PM2 at Moderate","ps_pm2mod_v230","PM2"),
-                             ("MDS PM1 pathway","ps_nomds_v230","PM1"),
-                             ("PP3->Strong proxy","ps_pp3proxy_v230","PP3"),
-                             ("meta-consensus branch","ps_nometa_v230","PP3"),
-                             ("PP3 3-point rung","ps_pp33pt_v230","PP3")):
+    for label, run, pref in (("PM2 at Moderate","ps_pm2mod_v231","PM2"),
+                             ("MDS PM1 pathway","ps_nomds_v231","PM1"),
+                             ("PP3->Strong proxy","ps_pp3proxy_v231","PP3"),
+                             ("meta-consensus branch","ps_nometa_v231","PP3"),
+                             ("PP3 3-point rung","ps_pp33pt_v231","PP3")):
         a = load(f"analyses/{run}")
         for p in ("full", "blind"):
             col = f"varviz_classification_{p}"; tc = f"tags_{p}"
@@ -120,7 +120,7 @@ def main():
                 f"{att:,} ({100*att/n:.2f}%)", f"analyses/{run}")
 
     # ---- RASopathy PM2 --------------------------------------------------------
-    r1, r2 = load("analyses/ras_vcep_pm2_1_v230"), load("analyses/ras_vcep_pm2_2_v230")
+    r1, r2 = load("analyses/ras_vcep_pm2_1_v231"), load("analyses/ras_vcep_pm2_2_v231")
     lab = universe_labels("analyses/derived/variant_universe_rasopathy.tsv")
     for p in ("full", "blind"):
         col = f"varviz_classification_{p}"
@@ -128,7 +128,7 @@ def main():
         lost = sum(1 for k in r2 if r2[k][col] in ACT and r1[k][col] not in ACT)
         rec("3.4", f"RASopathy PM2 downgrade Pass-{p.capitalize()}",
             f"{lost} of {den} ({100*lost/den:.1f}%)" if den else "n/a",
-            "analyses/ras_vcep_pm2_{1,2}_v230")
+            "analyses/ras_vcep_pm2_{1,2}_v231")
     # concordance of the shipped engine on the curated cohort
     for p in ("full", "blind"):
         col = f"varviz_classification_{p}"
@@ -137,20 +137,20 @@ def main():
         fp = sum(1 for k, v in lab.items() if v == "Benign" and k in r1 and r1[k][col] in ACT)
         nb = sum(1 for k, v in lab.items() if v == "Benign" and k in r1)
         rec("3.5", f"RASopathy sensitivity Pass-{p.capitalize()}",
-            f"{tp}/{np_} ({100*tp/np_:.1f}%)" if np_ else "n/a", "analyses/ras_vcep_pm2_1_v230")
+            f"{tp}/{np_} ({100*tp/np_:.1f}%)" if np_ else "n/a", "analyses/ras_vcep_pm2_1_v231")
         rec("3.5", f"RASopathy benign called actionable Pass-{p.capitalize()}",
-            f"{fp}/{nb} ({100*fp/nb:.1f}%)" if nb else "n/a", "analyses/ras_vcep_pm2_1_v230")
+            f"{fp}/{nb} ({100*fp/nb:.1f}%)" if nb else "n/a", "analyses/ras_vcep_pm2_1_v231")
 
     # ---- external 163 ---------------------------------------------------------
-    e = load("analyses/external163_v230")
+    e = load("analyses/external163_v231")
     for p in ("full", "blind"):
         col = f"varviz_classification_{p}"
         act = sum(1 for r in e.values() if r[col] in ACT)
         vus = sum(1 for r in e.values() if r[col].startswith("VUS"))
         rec("3.5", f"external163 actionable Pass-{p.capitalize()}",
-            f"{act}/{len(e)} ({100*act/len(e):.1f}%)", "analyses/external163_v230")
+            f"{act}/{len(e)} ({100*act/len(e):.1f}%)", "analyses/external163_v231")
         rec("3.5", f"external163 VUS Pass-{p.capitalize()}",
-            f"{vus}/{len(e)} ({100*vus/len(e):.1f}%)", "analyses/external163_v230")
+            f"{vus}/{len(e)} ({100*vus/len(e):.1f}%)", "analyses/external163_v231")
 
     # ---- discrimination vs ClinVar labels ------------------------------------
     cv = {}
@@ -165,7 +165,7 @@ def main():
         if k not in cv or st > cv[k][1]: cv[k] = (l, st)
     for ms in (1, 2):
         sel = {k: v for k, v in cv.items() if k in base and v[1] >= ms}
-        for nm, run, src in (("1.2.0", old, OLD), ("1.2.1", base, BASE)):
+        for nm, run, src in (("1.2.0", old, OLD), ("1.2.2", base, BASE)):
             tp = fp = tn = fn = 0
             for k, (l, _) in sel.items():
                 pred = run[k]["varviz_classification_blind"] in ACT
