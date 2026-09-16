@@ -4036,6 +4036,40 @@ ACMG_TAG_PTS <- c(
   BP1=-1, BP2=-1, BP3=-1, BP4=-1, BP5=-1, BP7=-1
 )
 
+# AlphaMissense may raise a PP3 level another tool assigned, but it may not be
+# the evidence that carries a variant across the Pathogenic threshold.
+#
+# Measured on the 1.2.1 engine, the variants that raise promoted into Pathogenic
+# under Pass-Blind are depleted of gnomAD singletons rather than enriched (CAPS
+# -0.135 against +0.269 for variants already Pathogenic), and the bin ordering
+# that held under 1.2.0 broke: Spearman rho between bin rank and CAPS fell from
+# 0.955 to 0.847, with Pathogenic scoring below Likely Pathogenic. Sensitivity
+# against curated labels rose over the same change, so the raise is kept below
+# the top bin and withheld at it.
+#
+# Only the crossing is undone. A raise that leaves the variant in the same bin,
+# or moves it between lower bins, stands.
+#
+# This is a named function rather than an inline block so the test suite can
+# call the shipped code. The first version of this logic lived inline, and its
+# test re-expressed the rule instead of invoking it: the test passed while a
+# `<<-` that should have been `<-` left the marker NA and the rule dead.
+cap_am_pathogenic <- function(tags, raised_from,
+                              enabled = isTRUE(getOption("varviz.am_cap_pathogenic", TRUE))) {
+  if (!enabled || is.na(raised_from)) return(tags)
+  with_raise <- tryCatch(classify_acmg(tags)$classification, error = function(e) NA_character_)
+  if (!identical(with_raise, "Pathogenic")) return(tags)
+  revert <- unname(c("1" = "PP3", "2" = "PP3_moderate",
+                     "3" = "PP3_moderate_plus", "4" = "PP3_strong")[as.character(raised_from)])
+  if (is.na(revert)) return(tags)
+  without <- unique(c(tags[!grepl("^PP3", tags)], revert))
+  cls <- tryCatch(classify_acmg(without)$classification, error = function(e) NA_character_)
+  if (is.na(cls) || identical(cls, "Pathogenic")) return(tags)
+  message("[PP3 cap] AlphaMissense raise withheld at the Pathogenic boundary (",
+          with_raise, " -> ", cls, ")")
+  without
+}
+
 classify_acmg <- function(tags_vec) {
   tag_pts_map <- ACMG_TAG_PTS
   # Sensitivity knob for the PM2 weight, default the ClinGen SVI value of 1
@@ -5848,7 +5882,10 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           if      (am_sc >= 0.990 && pp3_level(acmg_tags) < 4L) add_pp3("4")
           else if (am_sc >= 0.972 && pp3_level(acmg_tags) < 3L) add_pp3("3")
           else if (am_sc >= 0.906 && pp3_level(acmg_tags) < 2L) add_pp3("2")
-          if (pp3_level(acmg_tags) > .lvl0) .am_raised_from <<- .lvl0
+          # `<-`, not `<<-`: the marker is declared in this same function, and
+          # `<<-` would skip that binding and write to the enclosing environment,
+          # leaving the local NA and the cap below permanently inert.
+          if (pp3_level(acmg_tags) > .lvl0) .am_raised_from <- .lvl0
         }
       } else if (.am_cal) {
         if (!.am_defer || pp3_level(acmg_tags) == 0L) {
@@ -6078,32 +6115,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
 
     acmg_tags <- unique(acmg_tags)
 
-    # AlphaMissense may raise a PP3 level another tool assigned, but it may not
-    # be the evidence that carries a variant across the Pathogenic threshold.
-    #
-    # Measured on the 1.2.1 engine, the variants that raise promoted into
-    # Pathogenic under Pass-Blind are depleted of gnomAD singletons rather than
-    # enriched (CAPS -0.135 against +0.269 for variants already Pathogenic), and
-    # the population-genetic bin ordering that held under 1.2.0 broke: Spearman
-    # rho fell from 0.955 to 0.847 with the Pathogenic bin scoring below Likely
-    # Pathogenic. Sensitivity against curated labels rose at the same time, so
-    # the raise is worth keeping below the top bin and not at it.
-    #
-    # Only the crossing is undone. A raise that leaves the variant in the same
-    # bin, or moves it between lower bins, stands.
-    if (isTRUE(getOption("varviz.am_cap_pathogenic", TRUE)) &&
-        !is.na(.am_raised_from)) {
-      .with <- tryCatch(classify_acmg(acmg_tags)$classification,
-                        error = function(e) NA_character_)
-      if (identical(.with, "Pathogenic")) {
-        .revert <- c("1" = "PP3", "2" = "PP3_moderate",
-                     "3" = "PP3_moderate_plus", "4" = "PP3_strong")[as.character(.am_raised_from)]
-        .without <- unique(c(acmg_tags[!grepl("^PP3", acmg_tags)], unname(.revert)))
-        .cls <- tryCatch(classify_acmg(.without)$classification,
-                         error = function(e) NA_character_)
-        if (!is.na(.cls) && !identical(.cls, "Pathogenic")) acmg_tags <- .without
-      }
-    }
+    acmg_tags <- cap_am_pathogenic(acmg_tags, .am_raised_from)
     acmg_str <- if (length(acmg_tags) > 0) paste(acmg_tags, collapse = ", ") else ""
     
     # Serialize the full dbNSFP scores as JSON for the detail card rendering
