@@ -18,6 +18,10 @@ source("analyses/lib/clinvar_blind.R")
 eval(parse(text = grab("^ACMG_TAG_PTS <- c\\(", "^\\)")))
 eval(parse(text = grab("^PP1_PP4_CAP <- ", "^PP1_PP4_CAP <- ")))
 eval(parse(text = grab("^classify_acmg <- function\\(tags_vec\\) \\{", "^\\}")))
+# acmg_blind() applies the Pathogenic-boundary cap to its own tag set, so the
+# cap has to come across too. This extraction is by regex rather than by
+# sourcing server.R, so a new dependency is invisible until it is named here.
+eval(parse(text = grab("^cap_am_pathogenic <- function", "^\\}")))
 eval(parse(text = grab("^acmg_blind <- function\\(tags_vec", "^\\}")))
 
 fails <- 0L
