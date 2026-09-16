@@ -79,5 +79,18 @@ check(any(grepl("cap_am_pathogenic\\(blind_tags", src2)),
       "acmg_blind applies the cap to its own tag set")
 check(any(grepl("ACMG_AM_PP3_Precap", src2)), "the pre-cap PP3 tag is carried on the row")
 
+
+# Both harnesses derive the blind pass themselves with strip_clinvar_tags()
+# rather than calling acmg_blind(), so fixing acmg_blind() alone left every
+# harness run on the old behaviour. Assert each one applies the cap to its own
+# blind tag set; nothing about the function's behaviour reveals this.
+for (h in c("analyses/ps_final_harness.R", "analyses/05_classify_harness.R")) {
+  hs <- readLines(h, warn = FALSE)
+  check(any(grepl("cap_am_pathogenic\\(tags_blind", hs)),
+        sprintf("%s applies the cap to its blind tags", basename(h)))
+  check(any(grepl("ACMG_AM_PP3_Precap", hs)),
+        sprintf("%s reads the pre-cap PP3 tag", basename(h)))
+}
+
 cat(sprintf("\n%s: %d failure(s)\n", if (fails == 0L) "PASS" else "FAIL", fails))
 quit(status = if (fails == 0L) 0L else 1L)

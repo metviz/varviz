@@ -446,12 +446,24 @@ classify_gene <- function(gene_name) {
   # Vectorized dual-pass over the gene's rows
   tags_full_str_vec <- as.character(vtbl$ACMG_Tags)
   pm1_path_vec      <- as.character(vtbl$ACMG_PM1_Pathway)
+  # The Pathogenic-boundary cap is decided per pass. ACMG_Tags already carries
+  # the full pass's decision, so the blind pass must start from the evidence
+  # before that reversion and apply the rule to its own classification;
+  # inheriting it withholds a raise from a pass that was never at the boundary.
+  precap_vec <- if ("ACMG_AM_PP3_Precap" %in% names(vtbl))
+                  as.character(vtbl$ACMG_AM_PP3_Precap) else rep("", nrow(vtbl))
+  raised_vec <- if ("ACMG_AM_Raised_From" %in% names(vtbl))
+                  as.character(vtbl$ACMG_AM_Raised_From) else rep("", nrow(vtbl))
 
   parse_tags <- function(s) if (nchar(s) > 0) trimws(strsplit(s, ",")[[1]]) else character(0)
 
   out_rows <- map_dfr(seq_len(nrow(vtbl)), function(i) {
     tags_full  <- parse_tags(tags_full_str_vec[i])
-    tags_blind <- strip_clinvar_tags(tags_full, pm1_pathway = pm1_path_vec[i])
+    pre  <- precap_vec[i]
+    rf   <- if (nzchar(raised_vec[i])) as.integer(raised_vec[i]) else NA_integer_
+    base_tags <- if (nzchar(pre)) unique(c(tags_full[!grepl("^PP3", tags_full)], pre)) else tags_full
+    tags_blind <- strip_clinvar_tags(base_tags, pm1_pathway = pm1_path_vec[i])
+    tags_blind <- cap_am_pathogenic(tags_blind, rf)
     res_full   <- tryCatch(classify_acmg(tags_full),  error = function(e) list(classification = NA_character_, pts = NA_real_, rule = NA_character_))
     res_blind  <- tryCatch(classify_acmg(tags_blind), error = function(e) list(classification = NA_character_, pts = NA_real_, rule = NA_character_))
     tibble(
