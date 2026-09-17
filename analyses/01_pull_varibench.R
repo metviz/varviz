@@ -20,6 +20,9 @@
 ##   analyses/manifests/<timestamp>__varibench_*.json
 
 suppressMessages({
+# These services ask that automated clients identify themselves with a contact
+# address. Set VARVIZ_CONTACT_EMAIL before running; the placeholder fallback keeps
+# the script working without putting a personal address in version control.
   library(httr2)
   library(dplyr)
   library(readr)
@@ -51,7 +54,8 @@ download_vcf <- function(label, url) {
   }
   cat("DOWNLOADING:", url, "\n")
   req  <- request(url) |>
-    req_user_agent("VarViz-Pass2/1.0 (mailto:agasthyametpally5@gmail.com)") |>
+    req_user_agent(sprintf("VarViz-Pass2/1.0 (mailto:%s)",
+                           Sys.getenv("VARVIZ_CONTACT_EMAIL", "your.email@example.org"))) |>
     req_timeout(180)
   resp <- req_perform(req)
   raw  <- resp_body_raw(resp)
@@ -149,7 +153,8 @@ fetch_batch <- function(ids, batch_idx) {
   Sys.sleep(0.34)  # NCBI rate limit: 3 req/sec without API key
   req <- request(ESUM_URL) |>
     req_url_query(db = "clinvar", id = paste(ids, collapse = ","), retmode = "json") |>
-    req_user_agent("VarViz-Pass2/1.0 (mailto:agasthyametpally5@gmail.com)") |>
+    req_user_agent(sprintf("VarViz-Pass2/1.0 (mailto:%s)",
+                           Sys.getenv("VARVIZ_CONTACT_EMAIL", "your.email@example.org"))) |>
     req_timeout(120) |>
     req_retry(max_tries = 3, backoff = function(i) 2^i)
   resp <- req_perform(req)
