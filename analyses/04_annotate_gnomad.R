@@ -11,6 +11,9 @@
 # Run from project root: `Rscript analyses/04_annotate_gnomad.R`
 
 suppressMessages({
+# These services ask that automated clients identify themselves with a contact
+# address. Set VARVIZ_CONTACT_EMAIL before running; the placeholder fallback keeps
+# the script working without putting a personal address in version control.
   library(httr2)
   library(dplyr)
   library(readr)
@@ -80,7 +83,8 @@ fetch_gnomad_gene <- function(gene) {
 
   req <- request(GQL_ENDPOINT) |>
     req_method("POST") |>
-    req_user_agent("VarViz-Pass2/1.0 (mailto:agasthyametpally5@gmail.com)") |>
+    req_user_agent(sprintf("VarViz-Pass2/1.0 (mailto:%s)",
+                           Sys.getenv("VARVIZ_CONTACT_EMAIL", "your.email@example.org"))) |>
     req_timeout(180) |>
     req_retry(max_tries = 3, backoff = function(i) 2^i) |>
     req_body_json(list(query = GQL_QUERY, variables = list(symbol = gene)))
