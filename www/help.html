@@ -625,7 +625,7 @@
 
   <div class="group-box">
     <div class="group-box-title">PP3 / PP3_moderate / PP3_strong - Supporting to Strong Pathogenic &nbsp;<span class="tag pp">PP3</span>&nbsp;<span class="tag pm">PP3_mod</span>&nbsp;<span class="tag ps">PP3_str</span>&nbsp; +1 / +2 / +4 pts</div>
-    <p>Multi-tier computational pathogenicity evidence following Pejaver et al. (2022) [13] calibrated thresholds. Hierarchy (highest tier wins; each tool can only upgrade, never downgrade):</p>
+    <p>Multi-tier computational pathogenicity evidence following Pejaver et al. (2022) [13] calibrated thresholds, with the AlphaMissense corroboration rungs from Bergquist et al. (2025). Hierarchy (highest tier wins; each tool can only upgrade, never downgrade):</p>
 
     <div class="thresh-grid">
       <div class="thresh-card">
@@ -655,8 +655,11 @@
       </div>
       <div class="thresh-card">
         <h4>5. AlphaMissense</h4>
-        <div class="thresh-row"><span>PP3 supporting (+1)</span><span class="thresh-val tv-amb">&ge; 0.564</span></div>
+        <div class="thresh-row"><span>PP3 supporting (+1), alone</span><span class="thresh-val tv-amb">&ge; 0.564</span></div>
+        <div class="thresh-row"><span>raises another tool's level to moderate (+2)</span><span class="thresh-val tv-path">&ge; 0.906</span></div>
+        <div class="thresh-row"><span>raises another tool's level to strong (+4)</span><span class="thresh-val tv-path">&ge; 0.990</span></div>
         <div class="thresh-row"><span>BP4 vote</span><span class="thresh-val tv-ben">&le; 0.340</span></div>
+        <div class="thresh-row" style="font-size:11px;color:#64748b;padding-top:4px;"><em>Raised levels use the Bergquist 2025 calibration, and are withheld where the raise alone would reach Pathogenic.</em></div>
       </div>
       <div class="thresh-card">
         <h4>6. Conservation Gate (add-on)</h4>
@@ -826,6 +829,22 @@
 </div>
 
 <!-- GENE-SPECIFIC PP3 CALIBRATION -->
+<h3>AlphaMissense corroboration and the Pathogenic boundary</h3>
+<p>AlphaMissense contributes PP3 at supporting strength on its own, using the
+developer threshold of 0.564. Where another tool has already called the variant
+damaging, the calibrated intervals of Bergquist et al. 2025 (supporting 0.792,
+moderate 0.906, strong 0.990) may raise the level that tool assigned.</p>
+<p>The raise is withheld in one case: where reverting it would drop the variant
+below Pathogenic, so the raise alone would be what carries it across that
+threshold. Variants promoted into Pathogenic by the raise are depleted of gnomAD
+singletons rather than enriched, so the criterion is applied below the top bin
+and withheld at it. The rule is evaluated per pass, against that pass's own
+classification.</p>
+<p>Both behaviours can be switched off for comparison:
+<code>options(varviz.am_hybrid = FALSE)</code> restores AlphaMissense to
+supporting-only and last-resort, and
+<code>options(varviz.am_cap_pathogenic = FALSE)</code> lets a raise cross the
+Pathogenic threshold.</p>
 <h2 id="gene-calibration">Gene-Specific PP3 Calibration</h2>
 
 <div class="card">
@@ -960,7 +979,7 @@
     <tr><td><strong>MetaRNN</strong></td><td>D</td><td>-</td><td>T</td><td>Recurrent neural network ensemble</td></tr>
     <tr><td><strong>CADD</strong></td><td>&ge; 28.1</td><td>15&ndash;28.1</td><td>&lt; 15</td><td>PHRED-scaled C-score. &ge;35 = PP3_moderate, &ge;28.1 = PP3 supporting</td></tr>
     <tr><td><strong>DANN</strong></td><td>&ge; 0.96</td><td>-</td><td>&lt; 0.50</td><td>Deep neural net trained similarly to CADD</td></tr>
-    <tr><td><strong>AlphaMissense</strong></td><td>&ge; 0.564</td><td>0.340&ndash;0.564</td><td>&le; 0.340</td><td>Per-variant exact score from AlphaFold substitution CSV. Contributes to PP3/BP4</td></tr>
+    <tr><td><strong>AlphaMissense</strong></td><td>&ge; 0.564</td><td>0.340&ndash;0.564</td><td>&le; 0.340</td><td>Per-variant exact score. Contributes PP3 supporting on its own; where another tool has already given PP3, the Bergquist 2025 calibrated rungs (&ge; 0.906 moderate, &ge; 0.990 strong) may raise that level, except where the raise alone would reach Pathogenic</td></tr>
   </table>
 </div>
 
