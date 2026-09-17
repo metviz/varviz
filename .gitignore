@@ -78,3 +78,8 @@ analyses/ras_vcep_*/
 # Manuscript sources: prose destined for a journal, never published from this repo
 # (see rules/common/publishing.md). docs/ is already ignored above.
 analyses/humu/
+
+# Superseded external-validation outputs. The current cohort is external163_v231,
+# which goes to the Zenodo deposit rather than here; keeping both invited picking
+# up the older one by mistake.
+analyses/external_validation/
