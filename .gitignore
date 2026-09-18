@@ -96,8 +96,9 @@ analyses/weekly_test/
 analyses/external163_v231/
 
 # Another group's source data, fetched from the Code Ocean capsule cited in
-# Supplementary §S4. The supplement states it is not redistributed here; the
-# deposit records the derivation instead.
+# Supplementary §S4. It is CC0 and is redistributed in the Zenodo deposit as
+# inputs/ghasemnejad2026_tool_outputs.csv, which is where it belongs: 2.8 MB of
+# someone else's tool outputs is deposit material, not repository material.
 analyses/ACMG_163new.csv
 
 # Local tooling config, machine-specific.
