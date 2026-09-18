@@ -126,8 +126,12 @@ def main():
         a = sum(1 for r in base.values() if r[col] in ACT)
         c(f"actionable share Pass-{pas}", f"{100*a/n:.1f}%", f"{a:,} variants")
     # --- report ---------------------------------------------------------------
+    # The cover letter drifted to 1.2.0-era values while the manuscript and
+    # supplement were current, because nothing checked it. Tables 1-3 are blocks
+    # of appnote_humu.md, so the manuscript text covers them; the cover letter is
+    # a separate file and has to be read separately.
     docs = {p: io.open(f"analyses/humu/{p}", encoding="utf8").read()
-            for p in ("appnote_humu.md", "supp_humu.md")}
+            for p in ("appnote_humu.md", "supp_humu.md", "coverletter_humu.md")}
     print(f"{'quantity':<40}{'computed':>12}   where found")
     print("-"*88)
     missing = []
@@ -137,6 +141,40 @@ def main():
         if not loc: missing.append((label, val, note))
         print(f"{label:<40}{val:>12}   {mark}{('  ('+note+')') if note else ''}")
     print(f"\n{len(claims)-len(missing)}/{len(claims)} computed values appear verbatim in the text")
+
+    # Superseded values, with what replaced them. A number being absent is not
+    # enough: the 1.2.0 figures read as plausible and survived several reviews.
+    SUPERSEDED = [
+        ("0.959", "Pass-Blind VariBench AUROC, now 0.963"),
+        ("0.955", "Pass-Blind CAPS rho, now 0.883"),
+        ("0.034", "AUROC cost of blinding, now 0.030"),
+        ("43.6%", "PM2 P/LP movement, now 43.3%"),
+        ("77.7%", "RASopathy Pass-Blind recovery, now 83.5%"),
+        ("0.560", "Panel B Pass-Blind median AUROC, now 0.556"),
+        ("21,610", "PM2 Pass-Blind denominator, now 21,596"),
+        ("+0.211", "Likely Pathogenic CAPS, now +0.232"),
+    ]
+    # A superseded value may legitimately appear as an explicit before/after
+    # comparison. §3.5 cites rho 0.955 as the value obtained when AlphaMissense
+    # contributes no corroborated strength, which is a result, not drift. Only
+    # flag an occurrence that is not adjacent to the current value.
+    CURRENT = {"0.959": "0.963", "0.955": "0.883", "0.034": "0.030",
+               "43.6%": "43.3%", "77.7%": "83.5%", "0.560": "0.556",
+               "21,610": "21,596", "+0.211": "+0.232"}
+    stale = []
+    for v, why in SUPERSEDED:
+        for d, t in docs.items():
+            for m in re.finditer(re.escape(v), t):
+                window = t[max(0, m.start()-200):m.end()+200]
+                if CURRENT[v] not in window:
+                    stale.append((d, v, why))
+                    break
+    if stale:
+        print("\nSTALE VALUES STILL PRESENT:")
+        for d, v, why in stale:
+            print(f"  {d.replace('_humu.md',''):<12} {v:>8}  — {why}")
+    else:
+        print("\nno superseded value appears in any document")
     if missing:
         print("\nnot found as written (may be phrased differently, or stale):")
         for l, v, nt in missing: print(f"  {l:<40}{v:>12}  {nt}")
