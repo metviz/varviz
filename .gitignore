@@ -83,3 +83,24 @@ analyses/humu/
 # which goes to the Zenodo deposit rather than here; keeping both invited picking
 # up the older one by mistake.
 analyses/external_validation/
+
+# Zenodo deposit staging (106 MB). Built from the run outputs by the scripts in
+# analyses/; it goes to Zenodo, not here, and mirroring it would duplicate every
+# classification twice over.
+analyses/zenodo_deposit/
+
+# Archived and intermediate run outputs. Same rule as analyses/ps_*/ above: the
+# code that produces them is tracked, the outputs are not.
+analyses/runs_archive_*/
+analyses/weekly_test/
+analyses/external163_v231/
+
+# Another group's source data, fetched from the Code Ocean capsule cited in
+# Supplementary §S4. The supplement states it is not redistributed here; the
+# deposit records the derivation instead.
+analyses/ACMG_163new.csv
+
+# Local tooling config, machine-specific.
+.mcp.json
+.ignore
+__pycache__/
