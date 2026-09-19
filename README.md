@@ -14,7 +14,7 @@ Interpreting a panel of missense variants in a disease gene requires simultaneou
 
 VarViz addresses this by fetching **nine evidence streams** through live API calls and rendering them as vertically aligned, interactive tracks on a shared amino acid axis, with automated ACMG/AMP classification combining Richards et al. (2015) combinatorial rules, Tavtigian et al. (2020) Bayesian point scoring, and Pejaver et al. (2022) calibrated PP3/BP4 thresholds. Gene-agnostic predictor thresholds can additionally be **recalibrated against the queried gene's own ClinVar variants** at runtime, and every classification reports a **posterior probability of pathogenicity** alongside its point score.
 
-![VarViz workflow and CASR validation](docs/VarViz_Figure1_AB.png)
+![VarViz workflow(varviz_workflow.png) and CASR validation]
 
 **(A)** VarViz workflow architecture. **(B)** 24-variant CASR protein landscape showing spatial separation between loss-of-function (mean AlphaMissense 0.83) and gain-of-function variants (mean 0.39).
 
