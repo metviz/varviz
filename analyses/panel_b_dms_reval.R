@@ -48,6 +48,16 @@ univ <- read_tsv(UNIVERSE, show_col_types = FALSE)
 
 # Restrict to MaveDB rows (have score_raw populated) and join with classifications.
 mavedb <- univ |> filter(source == "MaveDB", !is.na(score_raw))
+# `cls` carries one row per variant-by-scoreset record, not per variant, and so
+# does `mavedb`. Joining them unreduced is many-to-many: a variant tested in k
+# scoresets matches k rows on each side and yields k^2, which inflated the
+# evaluation count from 89,957 to 227,929 and reweighted every AUROC by the
+# square of how many DMS studies happened to assay a variant. The DMS panel is
+# one evaluation per variant per scoreset, so reduce the classification side to
+# distinct variants and let `mavedb` supply the per-scoreset rows.
+# Panels A and C carried the same defect; see panel_a_fig_reval.R and
+# panel_c_caps_reval.R.
+cls <- cls |> distinct(gene, p_notation, .keep_all = TRUE)
 joined <- mavedb |> inner_join(cls, by = c("gene", "p_notation"))
 cat(sprintf("[panel_b] MaveDB variants with classifications: %d (over %d studies)\n",
             nrow(joined), n_distinct(joined$study)))

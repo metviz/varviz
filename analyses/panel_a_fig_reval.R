@@ -17,7 +17,7 @@ source("analyses/lib/metric_suite.R")
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
 CLASS_SUMMARY <- "__none__"
-CHECKPOINT_DIR <- "analyses/ps_reval/classifications"
+CHECKPOINT_DIR <- Sys.getenv("REVAL_DIR", "analyses/ps_reval/classifications")
 UNIVERSE       <- "analyses/derived/variant_universe.tsv"
 FIG_OUT        <- "analyses/figures/panel_a_clinical.pdf"
 HTML_OUT       <- "analyses/reports/panel_a.html"
@@ -36,9 +36,16 @@ cls <- if (file.exists(CLASS_SUMMARY)) {
 }
 univ <- read_tsv(UNIVERSE, show_col_types = FALSE)
 
+# `cls` carries one row per variant-by-scoreset record, not per variant: a
+# variant tested in k MaveDB scoresets appears k times. Joining it unreduced
+# counted those variants k times each, turning 744 distinct VariBench variants
+# into 1,108 rows (608 pathogenic into 945) and computing every metric below on
+# the duplicates. Panel C carried the same defect; see panel_c_caps_reval.R.
+cls <- cls |> distinct(gene, p_notation, .keep_all = TRUE)
+
 # Restrict to VariBench rows (have a clinical label) and join with classifications.
 joined <- cls |>
-  inner_join(univ |> filter(source == "VariBench"),
+  inner_join(univ |> filter(source == "VariBench") |> distinct(gene, p_notation, .keep_all = TRUE),
              by = c("gene", "p_notation")) |>
   mutate(truth = case_when(
     grepl("[Pp]athogenic", label) ~ "Pathogenic",

@@ -47,6 +47,17 @@ cls <- if (file.exists(CLASS_SUMMARY)) {
 }
 gn <- read_tsv(GNOMAD_IN, show_col_types = FALSE)
 
+# Both inputs carry one row per variant-by-scoreset RECORD, not per variant: a
+# variant tested in k MaveDB scoresets appears k times. Joining them unreduced
+# counted each such variant k times, which inflated n from 4,905 to 15,303 and
+# weighted every variant by how many DMS studies happened to assay it -- a
+# quantity with no bearing on population genetics. It also made the per-bin
+# counts exceed the whole-universe counts for the same bins (19 Benign against
+# 16), which is what surfaced the error. CAPS is a statement about variants, so
+# reduce both sides to distinct variants before joining.
+cls <- cls |> distinct(gene, p_notation, .keep_all = TRUE)
+gn  <- gn  |> distinct(gene, p_notation, .keep_all = TRUE)
+
 # Restrict to gnomAD-present variants joined with both passes.
 joined <- cls |>
   inner_join(
@@ -55,7 +66,7 @@ joined <- cls |>
   ) |>
   filter(gnomad_present)
 
-cat(sprintf("[panel_c] gnomAD-present variants with classifications: %d\n", nrow(joined)))
+cat(sprintf("[panel_c] gnomAD-present DISTINCT variants with classifications: %d\n", nrow(joined)))
 cat(sprintf("  Singletons in pool: %d (%.1f%%)\n",
             sum(joined$gnomad_singleton, na.rm = TRUE),
             100 * mean(joined$gnomad_singleton, na.rm = TRUE)))
