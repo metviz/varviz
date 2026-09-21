@@ -12,7 +12,7 @@
 
 Interpreting a panel of missense variants in a disease gene requires simultaneously consulting population databases, structural predictors, conservation resources, and clinical repositories. These tools share no common protein-level view and must be queried and collated by hand for each variant.
 
-VarViz addresses this by fetching **nine evidence streams** through live API calls and rendering them as vertically aligned, interactive tracks on a shared amino acid axis, with automated ACMG/AMP classification combining Richards et al. (2015) combinatorial rules, Tavtigian et al. (2020) Bayesian point scoring, and Pejaver et al. (2022) calibrated PP3/BP4 thresholds. Gene-agnostic predictor thresholds can additionally be **recalibrated against the queried gene's own ClinVar variants** at runtime, and every classification reports a **posterior probability of pathogenicity** alongside its point score.
+VarViz addresses this by fetching **nine evidence streams** through live API calls and rendering them as vertically aligned, interactive tracks on a shared amino acid axis, with automated ACMG/AMP classification. Criteria are those defined by Richards et al. (2015); scoring is the Tavtigian et al. (2020) Bayesian point scale, with Pejaver et al. (2022) calibrated PP3/BP4 thresholds. Gene-agnostic predictor thresholds can additionally be **recalibrated against the queried gene's own ClinVar variants** at runtime, and every classification reports a **posterior probability of pathogenicity** alongside its point score.
 
 [!VarViz workflow](varviz_workflow.png) and CASR validation
 
@@ -25,6 +25,8 @@ VarViz addresses this by fetching **nine evidence streams** through live API cal
 **[https://varviz.shinyapps.io/varviz/](https://varviz.shinyapps.io/varviz/) or [https://varviz.org](https://varviz.org)**
 
 No installation required. A modern web browser is sufficient. No user data are stored between sessions.
+
+Current release: **v1.2.2**
 
 ---
 
@@ -43,12 +45,12 @@ No installation required. A modern web browser is sufficient. No user data are s
 | UniProt domain architecture | UniProt REST API |
 | Lollipop variant map | Assembled from all above |
 
-### Automated hybrid ACMG/AMP engine
-- **Richards et al. (2015)** combinatorial rule-based classification (first pass)
-- **Tavtigian et al. (2020)** Bayesian point scoring when no rule matches (≥10 Pathogenic, 6-9 LP, -3 to +5 VUS, -4 to -6 LB, <=-7 Benign)
+### Automated ACMG/AMP engine
+- **Points-only classification** on the Tavtigian et al. (2020) Bayesian scale. Every criterion contributes points and conflicting evidence cancels. BA1 is the single stand-alone criterion and returns Benign regardless of the total. The Richards 2015 rule ladder that used to run first was removed in September 2026, because summation reproduces its outcomes without its edge cases.
+- **Seven-level output**: Pathogenic (≥10), Likely Pathogenic (6 to 9), VUS-High (4 to 5), VUS-Mid (2 to 3), VUS-Low (0 to 1), Likely Benign (−1 to −6), Benign (≤−7). The VUS subdivision follows the scheme adopted in the ACMG/AMP/CAP/ClinGen sequence variant classification pilot.
 - **Pejaver et al. (2022)** calibrated PP3/BP4 thresholds across seven predictors (REVEL, CADD, MetaSVM, MetaLR, MetaRNN, DANN, AlphaMissense) with Supporting/Moderate/Strong tiers
 - **Posterior probability of pathogenicity** reported for every variant, converting the Tavtigian point score to a calibrated probability (prior 0.10, C = 2.0813)
-- **PM1** via four pathways: CCRS ≥90th percentile, UniProt functional domain, 15-residue ClinVar hotspot neighbourhood, or — as a last resort when none of the above fire — Pfam domain alignment via the DOLPHIN API (Corcuff et al., 2023)
+- **PM1** through four pathways: CCRS ≥90th percentile, UniProt functional domain or site, a 15-residue ClinVar hotspot neighbourhood, and the Missense Disfavor Score (MDS), a per-residue Pfam domain PSSM evaluated locally at a threshold of −4. MDS can originate PM1 where no other pathway fires, or corroborate one that already has. It replaces the DOLPHIN API (Corcuff et al., 2023), which is no longer reachable, and reproduces its deltas offline
 - **PM2** against a prevalence-derived maximum credible allele frequency (Whiffin et al., 2017)
 - **PS1 and PM5** strength scaled by ClinVar review star count: PS1 spans Supporting/Moderate/Strong, PM5 spans Supporting/Moderate; a 0-star submission is not weighted as a 3-star expert-panel review
 - **PP2/BP1** from ClinGen gene-disease validity or GeVIR percentile
@@ -120,7 +122,7 @@ Scroll to the **Variant Summary** tab. Each variant card has dropdowns for de no
 
 ## Validation
 
-Applied to **24 CASR missense variants** with functionally validated loss-of-function (FHH1) and gain-of-function (ADH1) disease mechanisms from a population genomic cohort of 51,289 individuals (Gorvin et al., 2020):
+Applied to **24 CASR missense variants** with functionally validated loss-of-function (FHH1) and gain-of-function (ADH1) disease mechanisms from a population genomic cohort of 51,289 individuals (Dershem et al., 2020):
 
 - **Sensitivity 93%** for loss-of-function variants (14/15 classified as P/LP; Wilson 95% CI 70-99%)
 - The protein landscape revealed spatial separation between LOF and GOF variants in the AlphaMissense mean pathogenicity track; this pattern was not recoverable from any individual predictor score
@@ -157,10 +159,10 @@ The app will open at `http://127.0.0.1:XXXX` in your browser. Internet access is
 | AlphaFold EBI API | Per-residue pLDDT, AlphaMissense mean pathogenicity | Jumper et al., 2021; Cheng et al., 2023 |
 | gnomAD GraphQL API v4 | Allele frequencies, allele counts, homozygotes (GRCh38 / MANE Select) | Karczewski et al., 2020 |
 | NCBI E-utilities | ClinVar variant assertions, review stars, VCV IDs | Landrum et al., 2018 |
-| MyVariant.info | dbNSFP v4.4 (15 in silico predictor scores) | Xin et al., 2016; Liu et al., 2020 |
+| MyVariant.info | dbNSFP in silico predictor scores | Xin et al., 2016; Liu et al., 2020 |
 | UCSC + Ensembl REST | PhyloP 100V, PhyloP 470M, PhastCons per-residue scores | |
 | ClinGen / GenCC APIs | Gene-disease validity classification | Rehm et al., 2015 |
-| DOLPHIN API | Pfam domain alignment for the last-resort PM1 pathway | Corcuff et al., 2023 |
+| Pfam PSSM (local) | Per-residue domain alignment score for the MDS PM1 pathway | after Corcuff et al., 2023 |
 | GeVIR | Gene-level missense constraint percentile | Abramovs et al., 2020 |
 | CCRS (local) | Constrained coding region scores | Havrilla et al., 2019 |
 
