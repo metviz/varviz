@@ -13,7 +13,7 @@ data/*.gz
 data/*.tbi
 *.Rhistory
 .Rproj.user/
-
+brag-output*/*
 # Ignore log files
 *.log
 
@@ -105,3 +105,9 @@ analyses/ACMG_163new.csv
 .mcp.json
 .ignore
 __pycache__/
+
+# Manuscript-reading tooling: stays local, never published.
+# These read analyses/humu/*.md or the built .docx; the publishing policy
+# excludes scripts that read or narrate the manuscript.
+analyses/validate_manuscript_citations.py
+analyses/verify_manuscript_numbers.py
