@@ -111,3 +111,6 @@ __pycache__/
 # excludes scripts that read or narrate the manuscript.
 analyses/validate_manuscript_citations.py
 analyses/verify_manuscript_numbers.py
+analyses/build_tables_s5_s6.py
+analyses/validate_table_rendering.py
+analyses/OPTION_C_HANDOFF.md
