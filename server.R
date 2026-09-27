@@ -55,6 +55,14 @@ MDS_PM1_THRESHOLD <- -4
 # replicate against common population variants in genes with no disease
 # association, where domain constraint does not imply gene constraint.
 MDS_PM1_STRONG_THRESHOLD  <- -12   # PM1_strong (+4), LR+ ~39
+
+# AlphaMissense supporting rung. The Bergquist 2025 ClinGen SVI calibration puts
+# the developer threshold of 0.564 inside the indeterminate interval and begins
+# supporting evidence at 0.792, so awarding a point at 0.564 credits a score the
+# cited calibration treats as uninformative. Override with
+# options(varviz.am_pp3_supporting = 0.564) to reproduce runs made before this
+# moved.
+AM_PP3_SUPPORTING <- 0.792
 #
 # Evidence-overlap constraint (one signal, one criterion):
 #   * MDS is counted ONCE, under PM1 only. It never feeds PP3 and is never
@@ -5938,7 +5946,8 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       .am_hybrid <- isTRUE(getOption("varviz.am_hybrid", TRUE))
       if (.am_hybrid) {
         if (pp3_level(acmg_tags) == 0L) {
-          if (am_sc >= 0.564) add_pp3("1")
+          if (am_sc >= getOption("varviz.am_pp3_supporting", AM_PP3_SUPPORTING))
+            add_pp3("1")
         } else {
           # Remember what another tool had assigned, so a raise that turns out to
           # be the evidence carrying the variant into Pathogenic can be undone.

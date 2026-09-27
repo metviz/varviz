@@ -17,6 +17,45 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [1.2.3] - 2026-09-27
+
+**This release moves calls.** AlphaMissense no longer supplies supporting PP3 at
+its developer threshold, so a variant whose only computational evidence came from
+a score between 0.564 and 0.792 now receives none.
+
+### Changed
+
+- The AlphaMissense supporting rung moves from the developer threshold of 0.564
+  to the Bergquist 2025 ClinGen SVI calibrated threshold of 0.792, as the new
+  module constant `AM_PP3_SUPPORTING`. The calibration places 0.564 inside the
+  indeterminate interval and begins supporting evidence at 0.792, so the engine
+  had been awarding a point at a score its own cited calibration treats as
+  uninformative. "No reliable evidence" is an acceptable result for a variant,
+  and it is the honest one here.
+
+  Reach is wide. 60,067 of the 90,701 records in the 14-gene benchmark universe
+  (66.2%) carry PP3 at supporting strength only, so any of those whose PP3 came
+  from AlphaMissense below 0.792 loses it.
+
+  Set `options(varviz.am_pp3_supporting = 0.564)` to reproduce runs made before
+  this moved.
+
+- The raise rungs are untouched. AlphaMissense may still raise a PP3 level that
+  another tool assigned, at 0.906 and above, and the Pathogenic-boundary cap
+  from 1.2.2 still governs those raises.
+
+### Note for anyone tempted to reach the same threshold by configuration
+
+Setting `varviz.am_calibrated = TRUE` with `varviz.am_hybrid = FALSE` also puts
+the supporting rung at 0.792, but it is not equivalent and should not be used as
+a substitute. That route additionally lets AlphaMissense award PP3_strong at
+0.990 to a variant with no other computational evidence, where the hybrid ladder
+caps such a variant at supporting, and it leaves the Pathogenic-boundary cap
+inert, because `.am_raised_from` is recorded only in the hybrid branch and
+`cap_am_pathogenic()` returns its input unchanged when that marker is absent.
+The calibrated branch is therefore more permissive at the top of the scale and
+unguarded at the Pathogenic boundary.
+
 ## [1.2.2] - 2026-09-15
 
 **This release moves calls.** AlphaMissense corroboration may no longer carry a
