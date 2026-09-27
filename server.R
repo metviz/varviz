@@ -3696,6 +3696,51 @@ conservplot <- function(consurf_score, prot_length, highlight = data.frame()) {
 }
 
 
+# ── Lollipop colour decision ────────────────────────────────────────────────
+# Extracted from pfamplot() so it can be unit-tested directly
+# (analyses/tests/test_lollipop_colors.R). Two modes:
+#
+#   default   stem = chemical class of the REFERENCE residue,
+#             dot  = chemical class of the VARIANT residue, no key.
+#             This is the shipped behaviour and every existing figure depends
+#             on it, so it must not change.
+#   opt-in    the caller attaches mech_color (and optionally mech_label) to the
+#             highlight frame, and colours then encode whatever the caller says,
+#             with a key. Added so a caller that groups variants by an external
+#             attribute, such as an assigned functional mechanism, can show that
+#             grouping, which the residue-chemistry palette cannot express.
+#
+# Returns stem, dot, label (character vectors, one per row of `h`), mech (TRUE
+# when mechanism colouring is active) and pal (named label -> colour, NULL on the
+# default path).
+lollipop_colors <- function(h) {
+  aa_col <- c(D="#e04040",E="#e04040",H="#4472c4",K="#4472c4",R="#4472c4",
+              S="#2ca02c",T="#2ca02c",N="#2ca02c",Q="#2ca02c",C="#2ca02c",
+              F="#e67e22",W="#e67e22",Y="#e67e22",
+              A="#8e44ad",V="#8e44ad",I="#8e44ad",L="#8e44ad",M="#8e44ad",G="#8e44ad",
+              P="#8B4513")
+  bare   <- sub("^p\\.", "", as.character(h$Mutation))
+  ref_aa <- toupper(substr(bare, 1, 1))
+  var_aa <- toupper(substr(bare, nchar(bare), nchar(bare)))
+  stem <- unname(ifelse(ref_aa %in% names(aa_col), aa_col[ref_aa], "#555555"))
+  dot  <- unname(ifelse(var_aa %in% names(aa_col), aa_col[var_aa], "#555555"))
+
+  mech <- !is.null(h$mech_color) && !all(is.na(h$mech_color))
+  if (!mech) {
+    return(list(stem = stem, dot = dot, label = NULL, mech = FALSE, pal = NULL))
+  }
+
+  mc <- as.character(h$mech_color)
+  # A row with no mechanism assigned keeps its chemical-class dot colour rather
+  # than vanishing into NA.
+  mc[is.na(mc)] <- dot[is.na(mc)]
+  lab <- if (!is.null(h$mech_label)) as.character(h$mech_label) else mc
+  lab[is.na(lab)] <- mc[is.na(lab)]
+  pal <- tapply(mc, lab, function(x) x[1])
+  pal <- stats::setNames(as.character(pal), names(pal))
+  list(stem = mc, dot = mc, label = lab, mech = TRUE, pal = pal)
+}
+
 pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,for_plotly=FALSE,revel_scores=NULL)
 {
   begin = end = NULL
@@ -3913,26 +3958,38 @@ pfamplot <- function(pfam_data,uniprot_data,gene_clinvar_data,highlight,label,fo
                    highlight$prot_pos >= 0 &
                    highlight$prot_pos <= prot_len_l, , drop=FALSE]
     if (nrow(h) > 0) {
-      aa_col <- c(D="#e04040",E="#e04040",H="#4472c4",K="#4472c4",R="#4472c4",
-                  S="#2ca02c",T="#2ca02c",N="#2ca02c",Q="#2ca02c",C="#2ca02c",
-                  F="#e67e22",W="#e67e22",Y="#e67e22",
-                  A="#8e44ad",V="#8e44ad",I="#8e44ad",L="#8e44ad",M="#8e44ad",G="#8e44ad",
-                  P="#8B4513")
-      bare        <- sub("^p\\.", "", as.character(h$Mutation))
-      ref_aa      <- toupper(substr(bare, 1, 1))
-      var_aa      <- toupper(substr(bare, nchar(bare), nchar(bare)))
-      h$ref_color <- ifelse(ref_aa %in% names(aa_col), aa_col[ref_aa], "#555555")
-      h$var_color <- ifelse(var_aa %in% names(aa_col), aa_col[var_aa], "#555555")
+      .lc <- lollipop_colors(h)
+      # Kept as columns because the static label code below colours each label to
+      # match its dot via h_sorted$var_color.
+      h$ref_color <- .lc$stem
+      h$var_color <- .lc$dot
       # Baked y-coords: stem 2.85->3.60 (clears disulfide ceiling ~2.76)
       h$stem_base <- 1.5
       h$stem_dot  <- 3.60
-      p <- p + ggplot2::geom_segment(
-        data=h, ggplot2::aes(x=prot_pos, y=stem_base, xend=prot_pos, yend=stem_dot),
-        color=h$ref_color, linewidth=0.5, lineend="round", inherit.aes=FALSE)
-      p <- p + ggplot2::geom_point(
-        data=h, ggplot2::aes(x=prot_pos, y=stem_dot),
-        color=h$var_color, fill=h$var_color, size=2, shape=21, stroke=0.5,
-        inherit.aes=FALSE)
+      if (isTRUE(.lc$mech)) {
+        # Mechanism colouring is opt-in and mapped through aes() so ggplot emits a
+        # key, which the default path deliberately lacks. Only the colour scale is
+        # added; the fill scale already carries mod_res_group for PTM groups, so
+        # adding scale_fill_manual here would collide with it.
+        h$mech_label <- .lc$label
+        p <- p + ggplot2::geom_segment(
+          data=h, ggplot2::aes(x=prot_pos, y=stem_base, xend=prot_pos, yend=stem_dot,
+                               color=mech_label),
+          linewidth=0.5, lineend="round", inherit.aes=FALSE)
+        p <- p + ggplot2::geom_point(
+          data=h, ggplot2::aes(x=prot_pos, y=stem_dot, color=mech_label),
+          fill=.lc$dot, size=2, shape=21, stroke=0.5, inherit.aes=FALSE)
+        p <- p + ggplot2::scale_color_manual(values=.lc$pal, name=NULL)
+        p <- p + ggplot2::theme(legend.position="bottom")
+      } else {
+        p <- p + ggplot2::geom_segment(
+          data=h, ggplot2::aes(x=prot_pos, y=stem_base, xend=prot_pos, yend=stem_dot),
+          color=.lc$stem, linewidth=0.5, lineend="round", inherit.aes=FALSE)
+        p <- p + ggplot2::geom_point(
+          data=h, ggplot2::aes(x=prot_pos, y=stem_dot),
+          color=.lc$dot, fill=.lc$dot, size=2, shape=21, stroke=0.5,
+          inherit.aes=FALSE)
+      }
 
       # Static-only labels (plotly path gets them via layout(annotations))
       if (label == "Yes" && !for_plotly) {
