@@ -23,7 +23,15 @@ test_that("load_alphamissense_csv returns keyed data.table for PTEN (P60484)", {
 })
 
 test_that("load_alphamissense_csv returns NULL when the UID has no bulk file", {
-  expect_null(load_alphamissense_csv("P16473", am_dir = am_dir))  # TSHR — no AM file
+  # Do not hardcode an accession as absent. This asserted on P16473 (TSHR),
+  # which had no bulk file when the test was written and has one now, so the
+  # test failed on a change in local data rather than a change in behaviour.
+  # Pick an accession that is absent from am_dir at run time instead.
+  present <- sub("-F1-aa-substitutions\\.csv$", "",
+                 list.files(am_dir, pattern = "-F1-aa-substitutions\\.csv$"))
+  absent  <- setdiff(sprintf("P%05d", 60480:60520), present)
+  skip_if(length(absent) == 0L, "no absent accession available in am_dir")
+  expect_null(load_alphamissense_csv(absent[1], am_dir = am_dir))
 })
 
 test_that("lookup_alphamissense finds a known PTEN variant in 'p.X#Y' form", {
