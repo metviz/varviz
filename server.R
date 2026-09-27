@@ -5968,8 +5968,14 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
     # run cannot use a calibrated pathogenic ladder with an uncalibrated benign cut.
     # Hybrid deliberately leaves this at the developer cut: BP4 moved only 105
     # variants under the full calibration, so the benign side is untested here.
+    # The default here must match the PP3 side's read of the same option above,
+    # which defaults to TRUE. It used to default to FALSE, so a caller that set
+    # only varviz.am_calibrated scored PP3 off the hybrid ladder (supporting at
+    # the developer threshold) while taking the benign cut from the calibrated
+    # one. No shipped run reached it, because the harness sets both flags, but
+    # the pairing was incoherent and reachable.
     .am_bp4_cut <- if (isTRUE(getOption("varviz.am_calibrated", FALSE)) &&
-                       !isTRUE(getOption("varviz.am_hybrid", FALSE))) 0.169 else 0.34
+                       !isTRUE(getOption("varviz.am_hybrid", TRUE))) 0.169 else 0.34
     bp4_votes <- sum(c(
       isTRUE(!is.na(revel_sc)   && revel_sc   <= 0.290),
       isTRUE(!is.na(metasvm_pd) && grepl("^[Tt]", metasvm_pd)),
