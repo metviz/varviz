@@ -1481,10 +1481,108 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
  }
 
  #Extract Uniprot feature data
+# Extracted from extract_uniprot_feature_data() so the disk-cached path and the
+# fetch path share one parser instead of one of them re-deriving the shape.
+parse_uniprot_features <- function(features, uniprotID) {
+
+  if (is.null(features) || length(features) == 0) {
+    message("[UniProt Features] No features found")
+    return(data.frame(uniprot_id = character(), type = character(),
+                      start = numeric(), end = numeric(), description = character(), mod_res_group = character(), alt_aa = character(),
+                      stringsAsFactors = FALSE))
+  }
+
+  # Map UniProt feature type names to short codes used by pfamplot
+  type_map <- c(
+    "Signal peptide"    = "signal",
+    "Disulfide bond"    = "disulfid",
+    "Modified residue"  = "mod_res",
+    "Active site"       = "act_site",
+    "Binding site"      = "binding",
+    "Site"              = "site",
+    "Mutagenesis"       = "mutagen",
+    "Lipidation"        = "lipid",
+    "Glycosylation"     = "carbohyd",
+    "Cross-link"        = "crosslnk",
+    "Transmembrane"     = "transmem",
+    "Topological domain" = "topo_dom",
+    "Intramembrane"     = "intramem"
+  )
+
+  rows <- lapply(features, function(f) {
+    ftype <- type_map[f$type]
+    if (is.na(ftype)) return(NULL)
+
+    loc_start <- f$location$start$value
+    loc_end   <- f$location$end$value
+    if (is.null(loc_start)) return(NULL)
+
+    # Classify mod_res_group from description
+    desc <- if (!is.null(f$description)) f$description else ""
+    # Binding sites carry the ligand in a separate field, not in description.
+    if (ftype == "binding" && nchar(desc) == 0 && !is.null(f$ligand$name)) {
+      desc <- paste("Binds", f$ligand$name)
+    }
+    mod_group <- if (ftype == "mod_res") {
+      if (grepl("Phospho", desc, ignore.case = TRUE)) "Phosphorylation" else if (grepl("Acetyl", desc, ignore.case = TRUE)) "Acetylation" else if (grepl("Methyl", desc, ignore.case = TRUE)) "Methylation" else if (grepl("Ubiquitin", desc, ignore.case = TRUE)) "Ubiquitination" else if (grepl("Hydroxy", desc, ignore.case = TRUE)) "Hydroxylation" else if (grepl("Glycyl", desc, ignore.case = TRUE)) "Glycylation" else "Other modification"
+    } else NA_character_
+
+    # Mutagenesis features name the substitution that was assayed
+    # (alternativeSequence: S -> A/E). Kept so PS3 can require that the
+    # queried variant IS the tested one, not merely at the same residue.
+    alt_aa <- if (!is.null(f$alternativeSequence$alternativeSequences))
+      paste(unlist(f$alternativeSequence$alternativeSequences), collapse = "/") else ""
+    data.frame(
+      uniprot_id = uniprotID,
+      type = ftype,
+      start = as.numeric(loc_start),
+      end = as.numeric(ifelse(is.null(loc_end), loc_start, loc_end)),
+      description = if (!is.null(desc)) desc else "",
+      mod_res_group = mod_group,
+      alt_aa = alt_aa,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  result <- do.call(rbind, Filter(Negate(is.null), rows))
+  if (is.null(result) || nrow(result) == 0) {
+    return(data.frame(uniprot_id = character(), type = character(),
+                      start = numeric(), end = numeric(), description = character(), mod_res_group = character(), alt_aa = character(),
+                      stringsAsFactors = FALSE))
+  }
+
+  message("[UniProt Features] Found: ",
+          sum(result$type == "signal"), " signal, ",
+          sum(result$type == "disulfid"), " disulfid, ",
+          sum(result$type == "mod_res"), " mod_res, ",
+          sum(result$type == "act_site"), " act_site, ",
+          sum(result$type == "binding"), " binding, ",
+          sum(result$type == "site"), " site, ",
+          sum(result$type == "mutagen"), " mutagen, ",
+          sum(result$type == "transmem"), " transmem, ",
+          sum(result$type == "topo_dom"), " topo_dom")
+  result
+}
+
+
  # Extract UniProt feature data via API (replaces local uniprot_feature_data)
  extract_uniprot_feature_data <- function(uniprotID) {
    cached <- cache_get("uniprot_ft", uniprotID)
    if (!is.null(cached)) { message("[UniProt Features] Cache hit for: ", uniprotID); return(cached) }
+   # Disk payload before the network. These features feed the uniprot_site and
+   # uniprot_domain PM1 pathways plus the PTM and transmembrane tracks, so a run
+   # that refetches them is not reproducible against the ones it scored with.
+   .ft_disk <- if (payload_cache_refresh()) NULL else payload_cache_read_text("uniprot_ft", uniprotID)
+   if (!is.null(.ft_disk)) {
+     .ft_parsed <- tryCatch(fromJSON(.ft_disk, simplifyVector = FALSE), error = function(e) NULL)
+     if (!is.null(.ft_parsed$features)) {
+       message("[UniProt Features] Using primed payload: ",
+               file.path(payload_cache_dir("uniprot_ft"), paste0(uniprotID, ".json")))
+       .ft_out <- parse_uniprot_features(.ft_parsed$features, uniprotID)
+       cache_set("uniprot_ft", uniprotID, .ft_out)
+       return(.ft_out)
+     }
+   }
    tryCatch({
      message("[UniProt Features] Fetching for: ", uniprotID)
      resp <- request("https://rest.uniprot.org/uniprotkb/") %>%
@@ -1500,85 +1598,13 @@ plot_afmps <- function(mean_data, highlight = data.frame(), prot_length = NULL) 
        req_error(body = function(resp) paste("Error:", resp_status(resp))) %>%
        req_perform()
      
-     jdata <- fromJSON(resp %>% resp_body_string(), simplifyVector = FALSE)
-     features <- jdata$features
-     
-     if (is.null(features) || length(features) == 0) {
-       message("[UniProt Features] No features found")
-       return(data.frame(uniprot_id = character(), type = character(),
-                         start = numeric(), end = numeric(), description = character(), mod_res_group = character(), alt_aa = character(),
-                         stringsAsFactors = FALSE))
-     }
-     
-     # Map UniProt feature type names to short codes used by pfamplot
-     type_map <- c(
-       "Signal peptide"    = "signal",
-       "Disulfide bond"    = "disulfid",
-       "Modified residue"  = "mod_res",
-       "Active site"       = "act_site",
-       "Binding site"      = "binding",
-       "Site"              = "site",
-       "Mutagenesis"       = "mutagen",
-       "Lipidation"        = "lipid",
-       "Glycosylation"     = "carbohyd",
-       "Cross-link"        = "crosslnk",
-       "Transmembrane"     = "transmem",
-       "Topological domain" = "topo_dom",
-       "Intramembrane"     = "intramem"
-     )
-     
-     rows <- lapply(features, function(f) {
-       ftype <- type_map[f$type]
-       if (is.na(ftype)) return(NULL)
-       
-       loc_start <- f$location$start$value
-       loc_end   <- f$location$end$value
-       if (is.null(loc_start)) return(NULL)
-       
-       # Classify mod_res_group from description
-       desc <- if (!is.null(f$description)) f$description else ""
-       # Binding sites carry the ligand in a separate field, not in description.
-       if (ftype == "binding" && nchar(desc) == 0 && !is.null(f$ligand$name)) {
-         desc <- paste("Binds", f$ligand$name)
-       }
-       mod_group <- if (ftype == "mod_res") {
-         if (grepl("Phospho", desc, ignore.case = TRUE)) "Phosphorylation" else if (grepl("Acetyl", desc, ignore.case = TRUE)) "Acetylation" else if (grepl("Methyl", desc, ignore.case = TRUE)) "Methylation" else if (grepl("Ubiquitin", desc, ignore.case = TRUE)) "Ubiquitination" else if (grepl("Hydroxy", desc, ignore.case = TRUE)) "Hydroxylation" else if (grepl("Glycyl", desc, ignore.case = TRUE)) "Glycylation" else "Other modification"
-       } else NA_character_
-       
-       # Mutagenesis features name the substitution that was assayed
-       # (alternativeSequence: S -> A/E). Kept so PS3 can require that the
-       # queried variant IS the tested one, not merely at the same residue.
-       alt_aa <- if (!is.null(f$alternativeSequence$alternativeSequences))
-         paste(unlist(f$alternativeSequence$alternativeSequences), collapse = "/") else ""
-       data.frame(
-         uniprot_id = uniprotID,
-         type = ftype,
-         start = as.numeric(loc_start),
-         end = as.numeric(ifelse(is.null(loc_end), loc_start, loc_end)),
-         description = if (!is.null(desc)) desc else "",
-         mod_res_group = mod_group,
-         alt_aa = alt_aa,
-         stringsAsFactors = FALSE
-       )
-     })
-     
-     result <- do.call(rbind, Filter(Negate(is.null), rows))
-     if (is.null(result) || nrow(result) == 0) {
-       return(data.frame(uniprot_id = character(), type = character(),
-                         start = numeric(), end = numeric(), description = character(), mod_res_group = character(), alt_aa = character(),
-                         stringsAsFactors = FALSE))
-     }
-     
-     message("[UniProt Features] Found: ",
-             sum(result$type == "signal"), " signal, ",
-             sum(result$type == "disulfid"), " disulfid, ",
-             sum(result$type == "mod_res"), " mod_res, ",
-             sum(result$type == "act_site"), " act_site, ",
-             sum(result$type == "binding"), " binding, ",
-             sum(result$type == "site"), " site, ",
-             sum(result$type == "mutagen"), " mutagen, ",
-             sum(result$type == "transmem"), " transmem, ",
-             sum(result$type == "topo_dom"), " topo_dom")
+     .ft_text <- resp %>% resp_body_string()
+     jdata <- fromJSON(.ft_text, simplifyVector = FALSE)
+     payload_cache_write_text("uniprot_ft", uniprotID, .ft_text,
+                              meta = list(url = "https://rest.uniprot.org/uniprotkb/",
+                                          accession = uniprotID,
+                                          n_features = length(jdata$features)))
+      result <- parse_uniprot_features(jdata$features, uniprotID)
      cache_set("uniprot_ft", uniprotID, result)
      return(result)
      
@@ -1640,11 +1666,143 @@ extract_gnomad <- function(gene_name) {
 }
 
 
+# Generic payload cache. gnomad_cache_* below are the text-payload case; UniProt
+# features use the same path, and UCSC conservation uses the RDS case because its
+# raw form is dozens of per-window responses per gene and what the engine
+# consumes is the assembled per-residue table. That table is a derived view, not
+# a raw payload, and the sidecar records the windows it was built from so the
+# distinction stays visible.
+payload_cache_dir <- function(source) {
+  root <- getOption("varviz.cache_root", Sys.getenv("VARVIZ_CACHE_ROOT", "analyses/cache"))
+  file.path(root, source)
+}
+
+payload_cache_write_meta <- function(source, key, rec) {
+  d <- payload_cache_dir(source)
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  writeLines(as.character(jsonlite::toJSON(rec, auto_unbox = TRUE, pretty = TRUE)),
+             file.path(d, paste0(key, ".meta.json")))
+}
+
+payload_cache_read_text <- function(source, key) {
+  p <- file.path(payload_cache_dir(source), paste0(key, ".json"))
+  if (!file.exists(p)) return(NULL)
+  n <- file.info(p)$size
+  if (is.na(n) || n <= 0) return(NULL)
+  con <- file(p, open = "rb"); on.exit(close(con), add = TRUE)
+  readChar(con, n, useBytes = TRUE)
+}
+
+payload_cache_write_text <- function(source, key, resp_text, meta = list()) {
+  d <- payload_cache_dir(source)
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  p <- file.path(d, paste0(key, ".json"))
+  con <- file(p, open = "wb"); writeChar(resp_text, con, eos = NULL, useBytes = TRUE); close(con)
+  sha <- if (requireNamespace("digest", quietly = TRUE))
+           digest::digest(resp_text, algo = "sha256", serialize = FALSE) else ""
+  payload_cache_write_meta(source, key,
+    c(list(key = key, fetched_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+           bytes = nchar(resp_text, type = "bytes"), sha256 = sha,
+           storage = "verbatim response text"), meta))
+  invisible(p)
+}
+
+payload_cache_read_rds <- function(source, key) {
+  p <- file.path(payload_cache_dir(source), paste0(key, ".rds"))
+  if (!file.exists(p)) return(NULL)
+  tryCatch(readRDS(p), error = function(e) NULL)
+}
+
+payload_cache_write_rds <- function(source, key, obj, meta = list()) {
+  d <- payload_cache_dir(source)
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  p <- file.path(d, paste0(key, ".rds"))
+  saveRDS(obj, p)
+  payload_cache_write_meta(source, key,
+    c(list(key = key, fetched_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+           rows = if (is.data.frame(obj)) nrow(obj) else NA_integer_,
+           storage = "derived table, not a raw payload"), meta))
+  invisible(p)
+}
+
+payload_cache_refresh <- function() {
+  isTRUE(getOption("varviz.cache_refresh",
+                   identical(toupper(Sys.getenv("VARVIZ_CACHE_REFRESH", "FALSE")), "TRUE")))
+}
+
+# ── gnomAD payload cache ────────────────────────────────────────────────────
+# gnomAD was the only per-gene source with no disk cache: ClinVar is primed to
+# .rds, UniProt is stored as its verbatim payload, Ensembl exons are cached, but
+# gnomAD was queried live on every run and kept only in memory for the life of
+# the process. Allele frequency drives PM2, BA1, BS1 and BS2 and the
+# population-genetic panel is built from gnomAD singletons, so a run could not be
+# reproduced against the frequencies it actually used.
+#
+# The response is stored verbatim rather than as a re-serialised parse, so a
+# later fetch can be diffed against it to show whether the source moved. A
+# re-serialisation reformats floats, reorders fields and normalises nulls, which
+# makes that comparison impossible.
+gnomad_cache_dir <- function() {
+  getOption("varviz.gnomad_cache_dir",
+            Sys.getenv("VARVIZ_GNOMAD_CACHE", "analyses/cache/gnomad"))
+}
+
+gnomad_cache_path <- function(gene_name) {
+  file.path(gnomad_cache_dir(), paste0(gene_name, ".json"))
+}
+
+gnomad_cache_read <- function(gene_name) {
+  p <- gnomad_cache_path(gene_name)
+  if (!file.exists(p)) return(NULL)
+  # readChar over readLines: readLines drops the trailing newline and rewrites
+  # CRLF, so the bytes would no longer match what the API returned.
+  n <- file.info(p)$size
+  if (is.na(n) || n <= 0) return(NULL)
+  con <- file(p, open = "rb")
+  on.exit(close(con), add = TRUE)
+  readChar(con, n, useBytes = TRUE)
+}
+
+gnomad_cache_write <- function(gene_name, resp_text, meta = list()) {
+  d <- gnomad_cache_dir()
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+  p <- gnomad_cache_path(gene_name)
+  con <- file(p, open = "wb")
+  writeChar(resp_text, con, eos = NULL, useBytes = TRUE)
+  close(con)
+  sha <- if (requireNamespace("digest", quietly = TRUE))
+           digest::digest(resp_text, algo = "sha256", serialize = FALSE) else ""
+  rec <- c(list(gene = gene_name,
+                fetched_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+                bytes = nchar(resp_text, type = "bytes"),
+                sha256 = sha),
+           meta)
+  writeLines(as.character(jsonlite::toJSON(rec, auto_unbox = TRUE, pretty = TRUE)),
+             file.path(d, paste0(gene_name, ".meta.json")))
+  invisible(p)
+}
+
 # Extract gnomAD data using embedded GraphQL query
 # Function to query gnomAD API with gene symbol
 query_gnomad_api <- function(gene_name) {
   cached <- cache_get("gnomad_api", gene_name)
   if (!is.null(cached)) { message("[gnomAD API] Cache hit for: ", gene_name); return(cached) }
+  # Disk payload, unless a refresh was asked for. A primed gene never reaches the
+  # network, so a run reproduces the frequencies it was built from.
+  if (!isTRUE(getOption("varviz.gnomad_refresh",
+                        identical(toupper(Sys.getenv("VARVIZ_GNOMAD_REFRESH", "FALSE")), "TRUE")))) {
+    disk <- gnomad_cache_read(gene_name)
+    if (!is.null(disk)) {
+      parsed <- tryCatch(fromJSON(disk, simplifyDataFrame = FALSE), error = function(e) NULL)
+      if (!is.null(parsed) && !is.null(parsed$data$gene)) {
+        message("[gnomAD] Using primed payload: ", gnomad_cache_path(gene_name),
+                " (", length(parsed$data$gene$variants), " variants)")
+        cache_set("gnomad_api", gene_name, parsed)
+        return(parsed)
+      }
+      message("[gnomAD] Primed payload unusable, refetching: ", gnomad_cache_path(gene_name))
+    }
+  }
   gene_symbol=gene_name
   # Query both exome and genome data
   query <- "
@@ -1733,6 +1891,11 @@ query_gnomad_api <- function(gene_name) {
     message("[gnomAD API] Got ", n_variants, " variants from gnomad_r4")
     
     if (n_variants > 0) {
+      gnomad_cache_write(gene_name, resp_text,
+                         meta = list(url = url, dataset = "gnomad_r4",
+                                     reference_genome = "GRCh38",
+                                     http_status = status_code(response),
+                                     n_variants = n_variants))
       cache_set("gnomad_api", gene_name, json_parsed)
       return(json_parsed)
     }
@@ -2781,6 +2944,20 @@ fetch_conservation_scores <- function(gene_symbol, prot_length) {
     message("[UCSC Cons] Cache hit for ", gene_symbol)
     return(cached)
   }
+  # Disk table before the windows. PhyloP and PhastCons feed PP3/BP4 and the
+  # conservation-corroborated PM1_strong upgrade, and a full gene is dozens of
+  # 50 kb UCSC window requests, so refetching them is both slow and a source of
+  # drift between runs.
+  if (!payload_cache_refresh()) {
+    .cons_disk <- payload_cache_read_rds("ucsc_cons", cache_key)
+    if (!is.null(.cons_disk) && is.data.frame(.cons_disk) && nrow(.cons_disk) > 0) {
+      message("[UCSC Cons] Using primed table: ",
+              file.path(payload_cache_dir("ucsc_cons"), paste0(cache_key, ".rds")),
+              " (", nrow(.cons_disk), " positions)")
+      cache_set("ucsc_cons", cache_key, .cons_disk)
+      return(.cons_disk)
+    }
+  }
 
   message("[UCSC Cons] Starting conservation fetch for ", gene_symbol,
           " (", prot_length, " aa)")
@@ -2880,6 +3057,13 @@ fetch_conservation_scores <- function(gene_symbol, prot_length) {
   message("[UCSC Cons] Done. ", n_covered, "/", prot_length,
           " AA positions covered by PhyloP 100V")
 
+  payload_cache_write_rds("ucsc_cons", cache_key, result,
+                          meta = list(gene = gene_symbol, prot_length = prot_length,
+                                      chr = chr, gene_start = gene_start,
+                                      gene_end = gene_end, window_bp = win_size,
+                                      n_windows = length(windows),
+                                      positions_covered = n_covered,
+                                      source = "UCSC hgGeneGraph/wiggle windows"))
   cache_set("ucsc_cons", cache_key, result)
   return(result)
 }
