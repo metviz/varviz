@@ -108,6 +108,13 @@ UNIVERSE_IN    <- Sys.getenv("VARVIZ_UNIVERSE", "analyses/derived/variant_univer
 .out_dir <- Sys.getenv("VARVIZ_OUT_DIR", "analyses/ps_final")
 CHECKPOINT_DIR <- file.path(.out_dir, "classifications")
 SUMMARY_OUT    <- file.path(.out_dir, "summary.tsv")
+# Optional master table: the complete build_variant_table() output per gene, with
+# the dual-pass columns appended. The per-gene checkpoint keeps only the eleven
+# classification columns, which discards every evidence value the call was made
+# from -- AlphaMissense, REVEL, MDS, gnomAD, conservation, ClinVar detail -- so a
+# run cannot afterwards be asked why a variant scored the way it did. Off unless
+# VARVIZ_MASTER_DIR is set, so documented invocations are byte-unchanged.
+MASTER_DIR     <- Sys.getenv("VARVIZ_MASTER_DIR", "")
 # summary.tsv is the FINAL shipping build the manuscript numbers were read
 # from. Overwriting it requires the explicit opt-in VARVIZ_FORCE=1.
 .force <- identical(Sys.getenv("VARVIZ_FORCE", ""), "1")
@@ -480,6 +487,28 @@ classify_gene <- function(gene_name) {
       varviz_rule_blind             = res_blind$rule
     )
   })
+
+  if (nzchar(MASTER_DIR)) {
+    dir.create(MASTER_DIR, recursive = TRUE, showWarnings = FALSE)
+    # vtbl and out_rows are row-aligned by construction: out_rows is built by
+    # iterating seq_len(nrow(vtbl)).
+    carry <- setdiff(names(out_rows), c("gene", "p_notation"))
+    # dbNSFP_JSON is the raw payload and was 45% of the bytes in a smoke test.
+    # Every score it holds is already broken out into its own column, so it is
+    # redundant here and dropping it takes the full universe from ~287 MB to
+    # ~158 MB.
+    keep <- setdiff(names(vtbl), "dbNSFP_JSON")
+    master <- dplyr::bind_cols(vtbl[, keep, drop = FALSE],
+                               out_rows[, carry, drop = FALSE])
+    master$gene <- gene_name
+    master <- master[, c("gene", setdiff(names(master), "gene")), drop = FALSE]
+    readr::write_tsv(master, file.path(MASTER_DIR, paste0(gene_name, "__master.tsv")),
+                     na = "")
+    cat(sprintf("    master table: %d rows x %d cols -> %s\n",
+                nrow(master), ncol(master),
+                file.path(MASTER_DIR, paste0(gene_name, "__master.tsv"))))
+  }
+
   out_rows
 }
 
