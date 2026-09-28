@@ -504,12 +504,64 @@ classify_gene <- function(gene_name) {
     master <- master[, c("gene", setdiff(names(master), "gene")), drop = FALSE]
     readr::write_tsv(master, file.path(MASTER_DIR, paste0(gene_name, "__master.tsv")),
                      na = "")
+    write_run_manifest(gene_name, MASTER_DIR)
     cat(sprintf("    master table: %d rows x %d cols -> %s\n",
                 nrow(master), ncol(master),
                 file.path(MASTER_DIR, paste0(gene_name, "__master.tsv"))))
   }
 
   out_rows
+}
+
+# Per-gene run manifest. A run recorded its inputs and its analysis parameters but
+# not the code that consumed them, which is why an earlier run could not be
+# accounted for: its caches and its code were unchanged, yet some variants scored
+# differently, and nothing stored beside it named the configuration. Identical
+# inputs under a different flag are a different call.
+#
+# Written per gene rather than once per run because shards execute concurrently
+# against one output directory; a single shared file would be a write race, the
+# same reason the classification checkpoints are per gene.
+write_run_manifest <- function(gene_name, dir_out, universe = UNIVERSE_IN) {
+  dir.create(dir_out, recursive = TRUE, showWarnings = FALSE)
+  sh <- function(cmd) tryCatch(trimws(paste(system(cmd, intern = TRUE, ignore.stderr = TRUE),
+                                            collapse = "")),
+                               error = function(e) "", warning = function(w) "")
+  file_sha <- function(f) {
+    if (!nzchar(f) || !file.exists(f)) return("")
+    if (!requireNamespace("digest", quietly = TRUE)) return("")
+    digest::digest(file = f, algo = "sha256")
+  }
+  # Every flag that can move a call. Read from live state rather than restated, so
+  # the manifest cannot drift from the run it describes.
+  flags <- list(
+    "varviz.am_pp3_supporting" = getOption("varviz.am_pp3_supporting", AM_PP3_SUPPORTING),
+    "varviz.am_hybrid"         = isTRUE(getOption("varviz.am_hybrid", TRUE)),
+    "varviz.am_calibrated"     = isTRUE(getOption("varviz.am_calibrated", FALSE)),
+    "varviz.am_no_override"    = isTRUE(getOption("varviz.am_no_override", FALSE)),
+    "varviz.am_cap_pathogenic" = isTRUE(getOption("varviz.am_cap_pathogenic", TRUE)),
+    "varviz.pp3_3pt"           = isTRUE(getOption("varviz.pp3_3pt", FALSE)),
+    "varviz.pp3_meta_consensus"= !identical(getOption("varviz.pp3_meta_consensus", TRUE), FALSE),
+    "varviz.pp3_ps3_proxy"     = isTRUE(getOption("varviz.pp3_ps3_proxy", FALSE)),
+    "varviz.mds_pm1"           = isTRUE(getOption("varviz.mds_pm1", TRUE)),
+    "varviz.mds_tiered"        = isTRUE(getOption("varviz.mds_tiered", FALSE)),
+    "varviz.pm2_points"        = getOption("varviz.pm2_points", 1L)
+  )
+  rec <- list(
+    gene            = gene_name,
+    written_at      = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    varviz_version  = if (exists("VARVIZ_VERSION")) VARVIZ_VERSION else "",
+    git_commit      = sh("git rev-parse HEAD 2>/dev/null"),
+    git_dirty       = nzchar(sh("git status --porcelain -- server.R analyses/ 2>/dev/null")),
+    r_version       = paste(R.version$major, R.version$minor, sep = "."),
+    harness         = "analyses/ps_final_harness.R",
+    universe        = universe,
+    universe_sha256 = file_sha(universe),
+    flags           = flags
+  )
+  f <- file.path(dir_out, paste0(gene_name, "__manifest.json"))
+  writeLines(as.character(jsonlite::toJSON(rec, auto_unbox = TRUE, pretty = TRUE)), f)
+  invisible(f)
 }
 
 # -----------------------------------------------------------------------------
