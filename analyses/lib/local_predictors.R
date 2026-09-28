@@ -234,7 +234,13 @@ load_dbnsfp_for_region <- function(chrom, start, end,
         `100way_vertebrate` = list(score = num_first(201)),
         `17way_primate`     = list(score = num_first(205))
       ),
-      siphy_29way     = list(pi = list(a = num_first(207)))
+      siphy_29way     = list(pi = list(a = num_first(207))),
+      # Population frequencies. Verified against the dbNSFP 4.9a chr1 header:
+      # column 213 is 1000Gp3_AF and column 235 is ExAC_AF. These were previously
+      # left NA and a per-variant rsID fetch was attempted instead, through a
+      # function that does not exist; the values were already in the row.
+      onekg           = list(af = num_first(213)),
+      exac            = list(af = num_first(235))
       # dbscsnv (splice ada/rf) intentionally absent — not in dbNSFP 4.9a;
       # safe_extract_num returns NA_real_ for the missing path.
     )

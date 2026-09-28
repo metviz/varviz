@@ -3373,9 +3373,11 @@ parse_dbnsfp_scores <- function(hit) {
   gnomad_eur <- NA_real_
   gnomad_eas <- NA_real_
   gnomad_sas <- NA_real_
-  onekg_af   <- NA_real_
-  exac_af    <- NA_real_
-  message("[dbNSFP] Population fields absent from dbnsfp — will fetch via rsID")
+  # 1000 Genomes and ExAC come straight from the dbNSFP row (columns 213 and 235
+  # of 4.9a). gnomAD ancestry frequencies above stay NA here and are filled from
+  # the gene-level gnomAD payload by get_gnomad_pop().
+  onekg_af   <- safe_extract_num(d, "onekg", "af")
+  exac_af    <- safe_extract_num(d, "exac", "af")
   
   # ── ClinVar from MyVariant ──
   cv_sig <- safe_extract(cv, "rcv", "clinical_significance")
@@ -5420,17 +5422,12 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       }
     }, error = function(e) "")
 
-    # Ancestry AFs: fetched via rsID since dbNSFP object has no population fields
-    if (dbnsfp$has_data) {
-      pop_data <- tryCatch(fetch_pop_by_rsid(dbnsfp_raw), error = function(e) NULL)
-      if (!is.null(pop_data)) {
-        if (!is.na(pop_data$gnomAD_AFR)) dbnsfp$population$gnomAD_AFR <- pop_data$gnomAD_AFR
-        if (!is.na(pop_data$gnomAD_NFE)) dbnsfp$population$gnomAD_NFE <- pop_data$gnomAD_NFE
-        if (!is.na(pop_data$gnomAD_EAS)) dbnsfp$population$gnomAD_EAS <- pop_data$gnomAD_EAS
-        if (!is.na(pop_data$gnomAD_SAS)) dbnsfp$population$gnomAD_SAS <- pop_data$gnomAD_SAS
-        if (!is.na(pop_data$OneKG_AF))   dbnsfp$population$OneKG_AF   <- pop_data$OneKG_AF
-      }
-    }
+    # There was a fetch_pop_by_rsid() call here to fill ancestry frequencies. It
+    # was defined nowhere, so tryCatch swallowed the error on every variant and
+    # the block never ran. OneKG_AF and ExAC_AF now come from the dbNSFP row in
+    # parse_dbnsfp_scores(), and the gnomAD ancestry frequencies come from the
+    # gene-level payload via get_gnomad_pop(), so nothing needs fetching per
+    # variant.
 
     # Helper to extract score + verdict from a parsed section item
     sv <- function(section, tool) {
