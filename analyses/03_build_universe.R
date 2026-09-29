@@ -54,6 +54,13 @@ OUT       <- "analyses/derived/variant_universe.tsv"
 VB_PATH   <- "analyses/derived/varibench_canonical.tsv"
 MV_PATH   <- "analyses/derived/mavedb_canonical.tsv"
 
+# Per-scoreset numbering offsets. Two MaveDB scoresets are numbered on their own
+# construct rather than on the gene's reference protein: TP53 00000059-a-1 spans
+# positions 1-191 and needs +101 to reach 102-292, and BRCA1 00000003-a-2 needs +1.
+# Uncorrected, those variants get classified at the wrong residues.
+source("analyses/lib/dms_polarity.R")
+DMS_OFF <- load_dms_offsets()
+
 stopifnot(file.exists(VB_PATH), file.exists(MV_PATH))
 
 vb <- read_tsv(VB_PATH, show_col_types = FALSE)
@@ -75,15 +82,46 @@ vb_canonical <- vb |>
     set              = as.character(set),
     hgvs_g           = as.character(hgvs_g),
     clinvar_alleleid = as.character(clinvar_alleleid),
-    hgvs_pro_raw     = NA_character_
+    hgvs_pro_raw     = NA_character_,
+    offset_applied   = 0L          # VariBench is on reference numbering already
   ) |>
   filter(!is.na(p_notation))  # drop frameshifts, deletions, synonymous (=) etc.
 
-mv_canonical <- mv |>
+# Two passes, with explicit intermediate columns rather than reassigning
+# p_notation in place: transmute() evaluates in order, so a later
+# "p_notation_raw = p_notation" would capture the value just written, not the one
+# that came in. p_notation_raw therefore carries the scoreset's OWN numbering, which
+# is what makes a corrected row traceable back to the scoreset it came from.
+mv_shifted <- mv |>
+  mutate(
+    .p_construct = to_one_letter_v(p_notation),   # idempotent for already-one-letter form
+    .offset      = vapply(as.character(study),
+                          function(s) dms_offset_for(DMS_OFF, s), integer(1)),
+    .p_reference = shift_p_notation(.p_construct, .offset)
+  )
+
+# Fail closed. filter(!is.na(p_notation)) below would quietly drop any row whose
+# shift failed, and a silently shorter universe is the hardest kind of error to
+# notice later.
+lost <- sum(!is.na(mv_shifted$.p_construct) & is.na(mv_shifted$.p_reference))
+if (lost > 0L) {
+  bad <- head(unique(mv_shifted$study[!is.na(mv_shifted$.p_construct) &
+                                      is.na(mv_shifted$.p_reference)]), 5)
+  stop(sprintf(paste0("numbering correction dropped %d MaveDB row(s) that had a valid ",
+                      "notation before the shift (scoresets: %s). Check the offsets in ",
+                      "analyses/derived/mavedb_scoreset_offsets.tsv."),
+               lost, paste(bad, collapse = ", ")), call. = FALSE)
+}
+
+n_shift <- sum(mv_shifted$.offset != 0L, na.rm = TRUE)
+cat(sprintf("[universe] numbering corrected: %d MaveDB rows across %d scoreset(s)\n",
+            n_shift, length(unique(mv_shifted$study[mv_shifted$.offset != 0L]))))
+
+mv_canonical <- mv_shifted |>
   transmute(
     gene             = gene,
-    p_notation       = to_one_letter_v(p_notation),  # idempotent for already-one-letter form
-    p_notation_raw   = p_notation,
+    p_notation       = .p_reference,
+    p_notation_raw   = .p_construct,
     source           = source,
     label            = NA_character_,
     score_raw        = score_raw,
@@ -91,7 +129,8 @@ mv_canonical <- mv |>
     set              = NA_character_,
     hgvs_g           = NA_character_,
     clinvar_alleleid = NA_character_,
-    hgvs_pro_raw     = hgvs_pro_raw
+    hgvs_pro_raw     = hgvs_pro_raw,
+    offset_applied   = .offset
   ) |>
   filter(!is.na(p_notation))
 

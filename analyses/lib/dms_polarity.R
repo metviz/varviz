@@ -129,3 +129,31 @@ dms_offset_for <- function(off, study) {
   i <- match(as.character(study)[1], names(off))
   if (is.na(i)) 0L else as.integer(off[[i]])
 }
+
+# Move a one-letter protein notation by a recorded scoreset offset, keeping the
+# reference and alternate residues. Used by the universe build to put MaveDB
+# scoresets on their gene's reference numbering: TP53 00000059-a-1 is a domain
+# construct numbered from its own residue 1 and needs +101, BRCA1 00000003-a-2
+# needs +1. Left uncorrected those variants are classified at the wrong residues.
+#
+# Fails closed. A value that is not a well-formed one-letter notation returns NA
+# rather than passing through unshifted, because an unshifted row is exactly the
+# defect this corrects and it would be the hardest kind to notice. A shift that
+# would put the position below 1 also returns NA: that means the recorded offset is
+# wrong for the row, and a negative position would silently corrupt a join key.
+shift_p_notation <- function(p_notation, offset) {
+  n <- max(length(p_notation), length(offset))
+  if (n == 0L) return(character(0))
+  p <- rep_len(as.character(p_notation), n)
+  k <- rep_len(suppressWarnings(as.integer(offset)), n)
+  out <- rep(NA_character_, n)
+  ok <- !is.na(p) & !is.na(k) & grepl("^p\\.[A-Z*][0-9]+[A-Z*]$", p)
+  if (!any(ok)) return(out)
+  ref <- sub("^p\\.([A-Z*])[0-9]+[A-Z*]$", "\\1", p[ok])
+  pos <- as.integer(sub("^p\\.[A-Z*]([0-9]+)[A-Z*]$", "\\1", p[ok]))
+  alt <- sub("^p\\.[A-Z*][0-9]+([A-Z*])$", "\\1", p[ok])
+  new <- pos + k[ok]
+  res <- ifelse(is.na(new) | new < 1L, NA_character_, paste0("p.", ref, new, alt))
+  out[ok] <- res
+  out
+}
