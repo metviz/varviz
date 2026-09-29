@@ -125,8 +125,14 @@ cat("-- all three Panel B scripts use the shared rule, not their own copy --\n")
 # The reason the defect survived: the same quartile rule was written out three
 # times. Any script still computing it inline can be corrected in isolation and
 # drift again.
+# 10_compose_supp_s2.R carried a fourth copy and is checked when present. It is
+# untracked in this repository, so its absence is not a failure.
 for (f in c("analyses/07_panel_b_dms.R", "analyses/panel_b_dms_reval.R",
-            "analyses/panel_b_auroc_summary.R")) {
+            "analyses/panel_b_auroc_summary.R", "analyses/10_compose_supp_s2.R")) {
+  if (!file.exists(resolve(f))) {
+    cat(sprintf("  [skip] %s is not present\n", basename(f)))
+    next
+  }
   src <- readLines(resolve(f), warn = FALSE)
   code <- sub("#.*$", "", src)
   check(any(grepl("dms_polarity\\.R", code)), sprintf("%s sources the shared helper", basename(f)))
@@ -137,6 +143,11 @@ for (f in c("analyses/07_panel_b_dms.R", "analyses/panel_b_dms_reval.R",
         sprintf("%s goes through the shared rule", basename(f)))
   check(!any(grepl("score_dms *<= *q25", code)),
         sprintf("%s no longer hardcodes score_dms <= q25", basename(f)))
+  # A scoreset on different numbering was classified at the wrong residues. If one
+  # script drops it and another plots it, the figure and the table disagree about
+  # what the panel contains, which is how the three copies diverged before.
+  check(any(grepl("dms_offset_for\\(", code)),
+        sprintf("%s excludes scoresets numbered on a different sequence", basename(f)))
 }
 
 cat(sprintf("\n%s: %d failure(s)\n", if (fails) "FAIL" else "PASS", fails))

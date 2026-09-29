@@ -25,6 +25,7 @@ suppressMessages({
 source("analyses/lib/metric_suite.R")
 source("analyses/lib/dms_polarity.R")
 DMS_POL <- load_dms_polarity()
+DMS_OFF <- load_dms_offsets()
 
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
@@ -69,6 +70,19 @@ joined$score_dms <- joined[[score_col]]
 # direction per scoreset comes from analyses/lib/dms_polarity.R; a scoreset the
 # table does not list keeps the documented lower-is-damaging default, so this is
 # byte-unchanged for the twelve scoresets that were already right.
+# Drop scoresets numbered on a different sequence: their variants were classified
+# at the wrong residues, so no sign convention makes the result interpretable.
+# Kept in one place with the polarity rule for the same reason the polarity rule is
+# there: this file used to be one of three copies.
+joined$dms_off <- vapply(as.character(joined$study),
+                         function(s) dms_offset_for(DMS_OFF, s), integer(1))
+shifted <- sort(unique(joined$study[joined$dms_off != 0L]))
+if (length(shifted)) {
+  cat(sprintf("[panel_b] EXCLUDED, numbered on a different sequence: %s\n",
+              paste(shifted, collapse = ", ")))
+  joined <- joined[joined$dms_off == 0L, , drop = FALSE]
+}
+
 joined$dms_dir <- vapply(as.character(joined$study),
                          function(s) dms_direction_for(DMS_POL, s), character(1))
 
