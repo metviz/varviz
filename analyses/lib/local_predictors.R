@@ -180,47 +180,134 @@ load_dbnsfp_for_region <- function(chrom, start, end,
   env
 }
 
+# ---------------------------------------------------------------------------
+# MANE transcript resolution
+# ---------------------------------------------------------------------------
+# dbNSFP's per-transcript columns are only usable once you know which element
+# belongs to the MANE Select transcript, and MANE is the first element for only
+# half the benchmark genes (see analyses/reports/dbnsfp_mane_index_survey.tsv).
+# The map is read once from the same gene_mane.tsv the app's MANE join uses, then
+# memoised, because the row mapper runs once per variant.
+.MANE_TX_ENV <- new.env(parent = emptyenv())
+
+.dbnsfp_mane_tx <- function(gene, mane_path = "analyses/derived/gene_mane.tsv") {
+  if (length(gene) == 0L) return(NA_character_)
+  gene <- as.character(gene)[1]
+  if (is.na(gene) || !nzchar(gene)) return(NA_character_)
+  if (is.null(.MANE_TX_ENV$map)) {
+    # Dual-cwd, matching the tests: run from the project root or from
+    # analyses/tests. A missing file is not fatal -- it degrades to the
+    # first-element behaviour rather than dropping every predictor.
+    path <- if (file.exists(mane_path)) mane_path else file.path("..", mane_path)
+    if (!file.exists(path)) {
+      .MANE_TX_ENV$map <- character(0)
+      return(NA_character_)
+    }
+    tb <- data.table::fread(path, select = c("gene_name", "mane_ensembl"),
+                            showProgress = FALSE, na.strings = c("", "NA"))
+    tx <- sub("\\..*$", "", as.character(tb$mane_ensembl))   # drop the version suffix
+    nm <- as.character(tb$gene_name)
+    ok <- !is.na(nm) & nzchar(nm) & !is.na(tx) & nzchar(tx)
+    m  <- tx[ok]
+    names(m) <- nm[ok]
+    # First row wins: gene_mane.tsv carries one MANE Select per symbol, so a
+    # repeated symbol is an alias row, not a second transcript.
+    .MANE_TX_ENV$map <- m[!duplicated(names(m))]
+  }
+  m <- .MANE_TX_ENV$map
+  if (!length(m)) return(NA_character_)
+  i <- match(gene, names(m))
+  if (is.na(i)) NA_character_ else unname(m[[i]])
+}
+
+# NA asks the row mapper to resolve MANE from the row; NULL is the pre-change
+# first-element read. The option exists so a historical run can be reproduced
+# byte for byte, which is otherwise impossible once selection changes.
+.dbnsfp_mane_mode <- function() {
+  if (isTRUE(getOption("varviz.dbnsfp_mane", TRUE))) NA_character_ else NULL
+}
+
 # Private: convert a single dbNSFP row (character vector of 458 cols) into
 # the parse_dbnsfp_scores-shaped list. Tolerates "." (dbNSFP missing marker)
-# and ";"-separated transcript-level values (takes first non-empty entry —
-# matches MyVariant.info's behaviour of surfacing the first transcript
-# prediction).
-.dbnsfp_row_to_hit <- function(p) {
-  num_first <- function(i) {
-    if (i > length(p)) return(NA_real_)
-    v <- p[i]
-    if (is.na(v) || v == "." || v == "") return(NA_real_)
-    parts <- strsplit(v, ";", fixed = TRUE)[[1]]
-    parts <- parts[parts != "" & parts != "."]
-    if (length(parts) == 0L) return(NA_real_)
-    suppressWarnings(as.numeric(parts[1]))
+# and ";"-separated transcript-level values.
+#
+# mane_tx controls which element of a ";"-separated column is read:
+#   NULL  take the first non-"." element. The pre-change behaviour, kept so a
+#         caller that has no gene context, and every existing test, is unchanged.
+#   NA    resolve the MANE transcript from this row's own genename column.
+#   <id>  use this Ensembl transcript id.
+#
+# Only columns verified to be aligned with Ensembl_transcriptid (col 15) are
+# indexed. Measured over 5,256 multi-transcript rows across eight genes, list
+# lengths matched the transcript count in every row for aapos, Ensembl_proteinid,
+# HGVSp_VEP, SIFT, SIFT4G, Polyphen2 HDIV/HVAR, FATHMM, PROVEAN, MetaRNN, REVEL
+# and AlphaMissense, and never matched it for LRT, MetaSVM, MetaLR, CADD, DANN,
+# GERP, PhyloP, PhastCons, SiPhy, 1000Gp3_AF and ExAC_AF, which carry one value.
+# MutationTaster is the trap: 357 rows aligned, 331 single and 4,568 neither,
+# because its list is per prediction model. Indexing it by transcript position
+# would pair a transcript with another axis's value, which is the same class of
+# error this change removes, so it keeps the first element.
+.dbnsfp_row_to_hit <- function(p, mane_tx = NULL) {
+  mane_idx <- NA_integer_
+  if (!is.null(mane_tx)) {
+    tx_raw <- if (length(p) >= 15L) p[15] else "."
+    if (!is.na(tx_raw) && tx_raw != "." && tx_raw != "") {
+      tx   <- strsplit(tx_raw, ";", fixed = TRUE)[[1]]
+      want <- as.character(mane_tx)[1]
+      if (is.na(want)) {
+        # A dbNSFP row can span overlapping genes, so try each symbol and keep
+        # the first whose MANE transcript this row actually lists.
+        gn_raw <- if (length(p) >= 13L) p[13] else "."
+        if (!is.na(gn_raw) && gn_raw != "." && gn_raw != "") {
+          for (g in unique(strsplit(gn_raw, ";", fixed = TRUE)[[1]])) {
+            cand <- .dbnsfp_mane_tx(g)
+            if (!is.na(cand) && cand %in% tx) { want <- cand; break }
+          }
+        }
+      }
+      if (!is.na(want)) {
+        i <- which(tx == want)
+        if (length(i)) mane_idx <- i[1]
+      }
+    }
   }
-  chr_first <- function(i) {
+  # use_mane = TRUE reads the MANE element and falls back to the first scored one,
+  # because dbNSFP writes "." for a transcript a tool could not score and losing
+  # that row's evidence entirely would be worse than reporting another isoform's.
+  pick <- function(i, use_mane) {
     if (i > length(p)) return(NA_character_)
     v <- p[i]
     if (is.na(v) || v == "." || v == "") return(NA_character_)
     parts <- strsplit(v, ";", fixed = TRUE)[[1]]
-    parts <- parts[parts != "" & parts != "."]
-    if (length(parts) == 0L) return(NA_character_)
-    parts[1]
+    if (use_mane && !is.na(mane_idx) && mane_idx <= length(parts)) {
+      cand <- parts[mane_idx]
+      if (!is.na(cand) && cand != "." && cand != "") return(cand)
+    }
+    keep <- parts[parts != "" & parts != "."]
+    if (length(keep) == 0L) return(NA_character_)
+    keep[1]
   }
+  num_tx    <- function(i) suppressWarnings(as.numeric(pick(i, TRUE)))
+  chr_tx    <- function(i) pick(i, TRUE)
+  num_first <- function(i) suppressWarnings(as.numeric(pick(i, FALSE)))
+  chr_first <- function(i) pick(i, FALSE)
   list(
     dbnsfp = list(
-      sift            = list(score = num_first(38),  pred = chr_first(40)),
+      sift            = list(score = num_tx(38),    pred = chr_tx(40)),
       polyphen2       = list(
-        hdiv          = list(score = num_first(44),  pred = chr_first(46)),
-        hvar          = list(score = num_first(47),  pred = chr_first(49))
+        hdiv          = list(score = num_tx(44),    pred = chr_tx(46)),
+        hvar          = list(score = num_tx(47),    pred = chr_tx(49))
       ),
-      lrt             = list(score = num_first(50),  pred = chr_first(52)),
-      mutationtaster  = list(score = num_first(54),  pred = chr_first(56)),
-      fathmm          = list(score = num_first(62),  pred = chr_first(64)),
-      provean         = list(score = num_first(65),  pred = chr_first(67)),
-      metasvm         = list(score = num_first(70),  pred = chr_first(72)),
-      metalr          = list(score = num_first(73),  pred = chr_first(75)),
-      metarnn         = list(score = num_first(77),  pred = chr_first(79)),
-      revel           = list(score = num_first(83)),
-      alphamissense   = list(am_pathogenicity = num_first(138),
-                             am_class         = chr_first(140)),
+      lrt             = list(score = num_first(50), pred = chr_first(52)),
+      mutationtaster  = list(score = num_first(54), pred = chr_first(56)),
+      fathmm          = list(score = num_tx(62),    pred = chr_tx(64)),
+      provean         = list(score = num_tx(65),    pred = chr_tx(67)),
+      metasvm         = list(score = num_first(70), pred = chr_first(72)),
+      metalr          = list(score = num_first(73), pred = chr_first(75)),
+      metarnn         = list(score = num_tx(77),    pred = chr_tx(79)),
+      revel           = list(score = num_tx(83)),
+      alphamissense   = list(am_pathogenicity = num_tx(138),
+                             am_class         = chr_tx(140)),
       cadd            = list(raw_rankscore = num_first(154),
                              phred         = num_first(155)),
       dann            = list(score = num_first(159)),
@@ -253,7 +340,7 @@ lookup_dbnsfp_local <- function(env, chrom, pos, ref, alt) {
   if (!is.null(dt_chrom) && as.character(chrom) != dt_chrom) return(NULL)
   key <- paste0(as.integer(pos), "_", as.character(ref), "_", as.character(alt))
   if (!exists(key, envir = env, inherits = FALSE)) return(NULL)
-  .dbnsfp_row_to_hit(get(key, envir = env, inherits = FALSE))
+  .dbnsfp_row_to_hit(get(key, envir = env, inherits = FALSE), mane_tx = .dbnsfp_mane_mode())
 }
 
 # Protein-key path — the harness's primary lookup since the universe TSV
@@ -273,9 +360,10 @@ lookup_dbnsfp_by_aa <- function(env, chrom, aa_pos, aa_alt, aa_ref = NA_characte
   if (!is.na(aa_ref) && nzchar(as.character(aa_ref))) {
     key <- paste0(as.integer(aa_pos), "_", as.character(aa_ref), "_", as.character(aa_alt))
     if (!exists(key, envir = env_p, inherits = FALSE)) return(NULL)
-    return(.dbnsfp_row_to_hit(get(key, envir = env_p, inherits = FALSE)))
+    return(.dbnsfp_row_to_hit(get(key, envir = env_p, inherits = FALSE),
+                              mane_tx = .dbnsfp_mane_mode()))
   }
   key <- paste0(as.integer(aa_pos), "_", as.character(aa_alt))
   if (!exists(key, envir = env_p, inherits = FALSE)) return(NULL)
-  .dbnsfp_row_to_hit(get(key, envir = env_p, inherits = FALSE))
+  .dbnsfp_row_to_hit(get(key, envir = env_p, inherits = FALSE), mane_tx = .dbnsfp_mane_mode())
 }
