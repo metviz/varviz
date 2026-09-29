@@ -24,13 +24,18 @@ suppressMessages({
 })
 source("analyses/lib/metric_suite.R")
 source("analyses/lib/dms_polarity.R")
+source("analyses/lib/run_inputs.R")
 DMS_POL <- load_dms_polarity()
 DMS_OFF <- load_dms_offsets()
 
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
-CLASS_SUMMARY  <- "analyses/derived/varviz_classifications.tsv"
-CHECKPOINT_DIR <- "analyses/classifications"
+# Resolved rather than hardcoded: the consolidated default was six months
+# stale with a matching row count, which is what made it dangerous. The
+# resolver keeps that default and warns when a newer run exists.
+.cls_in        <- resolve_classifications(tag = "panel_b")
+CLASS_SUMMARY  <- .cls_in$path
+CHECKPOINT_DIR <- resolve_checkpoint_dir()
 UNIVERSE       <- "analyses/derived/variant_universe.tsv"
 FIG_OUT        <- "analyses/figures/panel_b_dms.pdf"
 HTML_OUT       <- "analyses/reports/panel_b.html"

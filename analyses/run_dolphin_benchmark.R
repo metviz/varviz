@@ -21,8 +21,11 @@
 suppressPackageStartupMessages({
   source("analyses/lib/dolphin_bulk.R", local = FALSE)
 })
+source("analyses/lib/run_inputs.R")
 
-UNIVERSE_TSV <- "analyses/derived/varviz_classifications.tsv"
+# Resolved, not hardcoded: this default was six months stale while its row
+# count still matched the current run.
+UNIVERSE_TSV <- resolve_classifications(tag = "driver")$path
 CACHE_DIR    <- "analyses/raw/dolphin/by_gene"
 LOG_PATH     <- "analyses/raw/dolphin/run_log.tsv"
 

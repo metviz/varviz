@@ -13,11 +13,16 @@ suppressMessages({
   library(dplyr); library(readr); library(ggplot2); library(tidyr)
 })
 source("analyses/lib/metric_suite.R")
+source("analyses/lib/run_inputs.R")
 
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
-CLASS_SUMMARY <- "analyses/derived/varviz_classifications.tsv"
-CHECKPOINT_DIR <- "analyses/classifications"
+# Resolved rather than hardcoded: the consolidated default was six months
+# stale with a matching row count, which is what made it dangerous. The
+# resolver keeps that default and warns when a newer run exists.
+.cls_in        <- resolve_classifications(tag = "panel_a")
+CLASS_SUMMARY  <- .cls_in$path
+CHECKPOINT_DIR <- resolve_checkpoint_dir()
 UNIVERSE       <- "analyses/derived/variant_universe.tsv"
 FIG_OUT        <- "analyses/figures/panel_a_clinical.pdf"
 HTML_OUT       <- "analyses/reports/panel_a.html"

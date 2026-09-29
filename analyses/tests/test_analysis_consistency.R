@@ -123,29 +123,57 @@ if (all(file.exists(c(pol_p, off_p, uni_p)))) {
   warn("polarity/offset/universe tables absent; regenerate with analyses/check_mavedb_offsets.py and analyses/determine_mavedb_polarity.py")
 }
 
-cat("-- run-specific inputs are overridable, so a panel cannot silently read a stale run --\n")
+cat("-- run-specific inputs go through the resolver, not a hardcoded path --\n")
 # analyses/derived/varviz_classifications.tsv was six months stale while its row
-# count still matched, which is exactly what makes it dangerous. A script that
-# hardcodes it with no override reads whatever happens to be on disk.
+# count still matched the current run, which is what made it dangerous. On the real
+# repository 21 run directories are newer than it. Five scripts read it with no way
+# to select a run; they now resolve it, and the fallback announces its own staleness.
+#
+# analyses/repro/03_which_run.R is exempt by design. It scores several candidate runs
+# against the manuscript's claims, so the consolidated file being one hardcoded
+# candidate among five is the question it answers, not a defect.
 CLS <- "analyses/derived/varviz_classifications.tsv"
-hard <- character(0)
+# 03_which_run.R: its candidate list IS the question it answers.
+# run_inputs.R: it defines the resolver, so it necessarily names the default.
+EXEMPT <- c("03_which_run.R", "run_inputs.R")
+unresolved <- character(0)
 for (f in scripts) {
-  cd <- code_of(f)
+  cd <- code_of(f); b <- basename(f)
   hit <- grep(CLS, cd, fixed = TRUE)
   if (!length(hit)) next
-  # An assignment can wrap, so look at a small window around each hit rather than
-  # the single line: 10_compose_supp_s2.R has its Sys.getenv on the line above.
+  if (b %in% EXEMPT) next
+  if (any(grepl("SUMMARY_OUT|OUT[[:space:]]*<-", cd[hit]))) next   # a writer
+  if (any(grepl("resolve_classifications\\(", cd))) next          # resolved
   win <- unique(unlist(lapply(hit, function(i) seq(max(1L, i - 2L), min(length(cd), i + 1L)))))
   if (any(grepl("Sys.getenv", cd[win]))) next
-  if (any(grepl("SUMMARY_OUT|OUT[[:space:]]*<-", cd[hit]))) next   # a writer, not a reader
-  hard <- c(hard, basename(f))
+  unresolved <- c(unresolved, b)
 }
-if (length(hard)) {
-  warn(sprintf("%d script(s) read %s with no override: %s",
-               length(hard), CLS, paste(unique(hard), collapse = ", ")))
-  warn("  pass a run directory explicitly, or add Sys.getenv, before quoting their numbers")
+check(length(unresolved) == 0L,
+      sprintf("no script reads the consolidated classifications unresolved (found %d%s)",
+              length(unresolved),
+              if (length(unresolved)) paste0(": ", paste(unique(unresolved), collapse = ", ")) else ""))
+
+cat("-- the derived classification chain is still a single global path --\n")
+# 11_merge_dolphin.R now resolves its input, but the files it and 22_mds_benchmark.R
+# write are fixed paths, so a stale _dolphin or _mds file carries the same hazard one
+# link down the chain. Reported, not enforced: giving these a run directory changes
+# their interfaces and the chain's shape, which is a design decision.
+chain <- c("analyses/derived/varviz_classifications_dolphin.tsv",
+           "analyses/derived/varviz_classifications_mds.tsv")
+downstream <- character(0)
+for (f in scripts) {
+  cd <- code_of(f)
+  if (any(vapply(chain, function(p) any(grepl(p, cd, fixed = TRUE)), logical(1)))) {
+    if (!any(grepl("resolve_classifications\\(|Sys.getenv|args\\[1\\]", cd)))
+      downstream <- c(downstream, basename(f))
+  }
+}
+if (length(downstream)) {
+  warn(sprintf("%d script(s) read the derived chain at a fixed path: %s",
+               length(downstream), paste(unique(downstream), collapse = ", ")))
+  warn("  regenerate the chain from the intended run before quoting their numbers")
 } else {
-  check(TRUE, "no script reads the consolidated classifications without an override")
+  check(TRUE, "every derived-chain reader can be pointed at a run")
 }
 
 cat(sprintf("\n%s: %d failure(s)\n", if (fails) "FAIL" else "PASS", fails))
