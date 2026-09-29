@@ -23,6 +23,9 @@ suppressMessages({
   library(dplyr); library(readr); library(ggplot2); library(tidyr)
 })
 source("analyses/lib/metric_suite.R")
+source("analyses/lib/dms_polarity.R")
+DMS_POL <- load_dms_polarity()
+DMS_OFF <- load_dms_offsets()
 
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
@@ -65,17 +68,26 @@ score_col <- if ("score_raw" %in% names(joined)) {
 }
 joined$score_dms <- joined[[score_col]]
 
+# Scoresets numbered on a different sequence were classified at the wrong
+# residues, so no sign convention makes their result interpretable.
+joined$dms_off <- vapply(as.character(joined$study),
+                         function(s) dms_offset_for(DMS_OFF, s), integer(1))
+shifted <- sort(unique(joined$study[joined$dms_off != 0L]))
+if (length(shifted)) {
+  cat(sprintf("[panel_b] EXCLUDED, numbered on a different sequence: %s\n",
+              paste(shifted, collapse = ", ")))
+  joined <- joined[joined$dms_off == 0L, , drop = FALSE]
+}
+# Which tail is damaging is per scoreset: see analyses/lib/dms_polarity.R.
+joined$dms_dir <- vapply(as.character(joined$study),
+                         function(s) dms_direction_for(DMS_POL, s), character(1))
+
 joined <- joined |>
   group_by(study) |>
   mutate(
     q25      = quantile(score_dms, 0.25, na.rm = TRUE),
     q75      = quantile(score_dms, 0.75, na.rm = TRUE),
-    dms_bin  = case_when(
-      score_dms <= q25                    ~ "LOF",
-      score_dms >= q75                    ~ "WT-like",
-      score_dms >  q25 & score_dms <  q75 ~ "Partial",
-      TRUE                                ~ NA_character_
-    ),
+    dms_bin  = dms_bin_label(score_dms, q25, q75, dms_dir),
     truth_dms = case_when(
       dms_bin == "LOF"     ~ "Pathogenic",
       dms_bin == "WT-like" ~ "Benign",
