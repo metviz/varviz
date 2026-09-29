@@ -14,6 +14,9 @@ suppressMessages({library(dplyr); library(readr); library(tidyr)})
 # The panels' own AUROC (Mann-Whitney U, ties at 0.5), not pROC: the repository
 # does not depend on pROC and the panel figures are computed this way.
 source("analyses/lib/metric_suite.R")
+source("analyses/lib/dms_polarity.R")
+DMS_POL <- load_dms_polarity()
+DMS_OFF <- load_dms_offsets()
 
 REVAL_DIR <- Sys.getenv("REVAL_DIR", "analyses/ps_final_v231/classifications")
 MAVEDB    <- Sys.getenv("MAVEDB", "analyses/derived/mavedb_canonical.tsv")
@@ -30,13 +33,29 @@ if (is.na(score_col)) stop("no score column in ", MAVEDB)
 joined <- inner_join(mave, cls, by = c("gene", "p_notation"))
 joined$score_dms <- joined[[score_col]]
 
-# Per-study quartiles, identical to the panel: bottom 25% LOF, top 25% WT-like.
+# Per-study quartiles, identical to the panel, but which tail is loss-of-function
+# is per scoreset: nine of the 21 assays score higher for more damage, so a single
+# convention reported 1 - the true AUROC for those. See analyses/lib/dms_polarity.R.
+# Drop scoresets numbered on a different sequence before anything else: their
+# variants were classified at the wrong residues, so neither sign convention makes
+# the AUROC mean anything.
+joined$dms_off <- vapply(as.character(joined$study),
+                         function(s) dms_offset_for(DMS_OFF, s), integer(1))
+shifted <- sort(unique(joined$study[joined$dms_off != 0L]))
+if (length(shifted)) {
+  cat(sprintf("\n[panel_b] EXCLUDED, numbered on a different sequence (offset != 0): %s\n",
+              paste(shifted, collapse = ", ")))
+  cat("[panel_b]   these need the universe rebuilt on reference numbering and re-classified\n")
+  joined <- joined[joined$dms_off == 0L, , drop = FALSE]
+}
+
+joined$dms_dir <- vapply(as.character(joined$study),
+                         function(s) dms_direction_for(DMS_POL, s), character(1))
 joined <- joined |>
   group_by(study) |>
   mutate(q25 = quantile(score_dms, .25, na.rm = TRUE),
          q75 = quantile(score_dms, .75, na.rm = TRUE),
-         truth = case_when(score_dms <= q25 ~ 1, score_dms >= q75 ~ 0,
-                           TRUE ~ NA_real_)) |>
+         truth = dms_truth(score_dms, q25, q75, dms_dir)) |>
   ungroup() |>
   filter(!is.na(truth))
 
