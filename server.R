@@ -4977,7 +4977,12 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       if (nchar(mut_1l) > 0) {
         am_idx <- which(afs_data$protein_variant == mut_1l)
         if (length(am_idx) > 0) {
-          am_exact_score <- round(as.numeric(afs_data$am_pathogenicity[am_idx[1]]), 3)
+          # Unrounded. Rounding to three decimals here moved any value within half
+          # a thousandth of a cut-point up to it, so a score below a tier scored as
+          # meeting it: KCNQ1 p.L342F at 0.9899 rounded to 0.990 and took the
+          # >= 0.990 PP3_strong rung. The error only ever promoted. Display rounds
+          # at the AM_Score export instead.
+          am_exact_score <- as.numeric(afs_data$am_pathogenicity[am_idx[1]])
           am_exact_class <- if (!is.na(am_exact_score)) {
             if      (am_exact_score >= 0.564) "pathogenic" else if (am_exact_score >= 0.340) "ambiguous" else                              "benign"
           } else NA_character_
@@ -6485,7 +6490,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       MetaRNN_Score = metarnn$s, MetaRNN_V = metarnn$v,
       CADD_Score = cadd$s, CADD_V = cadd$v,
       DANN_Score = dann$s, DANN_V = dann$v,
-      AM_Score  = if (!is.na(am_exact_score)) am_exact_score else am$s,
+      AM_Score  = if (!is.na(am_exact_score)) round(am_exact_score, 4) else am$s,
       AM_V      = if (!is.na(am_exact_class)) am_exact_class  else am$v,
       AM_Source = if (!is.na(am_exact_score)) "AlphaFold" else if (!is.na(am$s)) "MyVariant" else NA_character_,
       dbscSNV_ADA = dbscsnv_ada_sv$s,
