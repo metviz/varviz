@@ -29,7 +29,17 @@ TP53 scoreset matches only 5 clinical variants, by coincidence of a construct
 position equalling a UniProt position, rather than the 100+ it really shares.
 
 Publication identifiers were each verified against NCBI esummary, and the BRCA1
-preprint DOI against Crossref, in the session that wrote this file. Where the
+preprint DOI against Crossref, in the session that wrote this file.
+
+The six KRAS scoresets are the one group whose direction could not be settled from
+the MaveDB record alone: they list no publication there, and a free-energy change
+has no self-evident sign. The paper was identified by an exact match between the
+MaveDB experiment title and PMID 38109937, corroborated by its abstract and by the
+six interaction partners matching the six scoresets one to one, and its full text
+then settles the sign directly: mutations that increase the binding free energy
+are reported as enriched at the binding interface, and distal mutations that
+increase it are the inhibitory ones the paper set out to map. Increase therefore
+means weaker binding. Where the
 assay semantics alone settle the direction, that is recorded too, so a scoreset
 with too few clinical anchors still gets a documented answer rather than a guess.
 
@@ -50,54 +60,71 @@ OUT     = "analyses/derived/mavedb_scoreset_polarity.tsv"
 CURATED = {
  "00000003-a-2":  ("BRCA1", "PubMed:28784151", "method_paper",
                    "BRCA1 RING autoubiquitination (E3 ligase) DMS, Enrich2 scores",
-                   "more ligase activity", "lower"),
+                   "more ligase activity", "lower",
+                   "assay readout: more E3 ligase activity is healthier"),
  "00000081-a-1":  ("BRCA1", "PubMed:30219179", "assay_paper",
                    "homology-directed DNA repair, DEPLETION score",
-                   "more depletion, i.e. less repair", "higher"),
+                   "more depletion, i.e. less repair", "higher",
+                   "title states DEPLETION; clinical labels agree (AUROC 0.104, 6P/4B)"),
  "00000081-a-2":  ("BRCA1", "PubMed:30219179", "assay_paper",
                    "homology-directed DNA repair, mean HDR FLUORESCENCE",
-                   "more repair", "lower"),
+                   "more repair", "lower",
+                   "title states FLUORESCENCE; clinical labels agree (AUROC 0.776, 13P/11B)"),
  "00000093-a-1":  ("BRCA1", "DOI:10.1101/092619", "assay_paper",
                    "BRCA1-BARD1 RING mammalian 2-hybrid, reported as BASE_ACMG POINTS",
-                   "stronger ACMG evidence FOR pathogenicity", "higher"),
+                   "stronger ACMG evidence FOR pathogenicity", "higher",
+                   "score column documented as BASE_ACMG points; positive points are evidence FOR pathogenicity"),
  "00000096-a-1":  ("GCK",   "PubMed:37101203", "assay_paper",
                    "GCK activity by yeast functional complementation",
-                   "more enzyme activity", "lower"),
+                   "more enzyme activity", "lower",
+                   "assay readout: more enzyme activity is healthier"),
  "00000096-b-1":  ("GCK",   "PubMed:38627865", "assay_paper",
                    "GCK abundance by DHFR-PCA",
-                   "more protein abundance", "lower"),
+                   "more protein abundance", "lower",
+                   "assay readout: more protein abundance is healthier"),
  "00001216-a-1":  ("KCNH2", "PubMed:39315434", "assay_paper",
                    "KCNH2 cell-surface trafficking MAVE",
-                   "more trafficking to the surface", "lower"),
+                   "more trafficking to the surface", "lower",
+                   "assay readout: more surface trafficking is healthier; clinical labels agree (AUROC 0.959, 41P/6B)"),
  "00000094-a-14": ("KCNQ1", "PubMed:35760561", "assay_paper",
                    "KCNQ1 normalized currents, homozygous state",
-                   "more potassium current", "lower"),
+                   "more potassium current", "lower",
+                   "assay readout: more potassium current is healthier"),
  "00000094-a-15": ("KCNQ1", "PubMed:35760561", "assay_paper",
                    "KCNQ1 normalized currents, homozygous state",
-                   "more potassium current", "lower"),
+                   "more potassium current", "lower",
+                   "assay readout: more potassium current is healthier"),
  "00000055-0-1":  ("NUDT15","PubMed:32094176", "assay_paper",
                    "NUDT15 combined activity and stability",
-                   "more activity and stability", "lower"),
+                   "more activity and stability", "lower",
+                   "assay readout: more activity and stability is healthier"),
  "00000055-a-1":  ("NUDT15","PubMed:29785012", "method_paper",
                    "NUDT15 protein stability by VAMP-seq",
-                   "more protein abundance", "lower"),
+                   "more protein abundance", "lower",
+                   "assay readout: more protein abundance is healthier"),
  "00000055-b-1":  ("NUDT15","PubMed:32094176", "assay_paper",
                    "NUDT15 activity by thiopurine-cytotoxicity screen",
-                   "more enzyme activity", "lower"),
+                   "more enzyme activity", "lower",
+                   "assay readout: more enzyme activity is healthier"),
  "00000101-a-1":  ("PTEN",  "PubMed:34649609", "assay_paper",
                    "PTEN variant abundance by VAMP-seq (fill-in)",
-                   "more protein abundance", "lower"),
+                   "more protein abundance", "lower",
+                   "assay readout: more protein abundance is healthier"),
  "00000102-0-1":  ("PTEN",  "PubMed:34649609", "assay_paper",
                    "PTEN variant abundance by VAMP-seq (combined)",
-                   "more protein abundance", "lower"),
+                   "more protein abundance", "lower",
+                   "assay readout: more protein abundance is healthier"),
  "00000059-a-1":  ("TP53",  "PubMed:29979965", "assay_paper",
                    "p53 relative fitness by cell growth selection, DNA-binding domain",
                    "faster growth, which for a tumour suppressor means LOST function",
-                   "higher"),
+                   "higher",
+                   "tumour suppressor under growth selection, so LOF enriches; PMID 29979965 states the readout is relative growth rate"),
  # Six binding free-energy scoresets from one experiment, one partner each.
  **{u: ("KRAS", "PubMed:38109937", "assay_paper",
         f"KRAS binding free energy change (ddG) against {p}",
-        "larger ddG, i.e. weaker binding", "higher")
+        "larger ddG, i.e. weaker binding", "higher",
+        "PMID 38109937 full text: mutations that increase the binding free energy are "
+        "enriched at the binding interface, so increase means inhibition")
     for u, p in (("00000115-a-1", "DARPin K55"), ("00000115-a-2", "DARPin K27"),
                  ("00000115-a-3", "SOS1"),       ("00000115-a-4", "PIK3CG RBD"),
                  ("00000115-a-5", "RALGDS RBD"), ("00000115-a-6", "RAF1 RBD"))},
@@ -219,18 +246,18 @@ def main():
     os.makedirs("analyses/derived", exist_ok=True)
     with io.open(OUT, "w", encoding="utf-8") as fh:
         fh.write("gene\tstudy\tpublication\tpublication_role\tassay\thigh_score_means"
-                 "\tdamaging_direction\tbasis\tn_pathogenic\tn_benign"
+                 "\tdamaging_direction\tbasis\tdirection_evidence\tn_pathogenic\tn_benign"
                  "\tauroc_lower_is_damaging\toffset_applied\n")
         for gene, stu, cur, k, npos, nneg, a, clin, assay in rows:
             if cur:
-                pub, role, desc, high = cur[1], cur[2], cur[3], cur[4]
+                pub, role, desc, high, ev = cur[1], cur[2], cur[3], cur[4], cur[6]
             else:
-                pub = role = desc = high = "UNKNOWN"
+                pub = role = desc = high = ev = "UNKNOWN"
             basis = ("clinical_labels_and_assay" if clin == assay and clin != "insufficient"
                      else "assay_semantics" if clin == "insufficient"
                      else "CONFLICT_review_required")
             fh.write(f"{gene}\t{stu}\t{pub}\t{role}\t{desc}\t{high}\t{assay}\t{basis}"
-                     f"\t{npos}\t{nneg}\t{'' if a is None else f'{a:.4f}'}\t{k}\n")
+                     f"\t{ev}\t{npos}\t{nneg}\t{'' if a is None else f'{a:.4f}'}\t{k}\n")
     print("-" * 104)
     print(f"wrote {OUT}")
 
