@@ -2565,7 +2565,8 @@ fetch_dbnsfp_batch <- function(gene_name, hgvsps) {
         rows[[length(rows) + 1]] <- data.frame(
           hgvsp = hg,
           revel = safe_extract_num(h$dbnsfp, "revel", "score"),
-          am    = safe_extract_num(h$dbnsfp, "alphamissense", "score"),
+          am    = safe_extract_num_tx(h$dbnsfp, dbnsfp_mane_index(h$dbnsfp),
+                                      "alphamissense", "score"),
           cadd  = safe_extract_num(h, "cadd", "phred"),
           stringsAsFactors = FALSE)
       }
@@ -3281,6 +3282,91 @@ safe_extract_num <- function(obj, ...) {
   suppressWarnings(as.numeric(val))
 }
 
+# ---------------------------------------------------------------------------
+# MANE-aware reads of dbNSFP's per-transcript arrays
+# ---------------------------------------------------------------------------
+# MyVariant.info IS dbNSFP, and it returns several predictors as per-transcript
+# arrays aligned with dbnsfp.ensembl.transcriptid. Verified live for KCNH2:
+#   transcriptid ["ENST00000330883","ENST00000262186"]
+#   alphamissense.score [0.8652, 0.4761]   sift.score [0.009, 0.0]
+# KCNH2's MANE Select is ENST00000262186, the SECOND element, so safe_extract's
+# closing result[1] returned another isoform's score. MANE is not the first
+# element for GCK, TP53, DDR2, TSHR, KCNH2, BRCA1 or KCNQ1.
+
+# The MANE Select transcript for a gene symbol, from gene_data's mane_ensembl
+# column (added by analyses/17_merge_mane_into_rdata.R). The version suffix is
+# dropped because dbNSFP and MyVariant both report unversioned ids.
+mane_tx_for_gene <- function(gene, gd = NULL) {
+  if (length(gene) == 0L) return(NA_character_)
+  gene <- as.character(gene)[1]
+  if (is.na(gene) || !nzchar(gene)) return(NA_character_)
+  if (is.null(gd)) {
+    if (!exists("gene_data", inherits = TRUE)) return(NA_character_)
+    gd <- get("gene_data", inherits = TRUE)
+  }
+  if (!"mane_ensembl" %in% colnames(gd)) return(NA_character_)
+  i <- match(gene, gd$gene_name)
+  if (is.na(i)) return(NA_character_)
+  tx <- sub("\\..*$", "", as.character(gd$mane_ensembl[i]))
+  if (is.na(tx) || !nzchar(tx)) NA_character_ else tx
+}
+
+# Which element of a hit's per-transcript arrays belongs to MANE. NA means "not
+# determined", and every caller then falls back to the first scored element,
+# which is the pre-change behaviour.
+dbnsfp_mane_index <- function(d, gd = NULL) {
+  if (is.null(d)) return(NA_integer_)
+  tx <- d$ensembl$transcriptid
+  if (is.list(tx)) tx <- unlist(tx)
+  if (is.null(tx) || length(tx) == 0L) return(NA_integer_)
+  tx <- sub("\\..*$", "", as.character(tx))
+  gn <- d$genename
+  if (is.list(gn)) gn <- unlist(gn)
+  gn <- unique(as.character(gn))
+  gn <- gn[!is.na(gn) & nzchar(gn)]
+  # A variant can sit in overlapping genes, so try each symbol and keep the
+  # first whose MANE transcript this hit actually lists.
+  for (g in gn) {
+    cand <- mane_tx_for_gene(g, gd)
+    if (!is.na(cand)) {
+      i <- which(tx == cand)
+      if (length(i)) return(as.integer(i[1]))
+    }
+  }
+  NA_integer_
+}
+
+# safe_extract, reading element idx of a per-transcript array. Falls back to the
+# first scored element when idx is NA, past the end (a single-valued column such
+# as MetaSVM or CADD), or unscored for that transcript: dbNSFP writes "." where a
+# tool could not score an isoform, and dropping to NA would lose evidence the
+# row does carry.
+safe_extract_tx <- function(obj, idx, ...) {
+  keys <- c(...)
+  tryCatch({
+    result <- obj
+    for (k in keys) {
+      if (is.null(result)) return(NA)
+      result <- result[[k]]
+    }
+    if (is.null(result)) return(NA)
+    if (is.list(result)) result <- unlist(result)
+    if (length(result) == 0) return(NA)
+    if (!is.na(idx) && idx >= 1L && idx <= length(result)) {
+      cand <- result[idx]
+      if (!is.na(cand) && cand != "." && cand != "") return(cand)
+    }
+    result <- result[!is.na(result) & result != "." & result != ""]
+    if (length(result) == 0) return(NA)
+    result[1]
+  }, error = function(e) NA)
+}
+
+safe_extract_num_tx <- function(obj, idx, ...) {
+  suppressWarnings(as.numeric(safe_extract_tx(obj, idx, ...)))
+}
+
+
 # --- Parse dbNSFP hit into structured list ---
 parse_dbnsfp_scores <- function(hit) {
   if (is.null(hit) || identical(hit, NA)) {
@@ -3293,36 +3379,40 @@ parse_dbnsfp_scores <- function(hit) {
   
   d <- hit$dbnsfp
   cv <- hit$clinvar
+  # Resolved once per hit: the index of the MANE transcript inside d's
+  # per-transcript arrays. NA leaves every read on its previous first-element
+  # behaviour, so a gene absent from gene_data is never made worse.
+  mane_i <- dbnsfp_mane_index(d)
   
   # ── Pathogenicity Predictors ──
-  sift_score <- safe_extract_num(d, "sift", "score")
-  sift_pred  <- safe_extract(d, "sift", "pred")
+  sift_score <- safe_extract_num_tx(d, mane_i, "sift", "score")
+  sift_pred  <- safe_extract_tx(d, mane_i, "sift", "pred")
   
-  pp2_hdiv_score <- safe_extract_num(d, "polyphen2", "hdiv", "score")
-  pp2_hdiv_pred  <- safe_extract(d, "polyphen2", "hdiv", "pred")
-  pp2_hvar_score <- safe_extract_num(d, "polyphen2", "hvar", "score")
-  pp2_hvar_pred  <- safe_extract(d, "polyphen2", "hvar", "pred")
+  pp2_hdiv_score <- safe_extract_num_tx(d, mane_i, "polyphen2", "hdiv", "score")
+  pp2_hdiv_pred  <- safe_extract_tx(d, mane_i, "polyphen2", "hdiv", "pred")
+  pp2_hvar_score <- safe_extract_num_tx(d, mane_i, "polyphen2", "hvar", "score")
+  pp2_hvar_pred  <- safe_extract_tx(d, mane_i, "polyphen2", "hvar", "pred")
   
   lrt_score <- safe_extract_num(d, "lrt", "score")
   lrt_pred  <- safe_extract(d, "lrt", "pred")
   
-  fathmm_score <- safe_extract_num(d, "fathmm", "score")
-  fathmm_pred  <- safe_extract(d, "fathmm", "pred")
+  fathmm_score <- safe_extract_num_tx(d, mane_i, "fathmm", "score")
+  fathmm_pred  <- safe_extract_tx(d, mane_i, "fathmm", "pred")
   
-  provean_score <- safe_extract_num(d, "provean", "score")
-  provean_pred  <- safe_extract(d, "provean", "pred")
+  provean_score <- safe_extract_num_tx(d, mane_i, "provean", "score")
+  provean_pred  <- safe_extract_tx(d, mane_i, "provean", "pred")
   
   mt_score <- safe_extract_num(d, "mutationtaster", "score")
   mt_pred  <- safe_extract(d, "mutationtaster", "pred")
   
   # ── Ensemble / Meta Scores ──
-  revel     <- safe_extract_num(d, "revel", "score")
+  revel     <- safe_extract_num_tx(d, mane_i, "revel", "score")
   metasvm   <- safe_extract_num(d, "metasvm", "score")
   metasvm_p <- safe_extract(d, "metasvm", "pred")
   metalr    <- safe_extract_num(d, "metalr", "score")
   metalr_p  <- safe_extract(d, "metalr", "pred")
-  metarnn   <- safe_extract_num(d, "metarnn", "score")
-  metarnn_p <- safe_extract(d, "metarnn", "pred")
+  metarnn   <- safe_extract_num_tx(d, mane_i, "metarnn", "score")
+  metarnn_p <- safe_extract_tx(d, mane_i, "metarnn", "pred")
   cadd_raw  <- safe_extract_num(d, "cadd", "raw_rankscore")
   cadd_phred <- safe_extract_num(d, "cadd", "phred")
   # CADD is often a separate top-level field in MyVariant.info, not under dbnsfp
@@ -3331,8 +3421,14 @@ parse_dbnsfp_scores <- function(hit) {
     cadd_raw   <- safe_extract_num(hit$cadd, "rawscore")
   }
   dann      <- safe_extract_num(d, "dann", "score")
-  am_score  <- safe_extract_num(d, "alphamissense", "am_pathogenicity")
-  am_class  <- safe_extract(d, "alphamissense", "am_class")
+  # Both spellings: the local positional mapper in analyses/lib/local_predictors.R
+  # names these am_pathogenicity/am_class, MyVariant.info names them score/pred.
+  # Reading only the former meant the live path got NA for AlphaMissense on every
+  # variant and fell through to the AlphaFold CSV without saying so.
+  am_score  <- safe_extract_num_tx(d, mane_i, "alphamissense", "am_pathogenicity")
+  if (is.na(am_score)) am_score <- safe_extract_num_tx(d, mane_i, "alphamissense", "score")
+  am_class  <- safe_extract_tx(d, mane_i, "alphamissense", "am_class")
+  if (is.na(am_class)) am_class <- safe_extract_tx(d, mane_i, "alphamissense", "pred")
 
   # ── dbscSNV splice site scores (Jian et al. 2014) ──
   # ada_score: AdaBoost classifier; rf_score: Random Forest classifier
@@ -6492,7 +6588,10 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
       DANN_Score = dann$s, DANN_V = dann$v,
       AM_Score  = if (!is.na(am_exact_score)) round(am_exact_score, 4) else am$s,
       AM_V      = if (!is.na(am_exact_class)) am_exact_class  else am$v,
-      AM_Source = if (!is.na(am_exact_score)) "AlphaFold" else if (!is.na(am$s)) "MyVariant" else NA_character_,
+      # nzchar, not !is.na: sv() returns s = "" for an absent score and is.na("")
+      # is FALSE, so the old guard attributed a source that supplied nothing to
+      # 10,570 of 90,701 rows in ps_am792_v123_final.
+      AM_Source = if (!is.na(am_exact_score)) "AlphaFold" else if (!is.na(am$s) && nzchar(am$s)) "MyVariant" else NA_character_,
       dbscSNV_ADA = dbscsnv_ada_sv$s,
       dbscSNV_RF  = dbscsnv_rf_sv$s,
       # ── Group 3: Conservation ──
