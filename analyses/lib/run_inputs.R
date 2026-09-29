@@ -102,3 +102,66 @@ resolve_classifications <- function(default = "analyses/derived/varviz_classific
   }
   list(path = path, source = src, stale = stale, newer_runs = newer)
 }
+
+# Read the dual-pass classifications as one row per variant.
+#
+# The table is keyed to universe rows, and the universe has one row per
+# (variant, source, scoreset): 90,701 rows over 54,454 distinct variants on the
+# 14-gene run, with 20,944 variants appearing more than once. A variant's
+# classification does not depend on which scoreset it arrived from, and the run
+# confirms it: of those 20,944, zero disagree on the Pass-Full class, the Pass-Blind
+# class or the points.
+#
+# So a per-variant metric computed without deduplicating weights a variant by how
+# many scoresets happen to contain it. That produced two answers for one quantity:
+# Panel C's Spearman rho reads 0.847/0.991 deduplicated over 4,905 variants and
+# 0.811/0.883 undeduplicated over 15,303 rows, on the same run.
+#
+# distinct = FALSE is for a caller whose unit of analysis is not the variant. Panel B
+# is the case: one variant genuinely has a different DMS score in each scoreset. Its
+# scoreset rows come from the universe rather than from here, so deduplicating this
+# table does not collapse them and Panel B needs no exception.
+#
+# Disagreeing duplicates raise. Today none disagree; if a run produces a variant with
+# two classifications that is a defect, and keeping the first silently would hide it
+# behind a deduplication step.
+read_classifications <- function(path, distinct = TRUE, quiet = FALSE,
+                                 key = c("gene", "p_notation")) {
+  d <- utils::read.delim(path, stringsAsFactors = FALSE, na.strings = character(),
+                         check.names = FALSE)
+  n_in <- nrow(d)
+  if (!all(key %in% names(d))) {
+    if (!quiet) message(sprintf("[classifications] %d rows; no %s column, left as read",
+                                n_in, paste(setdiff(key, names(d)), collapse = "/")))
+    return(d)
+  }
+  if (!distinct) {
+    if (!quiet) message(sprintf("[classifications] %d rows, not deduplicated", n_in))
+    return(d)
+  }
+  k <- do.call(paste, c(unname(d[key]), list(sep = "\037")))
+  # Only the columns a classification actually asserts. Provenance columns such as
+  # study legitimately differ between duplicate rows and must not count as conflict.
+  assert_cols <- intersect(c("varviz_classification_full", "varviz_classification_blind",
+                             "varviz_pts_full", "varviz_pts_blind", "pm1_pathway",
+                             "tags_full", "tags_blind"), names(d))
+  if (length(assert_cols)) {
+    sig <- do.call(paste, c(unname(d[assert_cols]), list(sep = "\037")))
+    conflict <- unique(k[duplicated(cbind(k, sig)) == FALSE &
+                         k %in% k[duplicated(k)]])
+    per_key <- tapply(sig, k, function(x) length(unique(x)))
+    bad <- names(per_key)[per_key > 1L]
+    if (length(bad)) {
+      ex <- head(gsub("\037", " ", bad), 3)
+      stop(sprintf(paste0("%d variant(s) carry more than one classification in %s ",
+                          "(e.g. %s). Deduplicating would hide a real inconsistency."),
+                   length(bad), path, paste(ex, collapse = "; ")), call. = FALSE)
+    }
+  }
+  out <- d[!duplicated(k), , drop = FALSE]
+  if (!quiet) {
+    message(sprintf("[classifications] %d rows in, %d distinct variants out (%d duplicates collapsed)",
+                    n_in, nrow(out), n_in - nrow(out)))
+  }
+  out
+}

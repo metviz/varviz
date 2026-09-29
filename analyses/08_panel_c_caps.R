@@ -41,6 +41,11 @@ dir.create(dirname(FIG_OUT),  recursive = TRUE, showWarnings = FALSE)
 dir.create(dirname(HTML_OUT), recursive = TRUE, showWarnings = FALSE)
 
 # Load classifications (prefer summary, fall back to checkpoints).
+# One row per variant. The classifications table is keyed to universe rows, so a
+# variant present in three MaveDB scoresets appears three times; counting it three
+# times in a per-variant correlation weights it triple for no reason. This is what
+# made panel_c.html read 0.847/0.991 over 4,905 distinct variants while this script
+# read 0.811/0.883 over 15,303 rows on the same run.
 cls <- if (file.exists(CLASS_SUMMARY)) {
   cat(sprintf("[panel_c] Reading summary %s\n", CLASS_SUMMARY))
   read_tsv(CLASS_SUMMARY, show_col_types = FALSE)
@@ -51,6 +56,9 @@ cls <- if (file.exists(CLASS_SUMMARY)) {
   bind_rows(lapply(ckpt_files, read_tsv, show_col_types = FALSE))
 }
 gn <- read_tsv(GNOMAD_IN, show_col_types = FALSE)
+
+cls <- dplyr::distinct(cls, gene, p_notation, .keep_all = TRUE)
+gn  <- dplyr::distinct(gn,  gene, p_notation, .keep_all = TRUE)
 
 # Restrict to gnomAD-present variants joined with both passes.
 joined <- cls |>
