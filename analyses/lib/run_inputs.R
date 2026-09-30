@@ -196,8 +196,11 @@ read_classifications <- function(path, distinct = TRUE, quiet = FALSE,
   list(sha = if (length(sha)) sha[1] else NA_character_, dirty = dirty)
 }
 
+# extra: further lines to carry into the artefact, for anything a consumer removed or
+# restricted that a reader would otherwise have to infer from a changed count.
 run_provenance_lines <- function(classifications = NULL,
-                                 universe = "analyses/derived/variant_universe_gnomad.tsv") {
+                                 universe = "analyses/derived/variant_universe_gnomad.tsv",
+                                 extra = character(0)) {
   cls <- if (is.null(classifications)) resolve_classifications(quiet = TRUE) else classifications
   g <- .git_state()
   # The run directory, not the temp file the resolver consolidates into: a reader
@@ -215,6 +218,7 @@ run_provenance_lines <- function(classifications = NULL,
             paste(R.version$major, R.version$minor, sep = ".")),
     sprintf("generated: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"))
   )
+  if (length(extra)) ln <- c(ln, as.character(extra))
   if (isTRUE(cls$stale)) {
     ln <- append(ln, sprintf("STALE: %d run director%s newer than this input: %s",
                              length(cls$newer_runs),

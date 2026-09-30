@@ -201,7 +201,7 @@ htmltools::save_html(
     htmltools::tags$pre(paste(capture.output(print(metrics_per_study, n = Inf)), collapse = "\n")),
     htmltools::h3("Per-study, per-bin VarViz P-call rate"),
     htmltools::tags$pre(paste(capture.output(print(summary_df, n = Inf)), collapse = "\n")),
-    run_provenance_html()
+    run_provenance_html(extra = dms_exclusion_lines(DMS_ELIG))
   ),
   HTML_OUT
 )

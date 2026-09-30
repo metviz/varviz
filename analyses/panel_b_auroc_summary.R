@@ -127,5 +127,5 @@ print(as.data.frame(
 
 # This table is redirected to analyses/reports/panel_b_auroc_*.txt, so the stamp has
 # to travel in the stream rather than sit in the terminal that happened to run it.
-prov <- run_provenance_lines()
+prov <- run_provenance_lines(extra = dms_exclusion_lines(DMS_ELIG))
 cat("\n", paste0("# ", prov, collapse = "\n"), "\n", sep = "")

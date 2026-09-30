@@ -68,6 +68,41 @@ m <- run_provenance_md()
 check(is.character(m) && length(m) >= 4L, "run_provenance_md returns character lines")
 check(any(grepl("ps_am792_v124_refnum", m)), "the markdown carries the run")
 
+cat("-- the stamp can carry extra lines, and excluded scoresets are among them --\n")
+# panel_b.html carried the post-exclusion numbers while mentioning KRAS zero times, so a
+# reader could not tell that six of twenty scoresets were absent. The exclusion was
+# announced on stdout, which does not survive the script exiting: the same gap the run
+# stamp exists to close.
+suppressMessages(source(resolve("analyses/lib/dms_polarity.R"), local = FALSE))
+check(exists("dms_exclusion_lines"), "dms_exclusion_lines is available")
+if (exists("dms_exclusion_lines")) {
+  el <- load_dms_eligibility(resolve("analyses/derived/mavedb_scoreset_polarity.tsv"))
+  xl <- dms_exclusion_lines(el)
+  check(length(xl) >= 1L, "excluded scoresets produce at least one line")
+  jx <- paste(xl, collapse = " ")
+  check(grepl("00000115-a-1", jx), "the excluded scoresets are named")
+  check(grepl("binding|ddG|free energy", jx, ignore.case = TRUE),
+        "the reason travels with them, not just the count")
+  check(length(dms_exclusion_lines(setNames(character(0), character(0)))) == 0L,
+        "no exclusions produces no lines")
+}
+x <- run_provenance_lines(extra = c("excluded: something"))
+check(any(grepl("excluded: something", x)), "run_provenance_lines accepts extra lines")
+hx <- paste(as.character(run_provenance_html(extra = "excluded: something")), collapse = " ")
+check(grepl("excluded: something", hx), "the HTML footer renders extra lines")
+mx <- run_provenance_md(extra = "excluded: something")
+check(any(grepl("excluded: something", mx)), "the markdown footer renders extra lines")
+
+cat("-- every scoreset consumer discloses its exclusions in the report --\n")
+for (f in c("analyses/07_panel_b_dms.R", "analyses/panel_b_dms_reval.R",
+            "analyses/10_compose_supp_s2.R", "analyses/repro/07_panel_b_dms_run.R")) {
+  p <- resolve(f)
+  if (!file.exists(p)) { cat(sprintf("  [skip] %s absent\n", basename(f))); next }
+  code <- sub("#.*$", "", readLines(p, warn = FALSE))
+  check(any(grepl("dms_exclusion_lines\\(", code)),
+        sprintf("%s puts its exclusions in the report, not only on stdout", basename(f)))
+}
+
 cat("-- every report writer stamps its output --\n")
 WRITERS <- c("analyses/06_panel_a_clinical.R", "analyses/panel_a_fig_reval.R",
              "analyses/07_panel_b_dms.R", "analyses/panel_b_dms_reval.R",

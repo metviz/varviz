@@ -237,3 +237,27 @@ dms_ineligible_reason <- function(elig, study) {
   r <- unname(elig[[i]])
   if (is.na(r)) "" else r
 }
+
+# Report lines naming every excluded scoreset and why.
+#
+# The exclusion was announced with cat() to stdout, which does not survive the script
+# exiting: panel_b.html carried the post-exclusion numbers while mentioning KRAS zero
+# times, so a reader could not tell that six of twenty scoresets were absent. Same gap the
+# run stamp exists to close, one level up.
+#
+# Grouped by reason, because six identical paragraphs is noise and the scoreset list is
+# the part a reader needs beside it.
+dms_exclusion_lines <- function(elig = NULL) {
+  if (is.null(elig)) elig <- load_dms_eligibility()
+  if (length(elig) == 0L) return(character(0))
+  ex <- elig[nzchar(elig)]
+  if (length(ex) == 0L) return(character(0))
+  out <- character(0)
+  for (r in unique(unname(ex))) {
+    grp <- sort(names(ex)[ex == r])
+    out <- c(out,
+             sprintf("excluded %d scoreset(s): %s", length(grp), paste(grp, collapse = ", ")),
+             sprintf("  reason: %s", r))
+  }
+  out
+}
