@@ -23,6 +23,7 @@ suppressMessages({
   library(dplyr); library(readr); library(ggplot2); library(tidyr)
 })
 source("analyses/lib/metric_suite.R")
+source("analyses/lib/run_inputs.R")
 source("analyses/lib/dms_polarity.R")
 DMS_POL <- load_dms_polarity()
 DMS_OFF <- load_dms_offsets()
@@ -192,7 +193,8 @@ htmltools::save_html(
     htmltools::h3("Per-study metric suite"),
     htmltools::tags$pre(paste(capture.output(print(metrics_per_study, n = Inf)), collapse = "\n")),
     htmltools::h3("Per-study, per-bin VarViz P-call rate"),
-    htmltools::tags$pre(paste(capture.output(print(summary_df, n = Inf)), collapse = "\n"))
+    htmltools::tags$pre(paste(capture.output(print(summary_df, n = Inf)), collapse = "\n")),
+    run_provenance_html()
   ),
   HTML_OUT
 )

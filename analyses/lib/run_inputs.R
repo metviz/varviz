@@ -165,3 +165,80 @@ read_classifications <- function(path, distinct = TRUE, quiet = FALSE,
   }
   out
 }
+
+# ---------------------------------------------------------------------------
+# Report provenance
+# ---------------------------------------------------------------------------
+# A report states numbers without saying where they came from, so
+# analyses/derived/varviz_classifications.tsv could sit six months stale behind 21
+# newer runs and nothing in panel_a.html would show it. The resolver prints its path
+# to stdout, which is gone the moment the script exits.
+#
+# These build a stamp a reader can check months later: which run, which universe and
+# its fingerprint, which commit, and whether the run was selected deliberately or
+# fallen back to. Same content the harness writes per gene in <gene>__manifest.json,
+# so a report and a run can be matched up.
+
+.short_sha <- function(path, n = 12L) {
+  if (is.na(path) || !file.exists(path)) return(NA_character_)
+  out <- tryCatch(system2("sha256sum", shQuote(path), stdout = TRUE, stderr = FALSE),
+                  error = function(e) NA_character_, warning = function(w) NA_character_)
+  if (length(out) == 0L || is.na(out[1])) return(NA_character_)
+  substr(sub(" .*$", "", out[1]), 1L, n)
+}
+
+.git_state <- function() {
+  sha <- tryCatch(system2("git", c("rev-parse", "--short=8", "HEAD"),
+                          stdout = TRUE, stderr = FALSE), error = function(e) NA_character_)
+  dirty <- tryCatch(length(system2("git", c("status", "--porcelain"),
+                                   stdout = TRUE, stderr = FALSE)) > 0L,
+                    error = function(e) NA)
+  list(sha = if (length(sha)) sha[1] else NA_character_, dirty = dirty)
+}
+
+run_provenance_lines <- function(classifications = NULL,
+                                 universe = "analyses/derived/variant_universe_gnomad.tsv") {
+  cls <- if (is.null(classifications)) resolve_classifications(quiet = TRUE) else classifications
+  g <- .git_state()
+  # The run directory, not the temp file the resolver consolidates into: a reader
+  # needs the run's name, and /tmp/RtmpXXXX/... says nothing.
+  run_label <- switch(cls$source,
+    REVAL_DIR              = Sys.getenv("REVAL_DIR", cls$path),
+    VARVIZ_RUN             = Sys.getenv("VARVIZ_RUN", cls$path),
+    VARVIZ_CLASSIFICATIONS = Sys.getenv("VARVIZ_CLASSIFICATIONS", cls$path),
+    cls$path)
+  ln <- c(
+    sprintf("run: %s (via %s)", run_label, cls$source),
+    sprintf("universe: %s  sha256:%s", universe, .short_sha(universe)),
+    sprintf("code: commit %s%s, R %s", g$sha,
+            if (isTRUE(g$dirty)) " (working tree dirty)" else "",
+            paste(R.version$major, R.version$minor, sep = ".")),
+    sprintf("generated: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"))
+  )
+  if (isTRUE(cls$stale)) {
+    ln <- append(ln, sprintf("STALE: %d run director%s newer than this input: %s",
+                             length(cls$newer_runs),
+                             if (length(cls$newer_runs) == 1L) "y is" else "ies are",
+                             paste(utils::head(cls$newer_runs, 6), collapse = ", ")),
+                 after = 1L)
+  }
+  ln
+}
+
+run_provenance_html <- function(...) {
+  ln <- run_provenance_lines(...)
+  htmltools::tags$footer(
+    style = paste("margin-top:2em;padding-top:0.6em;border-top:1px solid #bbb;",
+                  "font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#555"),
+    htmltools::tags$strong("Provenance"),
+    htmltools::tags$ul(
+      style = "margin:0.3em 0 0 1em;padding:0;list-style:none",
+      lapply(ln, function(x) htmltools::tags$li(x))
+    )
+  )
+}
+
+run_provenance_md <- function(...) {
+  c("", "---", "", "**Provenance**", "",
+    paste0("- ", run_provenance_lines(...)))
+}

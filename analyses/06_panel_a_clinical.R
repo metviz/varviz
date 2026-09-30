@@ -155,7 +155,8 @@ htmltools::save_html(
     htmltools::tags$pre(paste(
       if (!is.null(delta) && nrow(delta) > 0) capture.output(print(delta))
       else "Awaiting more harness output (need >=1 P + >=1 B with non-VUS classification).",
-      collapse = "\n"))
+      collapse = "\n")),
+    run_provenance_html()
   ),
   HTML_OUT
 )

@@ -14,6 +14,7 @@ suppressMessages({library(dplyr); library(readr); library(tidyr)})
 # The panels' own AUROC (Mann-Whitney U, ties at 0.5), not pROC: the repository
 # does not depend on pROC and the panel figures are computed this way.
 source("analyses/lib/metric_suite.R")
+source("analyses/lib/run_inputs.R")
 source("analyses/lib/dms_polarity.R")
 DMS_POL <- load_dms_polarity()
 DMS_OFF <- load_dms_offsets()
@@ -102,3 +103,8 @@ print(as.data.frame(
               delta = mean(blind, na.rm = TRUE) - mean(full, na.rm = TRUE),
               .groups = "drop") |> arrange(desc(mean_full))),
   row.names = FALSE, digits = 3)
+
+# This table is redirected to analyses/reports/panel_b_auroc_*.txt, so the stamp has
+# to travel in the stream rather than sit in the terminal that happened to run it.
+prov <- run_provenance_lines()
+cat("\n", paste0("# ", prov, collapse = "\n"), "\n", sep = "")

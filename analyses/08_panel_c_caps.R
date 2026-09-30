@@ -113,7 +113,8 @@ if (is.null(caps_full) && is.null(caps_blind)) {
   htmltools::save_html(
     htmltools::tagList(
       htmltools::h2("Panel C — CAPS analysis"),
-      htmltools::p("Awaiting harness output. No gnomAD-present rows in classifications yet.")
+      htmltools::p("Awaiting harness output. No gnomAD-present rows in classifications yet."),
+      run_provenance_html()
     ),
     HTML_OUT
   )
@@ -183,7 +184,8 @@ htmltools::save_html(
     htmltools::h3("Pass-Full"),
     htmltools::tags$pre(paste(capture.output(print(caps_full %||% "")),  collapse = "\n")),
     htmltools::h3("Pass-Blind"),
-    htmltools::tags$pre(paste(capture.output(print(caps_blind %||% "")), collapse = "\n"))
+    htmltools::tags$pre(paste(capture.output(print(caps_blind %||% "")), collapse = "\n")),
+    run_provenance_html()
   ),
   HTML_OUT
 )
