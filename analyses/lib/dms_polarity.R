@@ -182,3 +182,50 @@ dms_pending_offset <- function(df, offsets = NULL, study_col = "study",
   applied[is.na(applied)] <- 0L
   want - applied
 }
+
+# ---------------------------------------------------------------------------
+# Scoreset eligibility
+# ---------------------------------------------------------------------------
+# Polarity and numbering ask whether a scoreset is READ correctly. Eligibility asks a
+# prior question: does its axis measure pathogenicity at all?
+#
+# The six KRAS scoresets of urn:mavedb:00000115-a report binding free energy changes
+# against six partners (PMID 38109937). A larger ddG is weaker binding, which is a real
+# measurement but not a pathogenicity axis: KRAS pathogenic variants are gain-of-function
+# acting through impaired GTP hydrolysis, and several retain or increase effector binding.
+#
+# Measured on the corrected universe. Established oncogenic variants sit at percentiles
+# 6-90 across the six, median 37, with 3 of 42 anchor observations in either extreme
+# decile. Using VariBench clinical labels, which are independent of the DMS score and of
+# every predictor, labelled-Pathogenic variants land at median percentile 42-53: a median
+# distance from random placement of 3, against 26 for the twelve other scoresets, and the
+# bottom six of eighteen.
+#
+# Recorded per scoreset with its reason rather than hardcoded in a filter, because it is a
+# scope decision and a reader is entitled to see why a third of the panel is absent. An
+# unlisted scoreset is eligible, so a newly ingested one is never silently dropped.
+load_dms_eligibility <- function(path = "analyses/derived/mavedb_scoreset_polarity.tsv") {
+  empty <- setNames(character(0), character(0))
+  p <- if (file.exists(path)) path else file.path("..", path)
+  if (!file.exists(p)) return(empty)
+  tb <- tryCatch(utils::read.delim(p, stringsAsFactors = FALSE, check.names = FALSE,
+                                   na.strings = character()),
+                 error = function(e) NULL)
+  if (is.null(tb) || !all(c("study", "ineligible_reason") %in% names(tb))) return(empty)
+  s <- as.character(tb$study)
+  r <- as.character(tb$ineligible_reason)
+  r[is.na(r)] <- ""
+  ok <- !is.na(s) & nzchar(s)
+  if (!any(ok)) return(empty)
+  setNames(r[ok], s[ok])
+}
+
+# "" means eligible. Returning the reason rather than a logical is deliberate: a consumer
+# that drops a scoreset should be able to say why in its own output.
+dms_ineligible_reason <- function(elig, study) {
+  if (length(elig) == 0L) return("")
+  i <- match(as.character(study)[1], names(elig))
+  if (is.na(i)) return("")
+  r <- unname(elig[[i]])
+  if (is.na(r)) "" else r
+}

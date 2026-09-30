@@ -130,6 +130,32 @@ CURATED = {
                  ("00000115-a-5", "RALGDS RBD"), ("00000115-a-6", "RAF1 RBD"))},
 }
 
+# Scoresets whose axis does not measure pathogenicity, so they cannot serve as truth
+# however correctly they are read. This is a scope decision, not a defect, and it is
+# recorded per scoreset so a reader can see why a third of the panel is absent.
+#
+# Measured on the corrected universe, two independent ways:
+#   Established oncogenic variants (G12D, G12V, G12C, G12A, G13D, Q61H, Q61L) sit at
+#   percentiles 6-90 across the six, median 37, with 3 of 42 anchor observations in
+#   either extreme decile. A pathogenicity axis concentrates them in one tail.
+#   Using VariBench clinical labels, independent of the DMS score and of every
+#   predictor, labelled-Pathogenic variants land at median percentile 42-53: median
+#   distance from random placement 3, against 26 for the twelve other scoresets, and
+#   the bottom six of eighteen.
+#
+# GCK 00000096-a-1 also scores weakly on the clinical measure (distance 11) and is
+# deliberately NOT excluded: it is an enzyme activity assay whose axis is
+# mechanistically relevant to GCK disease, and a weak labelled subset is a different
+# problem from measuring the wrong quantity.
+INELIGIBLE = {
+    u: ("measures binding free energy change (ddG) to an effector, not pathogenicity; "
+        "KRAS pathogenic variants are gain-of-function through impaired GTP hydrolysis "
+        "and several retain or increase effector binding (PMID 38109937). Clinically "
+        "Pathogenic variants land at median percentile 42-53 here, indistinguishable "
+        "from random placement")
+    for u in (f"00000115-a-{i}" for i in range(1, 7))
+}
+
 PATHO = {"pathogenic", "likely pathogenic", "p", "lp"}
 BENIGN = {"benign", "likely benign", "b", "lb"}
 
@@ -246,7 +272,8 @@ def main():
     os.makedirs("analyses/derived", exist_ok=True)
     with io.open(OUT, "w", encoding="utf-8") as fh:
         fh.write("gene\tstudy\tpublication\tpublication_role\tassay\thigh_score_means"
-                 "\tdamaging_direction\tbasis\tdirection_evidence\tn_pathogenic\tn_benign"
+                 "\tdamaging_direction\tbasis\tdirection_evidence"
+                 "\tineligible_reason\tn_pathogenic\tn_benign"
                  "\tauroc_lower_is_damaging\toffset_applied\n")
         for gene, stu, cur, k, npos, nneg, a, clin, assay in rows:
             if cur:
@@ -257,9 +284,16 @@ def main():
                      else "assay_semantics" if clin == "insufficient"
                      else "CONFLICT_review_required")
             fh.write(f"{gene}\t{stu}\t{pub}\t{role}\t{desc}\t{high}\t{assay}\t{basis}"
-                     f"\t{ev}\t{npos}\t{nneg}\t{'' if a is None else f'{a:.4f}'}\t{k}\n")
+                     f"\t{ev}\t{INELIGIBLE.get(stu, '')}\t{npos}\t{nneg}\t{'' if a is None else f'{a:.4f}'}\t{k}\n")
     print("-" * 104)
     print(f"wrote {OUT}")
+
+    inel = [r for r in rows if r[1] in INELIGIBLE]
+    if inel:
+        print(f"\nScoresets recorded INELIGIBLE as pathogenicity truth ({len(inel)} of "
+              f"{len(rows)}), excluded from the panel with the reason carried in the table:")
+        for gene, stu, cur, k, npos, nneg, a, clin, assay in inel:
+            print(f"  {gene:<8}{stu:<15}{cur[3] if cur else ''}")
 
     inverted = [r for r in rows if r[8] == "higher"]
     conflicts = [r for r in rows if r[7] not in ("insufficient",) and r[7] != r[8]]

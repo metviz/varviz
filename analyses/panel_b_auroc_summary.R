@@ -19,6 +19,7 @@ source("analyses/lib/dms_polarity.R")
 DMS_POL <- load_dms_polarity()
 DMS_OFF <- load_dms_offsets()
 
+DMS_ELIG <- load_dms_eligibility()
 REVAL_DIR <- Sys.getenv("REVAL_DIR", "analyses/ps_final_v231/classifications")
 # The UNIVERSE, not mavedb_canonical.tsv. The canonical table is raw MaveDB in each
 # scoreset's own numbering; the universe has the reference-numbering correction
@@ -47,6 +48,26 @@ joined$score_dms <- joined[[score_col]]
 # Drop scoresets numbered on a different sequence before anything else: their
 # variants were classified at the wrong residues, so neither sign convention makes
 # the AUROC mean anything.
+# Scoresets whose axis does not measure pathogenicity cannot serve as truth however
+# correctly they are read. Recorded per scoreset with its reason in
+# analyses/derived/mavedb_scoreset_polarity.tsv; see analyses/lib/dms_polarity.R.
+joined$dms_inelig <- vapply(as.character(joined$study),
+                      function(s) dms_ineligible_reason(DMS_ELIG, s), character(1))
+inelig <- sort(unique(joined$study[nzchar(joined$dms_inelig)]))
+if (length(inelig)) {
+  # One message per distinct reason: six identical paragraphs is noise, and the
+  # scoreset list is the part a reader needs alongside it.
+  for (r in unique(vapply(inelig, function(s) dms_ineligible_reason(DMS_ELIG, s),
+                          character(1)))) {
+    grp <- inelig[vapply(inelig, function(s) identical(dms_ineligible_reason(DMS_ELIG, s), r),
+                         logical(1))]
+    cat(sprintf("[panel_b] EXCLUDED %d scoreset(s): %s\n", length(grp),
+                paste(grp, collapse = ", ")))
+    cat(sprintf("[panel_b]   reason: %s\n", r))
+  }
+  joined <- joined[!nzchar(joined$dms_inelig), , drop = FALSE]
+}
+
 joined$dms_off <- dms_pending_offset(joined)
 shifted <- sort(unique(joined$study[joined$dms_off != 0L]))
 if (length(shifted)) {

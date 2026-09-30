@@ -28,6 +28,7 @@ source("analyses/lib/dms_polarity.R")
 DMS_POL <- load_dms_polarity()
 DMS_OFF <- load_dms_offsets()
 
+DMS_ELIG <- load_dms_eligibility()
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1 && is.na(a))) b else a
 
 CLASS_SUMMARY  <- Sys.getenv("VARVIZ_RUN", "analyses/ps_mds_corroborate/summary.tsv")
@@ -71,6 +72,26 @@ joined$score_dms <- joined[[score_col]]
 
 # Scoresets numbered on a different sequence were classified at the wrong
 # residues, so no sign convention makes their result interpretable.
+# Scoresets whose axis does not measure pathogenicity cannot serve as truth however
+# correctly they are read. Recorded per scoreset with its reason in
+# analyses/derived/mavedb_scoreset_polarity.tsv; see analyses/lib/dms_polarity.R.
+joined$dms_inelig <- vapply(as.character(joined$study),
+                      function(s) dms_ineligible_reason(DMS_ELIG, s), character(1))
+inelig <- sort(unique(joined$study[nzchar(joined$dms_inelig)]))
+if (length(inelig)) {
+  # One message per distinct reason: six identical paragraphs is noise, and the
+  # scoreset list is the part a reader needs alongside it.
+  for (r in unique(vapply(inelig, function(s) dms_ineligible_reason(DMS_ELIG, s),
+                          character(1)))) {
+    grp <- inelig[vapply(inelig, function(s) identical(dms_ineligible_reason(DMS_ELIG, s), r),
+                         logical(1))]
+    cat(sprintf("[panel_b] EXCLUDED %d scoreset(s): %s\n", length(grp),
+                paste(grp, collapse = ", ")))
+    cat(sprintf("[panel_b]   reason: %s\n", r))
+  }
+  joined <- joined[!nzchar(joined$dms_inelig), , drop = FALSE]
+}
+
 joined$dms_off <- dms_pending_offset(joined)
 shifted <- sort(unique(joined$study[joined$dms_off != 0L]))
 if (length(shifted)) {
