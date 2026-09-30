@@ -96,12 +96,21 @@ uniq <- dup[!duplicated(dup[, c("gene", "p_notation")]), ]
 d3 <- read_classifications(wr(uniq, "uniq.tsv"), quiet = TRUE)
 check(nrow(d3) == 3L, "an already-distinct table passes through at the same size")
 
-cat("-- the per-variant panels deduplicate; Panel B is left alone --\n")
-for (f in c("analyses/08_panel_c_caps.R", "analyses/10_compose_supp_s2.R")) {
+cat("-- every panel script deduplicates the classifications side --\n")
+# Both members of each pair. The pairs are the hazard: Panel C diverged because
+# 08_panel_c_caps.R did not deduplicate while panel_c_caps_reval.R did, and Panel B
+# diverged the same way between 07_panel_b_dms.R and panel_b_dms_reval.R. Panel B
+# keeps its (variant, scoreset) unit through the universe side of the join, so
+# deduplicating the classifications side is right there too.
+for (f in c("analyses/06_panel_a_clinical.R", "analyses/panel_a_fig_reval.R",
+            "analyses/07_panel_b_dms.R", "analyses/panel_b_dms_reval.R",
+            "analyses/08_panel_c_caps.R", "analyses/panel_c_caps_reval.R",
+            "analyses/10_compose_supp_s2.R")) {
   p <- resolve(f)
   if (!file.exists(p)) { cat(sprintf("  [skip] %s absent\n", basename(f))); next }
   code <- sub("#.*$", "", readLines(p, warn = FALSE))
-  dd <- grep("read_classifications\\(|distinct\\(cls|distinct\\(gene, p_notation", code)
+  dd <- grep(paste0("read_classifications\\(|distinct\\(cls|cls \\|> distinct\\(|",
+                    "distinct\\(gene, p_notation"), code)
   check(length(dd) > 0L, sprintf("%s deduplicates to one row per variant", basename(f)))
   # Presence is not enough. A dedupe placed after the join has no effect on the
   # result, which is exactly the mistake made while writing this.

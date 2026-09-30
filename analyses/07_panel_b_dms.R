@@ -56,6 +56,12 @@ univ <- read_tsv(UNIVERSE, show_col_types = FALSE)
 
 # Restrict to MaveDB rows (have score_raw populated) and join with classifications.
 mavedb <- univ |> filter(source == "MaveDB", !is.na(score_raw))
+# One classification per variant before the join. Panel B's unit of analysis is
+# (variant, scoreset), and `mavedb` supplies the per-scoreset rows; the
+# classifications side must not also fan out, or a variant in three scoresets is
+# counted nine times. panel_b_dms_reval.R already did this; Panels A and C carried
+# the same defect.
+cls <- cls |> distinct(gene, p_notation, .keep_all = TRUE)
 joined <- mavedb |> inner_join(cls, by = c("gene", "p_notation"))
 cat(sprintf("[panel_b] MaveDB variants with classifications: %d (over %d studies)\n",
             nrow(joined), n_distinct(joined$study)))
