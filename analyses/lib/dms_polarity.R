@@ -157,3 +157,28 @@ shift_p_notation <- function(p_notation, offset) {
   out[ok] <- res
   out
 }
+
+# The offset still OUTSTANDING per row, which is what a consumer should exclude on.
+#
+# load_dms_offsets() records what the RAW MaveDB table needs. Once
+# analyses/03_build_universe.R applies those shifts, the universe carries
+# offset_applied per row and its numbering is correct, so excluding on the raw
+# requirement would drop scoresets that are now fine. Outstanding = wanted minus
+# applied, so a scoreset the build has already corrected returns 0 and is kept, while
+# a table that later gains a larger shift than the universe was built with still
+# returns non-zero and is dropped.
+#
+# A frame with no offset_applied column is an UNCORRECTED universe, and there the raw
+# requirement is exactly right.
+dms_pending_offset <- function(df, offsets = NULL, study_col = "study",
+                               applied_col = "offset_applied") {
+  n <- nrow(df)
+  if (n == 0L) return(integer(0))
+  if (is.null(offsets)) offsets <- load_dms_offsets()
+  want <- vapply(as.character(df[[study_col]]),
+                 function(s) dms_offset_for(offsets, s), integer(1), USE.NAMES = FALSE)
+  if (!applied_col %in% names(df)) return(want)
+  applied <- suppressWarnings(as.integer(df[[applied_col]]))
+  applied[is.na(applied)] <- 0L
+  want - applied
+}

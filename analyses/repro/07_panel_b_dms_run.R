@@ -70,8 +70,7 @@ joined$score_dms <- joined[[score_col]]
 
 # Scoresets numbered on a different sequence were classified at the wrong
 # residues, so no sign convention makes their result interpretable.
-joined$dms_off <- vapply(as.character(joined$study),
-                         function(s) dms_offset_for(DMS_OFF, s), integer(1))
+joined$dms_off <- dms_pending_offset(joined)
 shifted <- sort(unique(joined$study[joined$dms_off != 0L]))
 if (length(shifted)) {
   cat(sprintf("[panel_b] EXCLUDED, numbered on a different sequence: %s\n",

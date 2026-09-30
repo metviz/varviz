@@ -146,8 +146,11 @@ for (f in c("analyses/07_panel_b_dms.R", "analyses/panel_b_dms_reval.R",
   # A scoreset on different numbering was classified at the wrong residues. If one
   # script drops it and another plots it, the figure and the table disagree about
   # what the panel contains, which is how the three copies diverged before.
-  check(any(grepl("dms_offset_for\\(", code)),
-        sprintf("%s excludes scoresets numbered on a different sequence", basename(f)))
+  # dms_pending_offset() is the current rule: exclude on the offset still
+  # OUTSTANDING, so a scoreset the universe build has already corrected is kept.
+  # dms_offset_for() is still valid where the universe is uncorrected.
+  check(any(grepl("dms_offset_for\\(|dms_pending_offset\\(", code)),
+        sprintf("%s excludes scoresets whose numbering is still uncorrected", basename(f)))
 }
 
 cat(sprintf("\n%s: %d failure(s)\n", if (fails) "FAIL" else "PASS", fails))

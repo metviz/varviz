@@ -58,7 +58,11 @@ for (f in binners) {
   # A scoreset on different numbering was classified at the wrong residues. One
   # script dropping it while another plots it is how the figure and the table
   # came to disagree.
-  check(any(grepl("dms_offset_for\\(", cd)), sprintf("%s excludes shifted scoresets", b))
+  # Either entry point: dms_pending_offset() excludes on the offset still outstanding
+  # once the universe build has applied the recorded shifts, dms_offset_for() on the
+  # raw requirement where it has not.
+  check(any(grepl("dms_offset_for\\(|dms_pending_offset\\(", cd)),
+        sprintf("%s excludes scoresets whose numbering is still uncorrected", b))
 }
 
 cat("-- the local dbNSFP mapper indexes only transcript-aligned columns --\n")

@@ -19,13 +19,20 @@ DMS_POL <- load_dms_polarity()
 DMS_OFF <- load_dms_offsets()
 
 REVAL_DIR <- Sys.getenv("REVAL_DIR", "analyses/ps_final_v231/classifications")
-MAVEDB    <- Sys.getenv("MAVEDB", "analyses/derived/mavedb_canonical.tsv")
+# The UNIVERSE, not mavedb_canonical.tsv. The canonical table is raw MaveDB in each
+# scoreset's own numbering; the universe has the reference-numbering correction
+# applied, which is the numbering the classifications are keyed on. Reading the raw
+# table meant TP53 00000059-a-1 joined on construct positions and matched nothing once
+# the universe was corrected. Its sibling scripts 07_panel_b_dms.R and
+# panel_b_dms_reval.R already read the universe.
+MAVEDB    <- Sys.getenv("MAVEDB", "analyses/derived/variant_universe.tsv")
 
 files <- list.files(REVAL_DIR, pattern = "__dual\\.tsv$", full.names = TRUE)
 if (!length(files)) stop("no __dual.tsv files under ", REVAL_DIR)
 cls <- bind_rows(lapply(files, read_tsv, show_col_types = FALSE)) |>
   distinct(gene, p_notation, .keep_all = TRUE)
 mave <- read_tsv(MAVEDB, show_col_types = FALSE)
+if ("source" %in% names(mave)) mave <- mave[mave$source == "MaveDB", , drop = FALSE]
 
 score_col <- intersect(c("score_raw", "score"), names(mave))[1]
 if (is.na(score_col)) stop("no score column in ", MAVEDB)
@@ -39,8 +46,7 @@ joined$score_dms <- joined[[score_col]]
 # Drop scoresets numbered on a different sequence before anything else: their
 # variants were classified at the wrong residues, so neither sign convention makes
 # the AUROC mean anything.
-joined$dms_off <- vapply(as.character(joined$study),
-                         function(s) dms_offset_for(DMS_OFF, s), integer(1))
+joined$dms_off <- dms_pending_offset(joined)
 shifted <- sort(unique(joined$study[joined$dms_off != 0L]))
 if (length(shifted)) {
   cat(sprintf("\n[panel_b] EXCLUDED, numbered on a different sequence (offset != 0): %s\n",
