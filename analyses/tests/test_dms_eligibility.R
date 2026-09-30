@@ -25,10 +25,16 @@
 # is 30% of an unweighted median.
 #
 # This is a scope decision, not a defect, so it is recorded per scoreset with its reason
-# rather than hardcoded in a filter. GCK 00000096-a-1 also scores weakly on the clinical
-# measure (distance 11) and is deliberately NOT excluded: it is an enzyme activity assay
-# whose axis is mechanistically relevant to GCK disease, and a weak labelled subset is a
-# different problem from measuring the wrong quantity.
+# rather than hardcoded in a filter.
+#
+# GCK 00000096-a-1 scores weakly on the clinical measure (distance 11) and is NOT
+# excluded. The reason first written here, a weak labelled subset, was wrong. The measure
+# is invalid for GCK: the gene has both loss-of-function disease (GCK-MODY) and
+# gain-of-function disease (hyperinsulinemic hypoglycemia), so its pathogenic variants
+# belong at opposite tails. PMID 37101203 names W99R as an HH variant that grew faster
+# than wild type, and the data places it at the 99th percentile. The axis is sound, and
+# distance-from-random is therefore supporting evidence for an exclusion rather than the
+# test for one.
 #
 # Run from project root: Rscript analyses/tests/test_dms_eligibility.R
 

@@ -143,10 +143,23 @@ CURATED = {
 #   distance from random placement 3, against 26 for the twelve other scoresets, and
 #   the bottom six of eighteen.
 #
-# GCK 00000096-a-1 also scores weakly on the clinical measure (distance 11) and is
-# deliberately NOT excluded: it is an enzyme activity assay whose axis is
-# mechanistically relevant to GCK disease, and a weak labelled subset is a different
-# problem from measuring the wrong quantity.
+# GCK 00000096-a-1 scores weakly on the clinical measure (distance 11) and is NOT
+# excluded, but the reason first recorded here was wrong. It is not a weak labelled
+# subset. The clinical measure is simply invalid for GCK: the gene has BOTH
+# loss-of-function disease (GCK-MODY) and gain-of-function disease (hyperinsulinemic
+# hypoglycemia), so its pathogenic variants belong at OPPOSITE tails and their median
+# percentile is meaningless. PMID 37101203 confirms the axis is sound -- it names W99R
+# as an HH variant that "grew faster than WT" and reports activity spanning "from total
+# loss of function to above-wildtype activity" -- and the data places W99R at the 99th
+# percentile, exactly where an activating variant belongs.
+#
+# So distance-from-50 is NOT a valid eligibility criterion in general. It cannot
+# distinguish a wrong axis from a bidirectional mechanism or an assay blind spot. The
+# KRAS exclusion rests on what the assay measures, corroborated by oncogenic variants
+# having no relationship to binding disruption; the distance figure is supporting
+# evidence, not the test. analyses/check_dms_truth_ceiling.py measures the blind spots
+# separately, and finds 9.8% of clinically-Pathogenic variants across the eligible
+# scoresets are scored as WT-like truth.
 INELIGIBLE = {
     u: ("measures binding free energy change (ddG) to an effector, not pathogenicity; "
         "KRAS pathogenic variants are gain-of-function through impaired GTP hydrolysis "

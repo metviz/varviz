@@ -204,6 +204,14 @@ dms_pending_offset <- function(df, offsets = NULL, study_col = "study",
 # Recorded per scoreset with its reason rather than hardcoded in a filter, because it is a
 # scope decision and a reader is entitled to see why a third of the panel is absent. An
 # unlisted scoreset is eligible, so a newly ingested one is never silently dropped.
+#
+# The distance-from-random figure above is supporting evidence, not the criterion. It
+# cannot tell a wrong axis from a bidirectional mechanism: GCK scores 11 on it and its
+# axis is sound, because the gene has both loss-of-function disease (GCK-MODY) and
+# gain-of-function disease (hyperinsulinemic hypoglycemia), so its pathogenic variants
+# belong at opposite tails and a median percentile says nothing. Eligibility turns on
+# what the assay measures. analyses/check_dms_truth_ceiling.py measures the resulting
+# blind spots separately.
 load_dms_eligibility <- function(path = "analyses/derived/mavedb_scoreset_polarity.tsv") {
   empty <- setNames(character(0), character(0))
   p <- if (file.exists(path)) path else file.path("..", path)
