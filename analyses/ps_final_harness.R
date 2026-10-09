@@ -79,10 +79,17 @@ options(varviz.am_calibrated = .env_flag("VARVIZ_AM_CALIBRATED", "FALSE"))
 # old precedence: AlphaMissense speaks only when no other tool has given PP3.
 # The difference against the plain calibrated run is the override's share.
 options(varviz.am_no_override = .env_flag("VARVIZ_AM_NO_OVERRIDE", "FALSE"))
-# VARVIZ_AM_HYBRID=TRUE keeps the developer threshold at the supporting rung and
-# lets only the calibrated moderate-and-above rungs raise a level another tool
-# already set - the half of the calibration that gains true positives.
+# VARVIZ_AM_HYBRID=TRUE awards the supporting rung from AM_PP3_SUPPORTING, which
+# has been the calibrated 0.792 since 1.2.3, and lets only the calibrated
+# moderate-and-above rungs raise a level another tool already set.
 options(varviz.am_hybrid = .env_flag("VARVIZ_AM_HYBRID", "TRUE"))
+# VARVIZ_AM_PP3_SUPPORTING sets the score at which AlphaMissense awards supporting
+# PP3 when no other predictor has contributed one. Default AM_PP3_SUPPORTING (0.792,
+# the Bergquist/ClinGen SVI calibrated value). Set 0.564 to reproduce pre-1.2.3 runs.
+.am_sup <- suppressWarnings(as.numeric(Sys.getenv("VARVIZ_AM_PP3_SUPPORTING", as.character(AM_PP3_SUPPORTING))))
+if (is.na(.am_sup) || .am_sup <= 0 || .am_sup > 1)
+  stop("VARVIZ_AM_PP3_SUPPORTING must be a score in (0, 1], got: ", Sys.getenv("VARVIZ_AM_PP3_SUPPORTING"))
+options(varviz.am_pp3_supporting = .am_sup)
 # VARVIZ_AM_CAP_PATH=FALSE lets an AlphaMissense raise carry a variant into
 # Pathogenic, which is the 1.2.1 behaviour the cap replaces.
 options(varviz.am_cap_pathogenic = .env_flag("VARVIZ_AM_CAP_PATH", "TRUE"))
