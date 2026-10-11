@@ -456,6 +456,11 @@ classify_gene <- function(gene_name) {
   if (is.null(vtbl) || nrow(vtbl) == 0) return(NULL)
   cat(sprintf("    build_variant_table %.1fs (%d rows)\n",
               as.numeric(Sys.time() - t1, units = "secs"), nrow(vtbl)))
+  # The degradation gate. A NULL preload is only a note: REVEL and
+  # AlphaMissense also arrive through dbNSFP, so the question that decides
+  # whether a gene was scored without its predictors is whether the values
+  # reached this table, not whether the bulk cache loaded.
+  record_value_gaps(gene_name, vtbl)
 
   # Vectorized dual-pass over the gene's rows
   tags_full_str_vec <- as.character(vtbl$ACMG_Tags)
@@ -637,6 +642,12 @@ if (nzchar(.shard)) {
 }
 # A degraded predictor cache lowers PP3 strength without changing the row count,
 # so it must never pass unnoticed. VARVIZ_ALLOW_DEGRADED=1 is the explicit opt-in.
+.preload <- preload_notes()
+if (length(.preload)) {
+  cat("[harness] preload unavailable for these genes (not a failure -- the\n",
+      "          values are checked on the scored table instead):\n", sep = "")
+  for (k in .preload) cat("  - ", k, "\n", sep = "")
+}
 .degraded <- cache_degradations()
 if (length(.degraded)) {
   cat("[harness] DEGRADED PREDICTOR CACHES:\n")

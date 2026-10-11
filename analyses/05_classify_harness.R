@@ -439,6 +439,9 @@ classify_gene <- function(gene_name) {
   if (is.null(vtbl) || nrow(vtbl) == 0) return(NULL)
   cat(sprintf("    build_variant_table %.1fs (%d rows)\n",
               as.numeric(Sys.time() - t1, units = "secs"), nrow(vtbl)))
+  # The degradation gate reads the scored table, not the preload. See
+  # analyses/lib/harness_guard.R for why those are different questions.
+  record_value_gaps(gene_name, vtbl)
 
   # Vectorized dual-pass over the gene's rows
   tags_full_str_vec <- as.character(vtbl$ACMG_Tags)
@@ -540,6 +543,12 @@ if (length(all_results) < length(genes)) {
 # A degraded predictor cache does not abort the gene -- dbNSFP often carries the
 # same scores -- but it silently changes PP3 strength, so it must never pass
 # unnoticed. --allow-degraded is the explicit opt-in.
+.preload <- preload_notes()
+if (length(.preload)) {
+  cat("[harness] preload unavailable for these genes (not a failure -- the\n",
+      "          values are checked on the scored table instead):\n", sep = "")
+  for (k in .preload) cat("  - ", k, "\n", sep = "")
+}
 .degraded <- cache_degradations()
 if (length(.degraded)) {
   cat("[harness] DEGRADED PREDICTOR CACHES:\n")

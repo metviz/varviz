@@ -28,8 +28,24 @@ HARNESS_SENTINEL_OPTIONS <- c("varviz.harness_fetch_failed",
 # cache is invisible in the row count. SNCA scored PP3 Supporting instead of
 # Moderate in a harness run because REVEL (chr4 absent from
 # analyses/raw/revel/by_chrom) and AlphaMissense never loaded, so the three
-# meta-predictors that earn the Moderate tier were missing. Record which caches
-# came up short per gene and let the caller decide whether that is acceptable.
+# meta-predictors that earn the Moderate tier were missing.
+#
+# Two different questions live here, and conflating them is what made this
+# guard unreliable:
+#
+#   1. Did the bulk per-chromosome PRELOAD load?   -> a note. Diagnostic only.
+#   2. Did the predictor VALUES reach the result?  -> the gate.
+#
+# They are not the same. REVEL and AlphaMissense also arrive through dbNSFP, so
+# a gene can have a NULL preload and a complete set of values. Gating on (1)
+# refused two reproducibility runs on 2026-10-11 whose data was complete -- 4 of
+# 16 RASopathy genes and most of the 44 external ones -- because only eleven
+# REVEL slices exist locally and any cohort reaching another chromosome trips
+# it. A guard that fires on complete data teaches people to pass
+# VARVIZ_ALLOW_DEGRADED=1 by reflex, and that flag cannot tell a missing preload
+# from missing values. So (1) is recorded and printed, and (2) decides.
+
+# (1) Preload state. Recorded as a note; never gates.
 record_cache_degradation <- function(gene, dbnsfp, revel, am, ucsc_n, prot_len) {
   miss <- c(if (is.null(dbnsfp)) "dbNSFP",
             if (is.null(revel))  "REVEL",
@@ -38,13 +54,42 @@ record_cache_degradation <- function(gene, dbnsfp, revel, am, ucsc_n, prot_len) 
               sprintf("UCSC(%d/%d aa)", ucsc_n, prot_len))
   if (!length(miss)) return(invisible(FALSE))
   key <- paste0(gene, ": ", paste(miss, collapse = ", "))
-  options(varviz.localpred_degraded =
-            union(getOption("varviz.localpred_degraded", character(0)), key))
-  cat(sprintf("    [%s] DEGRADED PREDICTOR CACHE: %s\n", gene, paste(miss, collapse = ", ")))
+  options(varviz.localpred_preload_note =
+            union(getOption("varviz.localpred_preload_note", character(0)), key))
+  cat(sprintf("    [%s] preload unavailable: %s (checking values after scoring)\n",
+              gene, paste(miss, collapse = ", ")))
   invisible(TRUE)
 }
 
-# Every gene whose predictor caches came up short in this run.
+# Genes whose bulk preload did not load. Informational.
+preload_notes <- function() getOption("varviz.localpred_preload_note", character(0))
+
+# (2) The gate. Reads the scored table and asks whether a predictor is absent
+# from EVERY row of a gene, which is the condition that silently changes a call.
+# A partial gap is normal -- not every variant has a REVEL entry -- so it is not
+# a gate; only a predictor that contributed nothing at all for the gene is.
+record_value_gaps <- function(gene, vtbl,
+                              cols = c(REVEL = "REVEL_Score",
+                                       AlphaMissense = "AM_Score")) {
+  if (is.null(vtbl) || !nrow(vtbl)) return(invisible(FALSE))
+  absent <- function(col) {
+    if (!col %in% names(vtbl)) return(TRUE)
+    v <- trimws(as.character(vtbl[[col]]))
+    all(is.na(v) | !nzchar(v) | v == "NA")
+  }
+  miss <- names(cols)[vapply(cols, absent, logical(1))]
+  if (!length(miss)) return(invisible(FALSE))
+  key <- paste0(gene, ": ", paste(miss, collapse = ", "),
+                " (no value on any of ", nrow(vtbl), " rows)")
+  options(varviz.localpred_degraded =
+            union(getOption("varviz.localpred_degraded", character(0)), key))
+  cat(sprintf("    [%s] DEGRADED: %s absent from every row\n",
+              gene, paste(miss, collapse = ", ")))
+  invisible(TRUE)
+}
+
+# Every gene whose predictor VALUES came up short in this run. This is what the
+# refusal reads.
 cache_degradations <- function() getOption("varviz.localpred_degraded", character(0))
 
 # Evaluate `expr`; on error print the cause, record "<gene>:<source>" and
