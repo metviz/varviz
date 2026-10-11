@@ -17,10 +17,11 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
-## [Unreleased]
+## [1.2.4] - 2026-10-11
 
-**This release does not move calls.** It records one more thing about how a call
-was reached.
+**This release does not move calls.** It makes an export say more about how its
+call was reached, and removes one way the engine could quietly change evidence
+source without saying so.
 
 ### Added
 
