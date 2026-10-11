@@ -10,6 +10,7 @@
 #   Rscript analyses/run_single_variant.R CASR p.Arg185Gln --inh=biallelic --prev=100000
 #   Rscript analyses/run_single_variant.R POLR3A p.Gly854Arg --out=/tmp/polr3a.tsv
 #   Rscript analyses/run_single_variant.R SLC6A1 p.Ala305Thr --plot=/tmp/slc6a1.png
+#   Rscript analyses/run_single_variant.R BMPR2 p.Glu376Lys --denovo=denovo_confirmed
 #   Rscript analyses/run_single_variant.R --self-test      # arg parsing only, no network
 #
 # Options
@@ -22,6 +23,10 @@
 #   --ci=        confidence interval              (0.95)
 #   --af_cutoff= max credible allele frequency    (1e-04)
 #   --ac_cutoff= max credible allele count        (34)
+#   --denovo=    not_denovo | denovo_assumed |    (not_denovo)
+#                denovo_confirmed                 -> PM6 / PS2
+#   --seg=       none | pp1 | pp1_moderate |      (none)
+#                pp1_strong                       -> PP1 tiers
 #   --out=       write the variant table as TSV, with the same commented
 #                run-parameter header the app export writes
 #   --plot=      write the track stack as .png or .pdf (pLDDT, AF pathogenicity,
@@ -34,13 +39,25 @@
 #
 # Defaults match the app's own: monoallelic, prevalence 1 in 2000, hetA 0.2,
 # hetG 1, penetrance 0.5, pop 251496, CI 0.95, af_cutoff 1e-4, ac_cutoff 34.
+#
+# --denovo and --seg carry the evidence a clinician supplies per card in the UI.
+# They were previously unreachable here: denovo_status was pinned to the literal
+# "not_denovo" at the call site and segregation was never passed, so PS2, PM6 and
+# the PP1 tiers could not fire headlessly whatever the caller intended.
 # Run from the project root — server.R sources by relative path.
 
 DEFAULTS <- list(inh = "monoallelic", prev = 2000, hetA = 0.2, hetG = 1,
                  pen = 0.5, pop = 251496, ci = 0.95,
                  af_cutoff = 1e-04, ac_cutoff = 34,
+                 denovo = "not_denovo", seg = "none",
                  out = "", plot = "", width = 11, height = 14, dpi = 150,
                  label = "")
+
+# The engine reads these through switch()/== comparisons, so an unrecognised
+# value is not an error there — it simply scores nothing, which reads back as
+# "the evidence did not help" rather than "you mistyped the flag". Validate here.
+DENOVO_VALUES <- c("not_denovo", "denovo_assumed", "denovo_confirmed")
+SEG_VALUES <- c("none", "pp1", "pp1_moderate", "pp1_strong")
 
 # Flags are --key=value; the two positionals are gene and a comma-separated
 # variant list. Numeric defaults decide which values get coerced, so a typo in a
@@ -56,6 +73,12 @@ parse_args <- function(argv) {
                                paste(names(p), collapse = ", "), ")")
     p[[k]] <- if (is.numeric(DEFAULTS[[k]])) as.numeric(v) else v
   }
+  if (!p$denovo %in% DENOVO_VALUES)
+    stop("unknown --denovo value '", p$denovo, "' (known: ",
+         paste(DENOVO_VALUES, collapse = ", "), ")")
+  if (!p$seg %in% SEG_VALUES)
+    stop("unknown --seg value '", p$seg, "' (known: ",
+         paste(SEG_VALUES, collapse = ", "), ")")
   pos <- argv[!flags]
   if (length(pos) < 2) stop("need a gene and at least one variant")
   p$gene <- pos[1]
@@ -76,6 +99,12 @@ if ("--self-test" %in% argv) {
   stopifnot(inherits(try(parse_args(c("X", "p.A1B", "--nope=1")), silent = TRUE), "try-error"))
   d <- parse_args(c("X", "p.A1B", "--plot=/tmp/x.png", "--dpi=300"))
   stopifnot(d$plot == "/tmp/x.png", d$dpi == 300, is.numeric(d$dpi))
+  e <- parse_args(c("X", "p.A1B", "--denovo=denovo_confirmed", "--seg=pp1_strong"))
+  stopifnot(e$denovo == "denovo_confirmed", e$seg == "pp1_strong")
+  stopifnot(parse_args(c("X", "p.A1B"))$denovo == "not_denovo",
+            parse_args(c("X", "p.A1B"))$seg == "none")
+  stopifnot(inherits(try(parse_args(c("X", "p.A1B", "--denovo=de_novo")), silent = TRUE), "try-error"),
+            inherits(try(parse_args(c("X", "p.A1B", "--seg=PP1")), silent = TRUE), "try-error"))
   cat("self-test OK\n"); quit(status = 0)
 }
 
@@ -85,9 +114,17 @@ suppressMessages(source("server.R"))
 
 uid <- as.character(gene_data$uniprot_id[gene_data$gene_name == p$gene][1])
 if (is.na(uid) || !nzchar(uid)) stop("no UniProt accession for gene ", p$gene)
-cat(sprintf("VarViz %s | %s (%s) | %d variant(s) | %s, 1 in %s, penetrance %s\n\n",
-            VARVIZ_VERSION, p$gene, uid, length(p$variants), p$inh,
-            format(p$prev, big.mark = ","), p$pen))
+
+# The transcript dbNSFP's per-transcript arrays were indexed on. Reads are already
+# MANE-aware; naming it here is what lets an export say which isoform produced its
+# predictor scores. NA when gene_data carries no MANE entry, which is reported
+# rather than silently dropped, because the scores then came from the first
+# element rather than from a chosen transcript.
+mane_tx <- mane_tx_for_gene(p$gene)
+cat(sprintf("VarViz %s | %s (%s) | MANE %s | %d variant(s) | %s, 1 in %s, penetrance %s\n",
+            VARVIZ_VERSION, p$gene, uid, if (is.na(mane_tx)) "unresolved" else mane_tx,
+            length(p$variants), p$inh, format(p$prev, big.mark = ","), p$pen))
+cat(sprintf("de novo: %s | cosegregation: %s\n\n", p$denovo, p$seg))
 
 pfam_d    <- extract_pfam(uid)
 if (is.null(pfam_d)) stop("UniProt fetch failed for ", uid, " — cannot score without prot_len")
@@ -122,7 +159,8 @@ vtbl <- build_variant_table(
   hl, af_d, mean_d, afs_d, gnomad_d, clinvar_d,
   pfam_d, uniprot_d, ccrs_d,
   af_cutoff = p$af_cutoff, ac_cutoff = p$ac_cutoff,
-  clinvar_missense = NULL, consurf_data = NULL, denovo_status = "not_denovo",
+  clinvar_missense = NULL, consurf_data = NULL,
+  denovo_status = p$denovo, segregation = p$seg,
   inh_param = p$inh, cutoff_method = "calc_af",
   prevalence_1_in_n = p$prev, allelic_het = p$hetA, genetic_het = p$hetG,
   penetrance = p$pen, pop_size = p$pop, conf_interval = p$ci,
@@ -137,6 +175,11 @@ SHOW <- c("ClinVar", "ClinVar_Stars", "ClinVar_Name", "ClinVar_Trait", "ClinVar_
 cat("\n")
 for (i in seq_len(nrow(vtbl))) {
   cat("=== ", as.character(vtbl$Variant[i]), " ===\n", sep = "")
+  # Gene-level, so it is printed rather than joined onto the table: a new column
+  # would break the "diff a headless run against an app export" promise the TSV
+  # writer below makes. It goes in the run-parameter header instead.
+  cat(sprintf("  %-20s %s\n", "MANE_Transcript",
+              if (is.na(mane_tx)) "unresolved" else mane_tx))
   for (f in intersect(SHOW, colnames(vtbl))) {
     v <- as.character(vtbl[[f]][i])
     if (length(v) && !is.na(v) && nzchar(v)) cat(sprintf("  %-20s %s\n", f, v))
@@ -159,6 +202,9 @@ if (nzchar(p$out)) {
     "gene"                  = p$gene,
     "variants_requested"    = paste(p$variants, collapse = ", "),
     "variants"              = as.character(nrow(vtbl)),
+    "mane_transcript"       = if (is.na(mane_tx)) "unresolved" else mane_tx,
+    "denovo_status"         = p$denovo,
+    "segregation"           = p$seg,
     "inheritance"           = hdr_val("Analysis_Inheritance"),
     "prevalence"            = hdr_val("Analysis_Prevalence"),
     "allelic_heterogeneity" = hdr_val("Analysis_Allelic_Het"),
