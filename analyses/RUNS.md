@@ -38,6 +38,49 @@ monoallelic. The reported results use `variant_universe_external163_moi.tsv`, wh
 26 genes biallelic and 18 monoallelic, with `variant_universe_external163_wnt10a_mono.tsv`
 overriding *WNT10A* for the conservative headline.
 
+## Reproducibility check, 2026-10-11
+
+Two canonical runs were repeated against the same universes to test whether the
+pinned-snapshot design holds. Kept rather than deleted so the check is auditable;
+both directories are gitignored, so this table is the record.
+
+| directory | repeats | result |
+| --- | --- | --- |
+| `ps_drift_20261011_ras` | `ps_rasopathy_v124` | 0 of 226 variants differ |
+| `ps_drift_20261011_ext` | `ps_ext163_moi_v124` | 0 of 65 variants differ |
+
+Identical on classification, points and the full tag string in both passes.
+Headline counts unchanged: RASopathy Pass-Full 147 P/LP and Pass-Blind 123;
+external cohort 54 of 65 and 47 of 65. Both universes still match the
+`universe_sha256` recorded in the originals' manifests, so the inputs are
+provably the same ones.
+
+**This doubles as proof that 1.2.4 moves no calls.** The originals were produced
+at 1.2.3 and these at 1.2.4, across 291 variants in 60 genes, with no difference
+anywhere. The release notes claim a PATCH on the grounds that nothing reaches
+the engine; this is the measurement behind that claim.
+
+Why it was run: the *CASR* case-study table drifted between its September session
+export and October, by one variant. That table comes from a live application
+session. These cohorts come from the harness, which reads one pinned snapshot of
+every external source, so they were expected not to move. They did not. Drift
+exposure in the manuscript is therefore confined to the two case-study tables,
+which now carry their export date.
+
+**The degraded-cache guard blocks both of these runs and should not be overridden
+blindly.** It refused to write `summary.tsv`, reporting REVEL missing for four
+RASopathy genes and REVEL or AlphaMissense missing for most external ones. What
+it detects is an absent *bulk per-chromosome preload*, not absent values: REVEL
+and AlphaMissense were fully populated in every flagged gene and identical to the
+original. Only eleven REVEL slices exist under `analyses/raw/revel/by_chrom/`
+(chr 1, 3, 4, 7, 10, 11, 12, 13, 14, 17, 19), so any cohort reaching other
+chromosomes trips it. `FAM20A` carries no REVEL in either run, which is a real
+gap and is reproduced faithfully. The diffs above were taken from the per-gene
+checkpoints, which are written regardless, so `VARVIZ_ALLOW_DEGRADED=1` was never
+needed. Setting that flag cannot distinguish "preload absent, values complete"
+from "values genuinely missing", which is the reason to tighten the guard rather
+than to habitually override it.
+
 ## Superseded runs, kept for provenance
 
 | directory | configuration | supports |
