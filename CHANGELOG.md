@@ -17,6 +17,34 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [Unreleased]
+
+**This release does not move calls.** It records one more thing about how a call
+was reached.
+
+### Added
+
+- The session export header now carries `mane_transcript`, the MANE Select
+  transcript that dbNSFP's per-transcript arrays were indexed on. Every other
+  field in that header records something that moves the call; so does this one,
+  because reading a predictor off the wrong isoform changes its score, and MANE
+  is first for only 7 of the 14 benchmark genes. An export could previously state
+  its allele-frequency cutoff and its penetrance but not which isoform produced
+  its predictor values.
+
+  Where `gene_data` carries no MANE entry the field reads `unresolved` rather
+  than being dropped. That is not an absent field: the reads fell back to the
+  first scored element, which is a materially different provenance and worth
+  saying out loud.
+
+- `analyses/run_single_variant.R` gains `--denovo` and `--seg`, so PS2, PM6 and
+  the PP1 cosegregation tiers can be supplied headlessly. They were reachable
+  only through the per-variant card dropdowns before, because the runner pinned
+  `denovo_status` to a literal and never passed `segregation` at all. The runner
+  also now reports the MANE transcript in its banner, its per-variant block and
+  its TSV header. No engine behaviour changed; evidence that could not be
+  expressed can now be expressed.
+
 ## [1.2.3] - 2026-09-27
 
 **This release moves calls.** AlphaMissense no longer supplies supporting PP3 at

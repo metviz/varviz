@@ -8737,6 +8737,16 @@ shinyServer(function(input, output, session) {
         "run"                                                   = if (!is.null(rp$run_time)) rp$run_time else "",
         "exported"                                              = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
         "gene"                                                  = gene_lbl,
+        # Which transcript dbNSFP's per-transcript arrays were indexed on. Every
+        # other field here records something that moves the call; so does this,
+        # because reading a predictor off the wrong isoform changes its score.
+        # "unresolved" is written rather than dropped: it means gene_data carried
+        # no MANE entry and the reads fell back to the first scored element, which
+        # is a materially different provenance, not an absent field.
+        "mane_transcript"                                       = {
+          tx <- mane_tx_for_gene(gene_lbl)
+          if (is.na(tx)) "unresolved" else tx
+        },
         "variants_requested"                                    = if (!is.null(rp$variants)) rp$variants else "",
         "variants"                                              = as.character(nrow(vtbl)),
         "inheritance"                                           = hdr_val("Analysis_Inheritance"),

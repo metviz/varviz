@@ -109,6 +109,22 @@ check("MANE_Transcript reaches the printed block",
 check("MANE_Transcript reaches the TSV header",
       any(grepl('"mane_transcript"\\s*=', runner)))
 
+# The app's export is the file a clinician actually keeps, so it needs the same
+# provenance. Its header already records every other parameter that moves a call;
+# the transcript the predictors were read from belongs with them.
+hb <- grep('^\\s*"varviz_version"\\s*=\\s*VARVIZ_VERSION,', src)
+he <- hb - 1 + which(grepl('^\\s*\\)\\s*$', src[hb:length(src)]))[1]
+app_hdr <- paste(src[hb:he], collapse = " ")
+check("the app export header carries mane_transcript too",
+      grepl('"mane_transcript"\\s*=', app_hdr))
+check("it resolves through the same shipped helper, not a second lookup",
+      grepl("mane_tx_for_gene\\(", app_hdr))
+# Dropped-when-empty is the app's convention for absent fields, but an
+# unresolved MANE entry is not absence: the reads fell back to the first array
+# element. Both paths must say so rather than omit the line.
+check("both paths write \"unresolved\" rather than dropping the field",
+      grepl('"unresolved"', app_hdr) && any(grepl('"unresolved"', runner)))
+
 # ── The anchor case, scored by the shipped classifier ──────────────────────
 # Observed for BMPR2 p.Glu376Lys on 2026-10-11, VarViz 1.2.3, app defaults.
 cb <- grep("^classify_acmg <- function", src)
