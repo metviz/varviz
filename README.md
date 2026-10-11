@@ -16,7 +16,7 @@ VarViz addresses this by fetching **nine evidence streams** through live API cal
 
 [!VarViz workflow](varviz_workflow.png) and CASR validation
 
-**(A)** VarViz workflow architecture. **(B)** 24-variant CASR protein landscape showing spatial separation between loss-of-function (mean AlphaMissense 0.83) and gain-of-function variants (mean 0.39).
+**(A)** VarViz workflow architecture. **(B)** 24-variant CASR protein landscape. Loss-of-function variants carry a higher mean AlphaMissense score than gain-of-function variants, 0.83 against 0.39. Position does not separate the two groups.
 
 ---
 
@@ -26,7 +26,7 @@ VarViz addresses this by fetching **nine evidence streams** through live API cal
 
 No installation required. A modern web browser is sufficient. No user data are stored between sessions.
 
-Current release: **v1.2.2**
+Current release: **v1.2.3**
 
 ---
 
@@ -125,7 +125,8 @@ Scroll to the **Variant Summary** tab. Each variant card has dropdowns for de no
 Applied to **24 CASR missense variants** with functionally validated loss-of-function (FHH1) and gain-of-function (ADH1) disease mechanisms from a population genomic cohort of 51,289 individuals (Dershem et al., 2020):
 
 - **Sensitivity 93%** for loss-of-function variants (14/15 classified as P/LP; Wilson 95% CI 70-99%)
-- The protein landscape revealed spatial separation between LOF and GOF variants in the AlphaMissense mean pathogenicity track; this pattern was not recoverable from any individual predictor score
+- Mean AlphaMissense pathogenicity differs by mechanism, 0.83 for loss of function against 0.39 for gain of function
+- Position does not separate the two mechanism groups. Both occupy extracellular and transmembrane regions, so the landscape shows the score difference rather than a spatial one
 
 ---
 
