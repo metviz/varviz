@@ -1,9 +1,12 @@
 <!--
-Reference copy. The operational copy lives beside the deploy staging directory
-at ~/tools/varvizR/DEPLOY.md and is what a deploy is run against; that tree is
-not a git repository, which is why this copy exists. Keep the two in step.
+Canonical copy: the one in the repository root. The deploy staging tree carries
+a byte-identical copy, synced by the loop below, because that tree is not a git
+repository and would otherwise lose this file with no way to restore it. If the
+two ever differ, the repository wins.
 
-Sanitised for a public repository: home-directory paths are ~-relative and the
+    cmp ./DEPLOY.md "$HOME/tools/varvizR/DEPLOY.md"
+
+Written for a public repository: home-directory paths go through $HOME and the
 hosting plan's cost is omitted. Nothing operational is left out.
 -->
 
@@ -14,12 +17,19 @@ This is a trimmed runtime subset, not a checkout. The development repository is
 
 ## Sync, then deploy
 
-    cd ~/tools/varviz
+    cd "$HOME/tools/varviz"
     for f in server.R ui.R www/help.html typography.R gene_calib_stats.R \
              analyses/lib/pssm_lookup.R analyses/lib/dolphin.R \
-             analyses/lib/clinvar_blind.R VERSION; do
-      cp "$f" "~/tools/varvizR/$f"
+             analyses/lib/clinvar_blind.R VERSION DEPLOY.md; do
+      cp "$f" "$HOME/tools/varvizR/$f"
     done
+
+`$HOME` rather than `~`: bash does not expand a tilde inside double quotes, so
+`"~/tools/varvizR/$f"` silently creates a directory called `~`. R expands `~` in
+a path itself, which is why the `deployApp` call below can keep it.
+
+`DEPLOY.md` is in that list so this file cannot drift from the repository copy.
+It is `.rscignore`d, so syncing it does not put it in the bundle.
 
     Rscript -e 'rsconnect::deployApp("~/tools/varvizR",
                   appName="varviz", account="varviz", forceUpdate=TRUE)'
@@ -54,10 +64,12 @@ not yet source it. The 1.2.2 sync added it. Re-check this list whenever
 1.2.2 deploy shipped five backup files. Backups now go to
 `~/tools/varvizR_staging_backups/`, outside the bundle.
 
-This directory is **not** a git repository, so nothing here is recoverable from
-a checkout. Its current `.rscignore` is reproduced below; if the staging tree is
-ever rebuilt, recreate it by hand or the excluded files start shipping again
-with no error to say so.
+The staging directory is **not** a git repository, so nothing in it is
+recoverable from a checkout. Its `.rscignore` is reproduced below; if that tree
+is ever rebuilt, recreate the file by hand or the excluded entries start
+shipping again with no error to say so. This document is covered by the sync
+loop above, but `.rscignore` is not, because it is the thing that decides what
+reaches the bundle and should not be rewritten by a routine copy.
 
     VarViz.CASR.pdf
     DEPLOY.md
