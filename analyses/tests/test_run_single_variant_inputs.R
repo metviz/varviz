@@ -151,6 +151,70 @@ check("assumed de novo (PM6) stops short at Likely Pathogenic",
 check("PM6 is worth Moderate, so 7 + 2 = 9",
       classify_acmg(c(BMPR2, "PM6"))$pts == 9)
 
+# ── acmg_blind() must be called with its full argument list ───────────────
+# Anchor: CASR p.Gly509Arg on the live app, 2026-10-11. Pass-Full is
+# PM1 2 + PM2 1 + PP2 1 + PM5 2 + PP3_moderate 2 = 8. PP3's pre-cap tier is
+# strong; the outcome-aware cap lowers it because a strong PP3 would reach 10
+# and tip the full pass into Pathogenic. Under blinding PM1 (clinvar_hotspot)
+# and PM5 go, the total can no longer reach Pathogenic, and PP3 must therefore
+# return to strong: 1 + 1 + 4 = 6, Likely Pathogenic.
+#
+# acmg_blind() does that only when it is given am_pp3_precap. Called with two
+# arguments it silently inherits the full pass's capped PP3 and reports 4,
+# VUS-High. The app (server.R:7821, :8707) and the published harness
+# (ps_final_harness.R:479) all pass the full set; run_single_variant.R did not,
+# so a headless export disagreed with the app on exactly these variants.
+eval(parse(text = readLines(resolve("analyses/lib/clinvar_blind.R"), warn = FALSE)))
+for (fn in c("cap_am_pathogenic", "acmg_blind")) {
+  b <- grep(paste0("^", fn, " <- function"), src)
+  e <- b - 1 + which(src[b:length(src)] == "}")[1]
+  eval(parse(text = paste(src[b:e], collapse = "\n")))
+}
+
+G509 <- c("PM1", "PM2", "PP2", "PM5", "PP3_moderate")
+two <- acmg_blind(G509, "clinvar_hotspot")
+four <- acmg_blind(G509, "clinvar_hotspot", "PP3_strong", 2L)
+check("two-arg acmg_blind inherits the capped PP3 (the defect)",
+      two$pts == 4 && two$classification == "VUS-High")
+check("four-arg acmg_blind restores the pre-cap tier",
+      four$pts == 6 && four$classification == "Likely Pathogenic")
+check("and that is what the live app reports for CASR p.Gly509Arg",
+      "PP3_strong" %in% four$tags && !any(c("PM1", "PM5") %in% four$tags))
+
+# The regression guard: every call site passes four arguments. A parser that
+# works while an argument is dropped at the call site is the failure mode here.
+call_sites <- c(
+  grep("acmg_blind\\(", runner, value = TRUE),
+  grep("acmg_blind\\(", src, value = TRUE)
+)
+call_sites <- grep("^\\s*#", call_sites, value = TRUE, invert = TRUE)
+check("at least three acmg_blind call sites found", length(call_sites) >= 3)
+check("no call site passes only two arguments",
+      !any(grepl("acmg_blind\\([^,)]+,[^,)]+\\)", call_sites)))
+check("the runner reads the pre-cap column",
+      any(grepl("ACMG_AM_PP3_Precap", runner)))
+check("the runner reads the raised-from column",
+      any(grepl("ACMG_AM_Raised_From", runner)))
+
+# ── AlphaMissense source must be deterministic and declared ──────────────
+# AlphaFold EBI answers 403 to download.file()'s default libcurl user-agent but
+# 200 once HTTPUserAgent is set. Without it the per-gene substitutions CSV never
+# arrives, the engine falls back to MyVariant/dbNSFP, and the two sources differ
+# enough to change a call: CASR p.Gly509Arg scored AM 0.996 (MyVariant) with no
+# PP3 raise recorded, against 0.9962 (AlphaFold) with a raise to strong on the
+# live app -- Pass-Blind VUS-High 4 here, Likely Pathogenic 6 there. The fallback
+# was silent, so an export could not say which source produced its scores.
+check("the runner sets a user-agent before fetching",
+      any(grepl("HTTPUserAgent", runner)))
+check("the user-agent is set before the pipeline runs",
+      min(grep("HTTPUserAgent", runner)) < min(grep("^mane_tx <- |^pfam_d", runner)))
+check("AM_Source reaches the printed block",
+      any(grepl('"AM_Source"', runner)))
+check("AM_Source reaches the TSV header",
+      any(grepl('"am_source"\\s*=', runner)))
+check("a fallback to a non-AlphaFold source is warned about, not silent",
+      any(grepl("AM source fallback|falling back", runner)))
+
 cat(sprintf("\nrun_single_variant inputs: %d check(s), %d failure(s)\n",
             checks, fails))
 quit(status = if (fails) 1L else 0L)

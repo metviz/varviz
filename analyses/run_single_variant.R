@@ -109,6 +109,21 @@ if ("--self-test" %in% argv) {
 }
 
 p <- parse_args(argv)
+
+# AlphaFold EBI answers 403 to download.file()'s default libcurl user-agent and
+# 200 once one is set. Without this the per-gene AlphaMissense substitutions CSV
+# never arrives, the engine falls back to MyVariant/dbNSFP, and the two sources
+# disagree by enough to move a call. Set before server.R is sourced, because the
+# fetch happens during the pipeline below.
+# Set unconditionally. R ships a non-empty default ("R (4.6.1 ...)"), so a
+# `if unset` guard never fires, yet download.file() does not put that default on
+# the wire -- libcurl sends its own, which is what EBI rejects. Assigning the
+# option is what makes download.file send a user-agent at all.
+options(HTTPUserAgent = sprintf("VarViz/%s R/%s",
+                                tryCatch(readLines("VERSION", warn = FALSE)[1],
+                                         error = function(e) "dev"),
+                                getRversion()))
+
 suppressMessages(source("server.R"))
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
@@ -167,7 +182,19 @@ vtbl <- build_variant_table(
   clingen_disease_param = cg$disease %||% "", clingen_moi_param = cg$moi %||% "",
   consurf_file_name = "")
 
-SHOW <- c("ClinVar", "ClinVar_Stars", "ClinVar_Name", "ClinVar_Trait", "ClinVar_Match",
+# Which AlphaMissense source actually answered. The engine prefers the AlphaFold
+# per-gene CSV and falls back to MyVariant/dbNSFP when it is unavailable; the two
+# differ in precision and in whether a PP3 raise is recorded, so a run that does
+# not name its source cannot be compared with an app export.
+.am_src <- if ("AM_Source" %in% names(vtbl)) unique(as.character(vtbl$AM_Source)) else character(0)
+.am_src <- .am_src[nzchar(.am_src) & !is.na(.am_src)]
+if (length(.am_src) && !all(.am_src == "AlphaFold"))
+  cat(sprintf("\n[WARN] AM source fallback: %s, not AlphaFold. The AlphaMissense\n",
+              paste(.am_src, collapse = ", ")),
+      "       substitutions CSV did not load, so scores and any PP3 raise may\n",
+      "       differ from the application for the same variant.\n", sep = "")
+
+SHOW <- c("AM_Source", "ClinVar", "ClinVar_Stars", "ClinVar_Name", "ClinVar_Trait", "ClinVar_Match",
           "gnomAD_AF", "gnomAD_AC", "CCRS", "Domain", "MDS_Score",
           "ACMG_Tags", "ACMG_PM1_Pathway", "PM1_Derivation",
           "ClinGen_Disease", "ClinGen_MOI", "ClinGen_Class",
@@ -203,6 +230,7 @@ if (nzchar(p$out)) {
     "variants_requested"    = paste(p$variants, collapse = ", "),
     "variants"              = as.character(nrow(vtbl)),
     "mane_transcript"       = if (is.na(mane_tx)) "unresolved" else mane_tx,
+    "am_source"             = paste(unique(.am_src), collapse = ", "),
     "denovo_status"         = p$denovo,
     "segregation"           = p$seg,
     "inheritance"           = hdr_val("Analysis_Inheritance"),
@@ -223,8 +251,18 @@ if (nzchar(p$out)) {
     t <- trimws(strsplit(as.character(vtbl$ACMG_Tags[i]), ",")[[1]]); t[nzchar(t)]
   })
   .pw <- if ("ACMG_PM1_Pathway" %in% names(vtbl)) as.character(vtbl$ACMG_PM1_Pathway) else rep("", nrow(vtbl))
+  # acmg_blind() needs all four arguments. The AlphaMissense Pathogenic cap is
+  # outcome-aware, so a PP3 tier reverted because the FULL pass would have
+  # reached Pathogenic must not be inherited by a blind pass that cannot. Given
+  # only (tags, pathway) the function silently keeps the capped tier and reports
+  # a lower blind score than the app and the published harness do -- CASR
+  # p.Gly509Arg read VUS-High 4 here against Likely Pathogenic 6 live.
+  .pre <- if ("ACMG_AM_PP3_Precap" %in% names(vtbl)) as.character(vtbl$ACMG_AM_PP3_Precap) else rep("", nrow(vtbl))
+  .rf  <- if ("ACMG_AM_Raised_From" %in% names(vtbl)) as.character(vtbl$ACMG_AM_Raised_From) else rep("", nrow(vtbl))
   .full  <- lapply(.tags, function(t) tryCatch(classify_acmg(t), error = function(e) NULL))
-  .blind <- Map(function(t, w) tryCatch(acmg_blind(t, w), error = function(e) NULL), .tags, .pw)
+  .blind <- Map(function(t, w, p, r) tryCatch(
+                  acmg_blind(t, w, p, if (nzchar(r)) as.integer(r) else NA_integer_),
+                  error = function(e) NULL), .tags, .pw, .pre, .rf)
   pick <- function(l, f, default) vapply(l, function(x) if (is.null(x)) default else f(x), default)
   vtbl$Final_ACMG_Tags      <- vapply(.tags, paste, character(1), collapse = ", ")
   vtbl$Final_Classification <- pick(.full,  function(x) as.character(x$classification)[1], NA_character_)
