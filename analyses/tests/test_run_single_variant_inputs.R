@@ -215,6 +215,25 @@ check("AM_Source reaches the TSV header",
 check("a fallback to a non-AlphaFold source is warned about, not silent",
       any(grepl("AM source fallback|falling back", runner)))
 
+# ── The app needs the same two protections as the runner ─────────────────
+# Both defects fixed in the runner can occur in the application: EBI could begin
+# rejecting its user-agent as it rejects a bare libcurl one, and the engine would
+# then fall back to MyVariant/dbNSFP mid-session, changing calls with nothing in
+# the export to show it. The app serves clinicians, so the silent part is the
+# part that matters.
+check("server.R sets a user-agent",
+      any(grepl("HTTPUserAgent", src)))
+# Skip comment lines: the block explaining this fix names download.file()
+# itself, and matching prose about the code instead of the code is how the
+# earlier switch()-arm assertion in this file first went wrong.
+.code <- function(pat, lines) grep(pat, lines[!grepl("^\\s*#", lines)])
+check("it is set before the first download.file()",
+      min(.code("HTTPUserAgent", src)) < min(.code("download\\.file\\(", src)))
+check("the app export header carries am_source",
+      grepl('"am_source"\\s*=', app_hdr))
+check("am_source reports every distinct source, not just the first row",
+      grepl("unique\\(", app_hdr))
+
 cat(sprintf("\nrun_single_variant inputs: %d check(s), %d failure(s)\n",
             checks, fails))
 quit(status = if (fails) 1L else 0L)

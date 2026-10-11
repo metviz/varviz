@@ -14,6 +14,17 @@ suppressMessages(library(wordcloud))
 # trackViewer/GenomicRanges/IRanges no longer needed — lollipops drawn natively in ggplot
 theme_set(theme_cowplot(font_size=12))
 
+# AlphaFold EBI answers 403 to download.file()'s default libcurl user-agent and
+# 200 once one is sent. Set unconditionally: R ships a non-empty default that
+# download.file() never puts on the wire, so an `if unset` guard never fires and
+# the option is never assigned. Without this the AlphaMissense substitutions CSV
+# can silently fail to load and the engine falls back to MyVariant/dbNSFP, whose
+# scores differ enough to change a call.
+options(HTTPUserAgent = sprintf(
+  "VarViz/%s R/%s",
+  tryCatch(readLines("VERSION", warn = FALSE)[1], error = function(e) "dev"),
+  getRversion()))
+
 # --- Unified VarViz plot theme for consistent axis fonts ---
 # Typography tiers (vv_base_font / vv_big / vv_medium / vv_small) live in
 # typography.R so they can be unit-tested without sourcing the full server.
@@ -8737,6 +8748,16 @@ shinyServer(function(input, output, session) {
         "run"                                                   = if (!is.null(rp$run_time)) rp$run_time else "",
         "exported"                                              = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
         "gene"                                                  = gene_lbl,
+        # Which AlphaMissense source answered. The engine prefers the AlphaFold
+        # per-gene CSV and falls back to MyVariant/dbNSFP when it cannot be
+        # fetched; the two differ in precision and in whether a PP3 raise is
+        # recorded, so a call can turn on which one was used. unique() because a
+        # multi-variant session can legitimately mix sources, and reporting only
+        # the first row would hide that.
+        "am_source"                                             = {
+          v <- if ("AM_Source" %in% colnames(vtbl)) as.character(vtbl$AM_Source) else character(0)
+          paste(unique(v[nzchar(v) & !is.na(v)]), collapse = ", ")
+        },
         # Which transcript dbNSFP's per-transcript arrays were indexed on. Every
         # other field here records something that moves the call; so does this,
         # because reading a predictor off the wrong isoform changes its score.

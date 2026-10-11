@@ -24,6 +24,21 @@ was reached.
 
 ### Added
 
+- The session export header now carries `am_source`, naming which AlphaMissense
+  source answered. The engine prefers the AlphaFold per-gene substitutions CSV
+  and falls back to MyVariant/dbNSFP when it cannot be fetched, and the two are
+  not interchangeable: for *CASR* p.Gly509Arg they give 0.996 against 0.9962,
+  and only the AlphaFold value records a PP3 raise. That raise sets the pre-cap
+  tier the blind pass restores, so the fallback moved Pass-Blind from Likely
+  Pathogenic to VUS-High. The substitution was previously invisible in the
+  output.
+
+- A `HTTPUserAgent` is now set before any download. AlphaFold EBI answers 403 to
+  `download.file()`'s default libcurl user-agent and 200 once one is sent, so
+  the fallback above was one rejected request away at any time. The option is
+  set unconditionally because R ships a non-empty default that `download.file()`
+  never puts on the wire, which makes an `if unset` guard useless.
+
 - The session export header now carries `mane_transcript`, the MANE Select
   transcript that dbNSFP's per-transcript arrays were indexed on. Every other
   field in that header records something that moves the call; so does this one,
