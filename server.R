@@ -7575,13 +7575,13 @@ shinyServer(function(input, output, session) {
       sum_cell <- function(label, value, color = "#374151", note = "", bold = FALSE) {
         bw <- if (bold) "font-weight:700;" else "font-weight:400;"
         note_html <- if (nchar(note) > 0)
-          paste0('<br><span style="font-size:9px;color:#94a3b8;white-space:nowrap;">', note, '</span>') else ""
+          paste0('<br><span style="font-size:11px;color:#94a3b8;white-space:nowrap;">', note, '</span>') else ""
         paste0(
-          '<td style="padding:3px 6px; vertical-align:top; border:1px solid #e5e7eb; ',
-          'background:#fff; min-width:55px; max-width:110px;">',
-          '<div style="font-size:8px;color:#111827;text-transform:uppercase;',
-          'letter-spacing:0.3px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">', label, '</div>',
-          '<div style="font-size:11px;color:', color, ';', bw, 'white-space:nowrap;">', value, note_html, '</div>',
+          '<td style="padding:5px 8px; vertical-align:top; border:1px solid #e5e7eb; ',
+          'background:#fff; min-width:64px; max-width:130px;">',
+          '<div style="font-size:10px;color:#111827;text-transform:uppercase;',
+          'letter-spacing:0.3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">', label, '</div>',
+          '<div style="font-size:14px;color:', color, ';', bw, 'white-space:nowrap;">', value, note_html, '</div>',
           '</td>'
         )
       }
@@ -7589,13 +7589,13 @@ shinyServer(function(input, output, session) {
       info_cell <- function(label, value, color = "#374151", note = "", bold = FALSE) {
         bw <- if (bold) "font-weight:700;" else "font-weight:400;"
         note_html <- if (nchar(note) > 0)
-          paste0('<br><span style="font-size:9px;color:#94a3b8;">', note, '</span>') else ""
+          paste0('<br><span style="font-size:11px;color:#94a3b8;">', note, '</span>') else ""
         paste0(
-          '<td style="padding:3px 7px; vertical-align:top; border:1px solid #e5e7eb; ',
-          'background:#fff; min-width:70px; max-width:150px; word-break:break-word;">',
-          '<div style="font-size:8px;color:#111827;text-transform:uppercase;',
-          'letter-spacing:0.3px;margin-bottom:1px;white-space:nowrap;">', label, '</div>',
-          '<div style="font-size:11px;color:', color, ';', bw, 'line-height:1.3;">', value, note_html, '</div>',
+          '<td style="padding:5px 9px; vertical-align:top; border:1px solid #e5e7eb; ',
+          'background:#fff; min-width:82px; max-width:175px; word-break:break-word;">',
+          '<div style="font-size:10px;color:#111827;text-transform:uppercase;',
+          'letter-spacing:0.3px;margin-bottom:2px;white-space:nowrap;">', label, '</div>',
+          '<div style="font-size:14px;color:', color, ';', bw, 'line-height:1.35;">', value, note_html, '</div>',
           '</td>'
         )
       }
@@ -7764,9 +7764,9 @@ shinyServer(function(input, output, session) {
         paste0('<span class="txt-big" style="background:', pal$bg, ';color:', pal$col,
                ';padding:3px 10px;border-radius:6px;font-weight:800;">',
                lbl, '</span>',
-               ' <span class="txt-medium" style="color:', pal$col,
+               ' <span style="font-size:15px;font-weight:700;color:', pal$col,
                ';background:', pal$bg,
-               ';padding:2px 7px;border-radius:4px;margin-left:4px;',
+               ';padding:4px 10px;border-radius:5px;margin-left:5px;',
                'border:1px solid ', pal$col, '44;">',
                esc(acmg_res$rule), '</span>'
         )
@@ -7881,10 +7881,18 @@ shinyServer(function(input, output, session) {
         # ── Section rows ──────────────────────────────────────────────────
 
         # — Row 0: title bar —
+        # The card header names the gene as well as the protein change: a card
+        # read on its own, or pasted into a report, is ambiguous without it.
+        gene_lbl <- tryCatch(as.character(isolate(input$gene_name)), error = function(e) "")
+        variant_lbl <- if (nzchar(gene_lbl))
+          paste0(esc(gene_lbl), ' ', esc(as.character(r$Variant))) else
+          esc(as.character(r$Variant))
+        # Own line beneath the variant rather than trailing it, so the protein
+        # change reads first and the dbSNP id does not compete with it.
         rsid_link <- if (nchar(as.character(r$RSID)) > 0 && !is.na(r$RSID))
-          paste0(' &nbsp;<a href="https://www.ncbi.nlm.nih.gov/snp/', esc(r$RSID),
-                 '" target="_blank" style="font-size:11px;color:#93c5fd;">',
-                 esc(r$RSID), '</a>') else ""
+          paste0('<div><a href="https://www.ncbi.nlm.nih.gov/snp/', esc(r$RSID),
+                 '" target="_blank" style="font-size:16px;font-weight:600;color:#93c5fd;',
+                 'text-decoration:none;">', esc(r$RSID), '</a></div>') else ""
 
         # ── PubMed MeSH variant search link ───────────────────────────────
         # Query: humans[MeSH Terms] AND GENE AND (variation OR variant OR mutation) AND Ref###Alt
@@ -7913,29 +7921,59 @@ shinyServer(function(input, output, session) {
                                " AND (variation OR variant OR mutation) AND ", three_letter)
           pubmed_url <- paste0("https://pubmed.ncbi.nlm.nih.gov/?term=",
                                URLencode(mesh_query, reserved = TRUE))
-          paste0('&nbsp;<a href="', pubmed_url, '" target="_blank" rel="noopener" ',
-                 'style="font-size:10px;color:#bfdbfe;text-decoration:none;',
-                 'background:rgba(255,255,255,0.12);border-radius:4px;',
-                 'padding:1px 7px;white-space:nowrap;border:1px solid rgba(255,255,255,0.2);">',
-                 '&#128269; PubMed</a>')
+          paste0('<div><a href="', pubmed_url, '" target="_blank" rel="noopener" ',
+                 'style="font-size:14px;color:#bfdbfe;text-decoration:none;',
+                 'background:rgba(255,255,255,0.12);border-radius:5px;',
+                 'padding:5px 12px;white-space:nowrap;border:1px solid rgba(255,255,255,0.2);',
+                 'display:inline-block;">',
+                 '&#128269; Search supporting literature in PubMed</a></div>')
         }, error = function(e) "")
 
         title_bar <- paste0(
-          '<tr><td colspan="99" style="padding:10px 14px;background:#003f5c;border:none;">',
-          '<span class="txt-big" style="font-weight:800;color:#fff;">',
-          esc(as.character(r$Variant)), '</span>',
-          rsid_link,
-          pubmed_link,
-          ' &nbsp;&nbsp;', class_badge(acmg_res),
-          '<span style="float:right;font-size:11px;color:#7dd3fc;margin-top:2px;text-align:right;">',
-          'Score: <strong style="font-size:13px;color:#fff;">', acmg_res$pts, ' pts</strong>',
+          '<tr><td colspan="99" style="padding:8px 14px;background:#003f5c;border:none;">',
+          # The call belongs beside the variant it describes, not a line below it:
+          # line one answers "what is this and what did it score", and the
+          # identifiers and the literature link sit underneath as support.
+          '<span style="display:inline-block;vertical-align:top;margin-right:12px;">',
+          # Three columns on two lines: the variant, both calls, then the
+          # identifiers. Stacking the identifiers under the calls made the
+          # header four lines tall and pushed the evidence table down the page.
+          '<div style="display:flex;align-items:flex-start;flex-wrap:wrap;gap:8px 18px;">',
+          '<span class="txt-big" style="font-weight:800;color:#fff;font-size:20px;',
+          'line-height:1.6;">', variant_lbl, '</span>',
+          # Both passes, stacked and labelled, in one style. The blinded call is
+          # the engine's own differentiator, so it is shown next to the full
+          # call rather than relegated to a footnote on the right.
+          local({
+            pass_lab <- function(txt) paste0(
+              '<span style="font-size:11px;font-weight:700;letter-spacing:0.08em;',
+              'text-transform:uppercase;color:#93c5fd;min-width:74px;',
+              'display:inline-block;text-align:right;">', txt, '</span>')
+            row <- function(lab, res) paste0(
+              '<span style="display:inline-flex;align-items:center;gap:7px;">',
+              pass_lab(lab), class_badge(res), '</span>')
+            paste0(
+              '<span style="display:inline-flex;flex-direction:column;gap:6px;">',
+              row('Pass-Full', acmg_res),
+              if (!is.null(blind_res)) row('Pass-Blind', blind_res) else "",
+              '</span>')
+          }),
+          # Identifiers ride alongside the calls rather than beneath them.
+          if (nzchar(rsid_link) || nzchar(pubmed_link))
+            paste0('<span style="display:inline-flex;flex-direction:column;gap:6px;',
+                   'justify-content:center;">', rsid_link, pubmed_link, '</span>') else "",
+          '</div>',
+          '</span>',
+          '<span style="float:right;font-size:15px;color:#7dd3fc;margin-top:2px;text-align:right;">',
+          'Score: <strong style="font-size:26px;font-weight:800;color:#ffa600;',
+          'letter-spacing:0.2px;">', acmg_res$pts, ' pts</strong>',
           if (nchar(acmg_res$pts_str) > 0)
-            paste0('<br><span style="font-size:10px;color:#93c5fd;letter-spacing:0.2px;">',
-                   esc(acmg_res$pts_str), '</span>') else "",
+            paste0(' <span style="font-size:14px;font-weight:600;color:#bae6fd;',
+                   'letter-spacing:0.2px;">', esc(acmg_res$pts_str), '</span>') else "",
           local({
             pp <- acmg_posterior(acmg_res$pts)
             if (is.finite(pp))
-              paste0('<br><span style="font-size:10px;color:#93c5fd;letter-spacing:0.2px;" ',
+              paste0('<br><span style="font-size:14px;color:#bae6fd;letter-spacing:0.2px;" ',
                      'title="calibrated posterior at prior_P=0.10 (OddsPath; Tavtigian 2018)">',
                      'P(path) &#8776; ', formatC(pp, format = "f", digits = 2), '</span>')
             else ""
@@ -7945,16 +7983,15 @@ shinyServer(function(input, output, session) {
           # a second identical line is noise. When it does change, naming the
           # withheld criteria is what makes the delta readable, since the numeric
           # breakdown above is unlabelled.
+          # The Pass-Blind row beside the variant now carries this; repeating it
+          # here in smaller type would be the same claim twice. What is kept is
+          # the list of criteria the blinding withheld, which the row cannot show.
           local({
             if (is.null(blind_res) || length(blind_res$withheld) == 0) return("")
-            same <- identical(as.character(blind_res$classification),
-                              as.character(acmg_res$classification)) &&
-                    identical(as.integer(blind_res$pts), as.integer(acmg_res$pts))
-            if (same) return("")
-            paste0('<br><span style="font-size:10px;color:#fbbf24;letter-spacing:0.2px;" ',
+            paste0('<br><span style="font-size:12px;color:#93c5fd;letter-spacing:0.2px;" ',
                    'title="', esc(paste("withheld:", paste(blind_res$withheld, collapse = ", "))),
-                   '">without ClinVar: ', blind_res$pts, ' pts &middot; ',
-                   esc(as.character(blind_res$classification)), '</span>')
+                   '">ClinVar-derived withheld: ',
+                   esc(paste(blind_res$withheld, collapse = ", ")), '</span>')
           }),
           '</span>',
           '</td></tr>'
