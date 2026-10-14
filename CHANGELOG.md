@@ -17,6 +17,32 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [1.2.5] - 2026-10-14
+
+**This release does not move calls.** It changes only how the variant card
+presents a classification that was already computed the same way.
+
+### Changed
+
+- The variant card header leads with the gene name alongside the protein
+  change, so a card read on its own, or pasted into a report, says which gene
+  it belongs to.
+- Both calls are shown as labelled rows, Pass-Full above Pass-Blind, in one
+  style. The blinded call was previously a footnote on the right; it is the
+  engine's own differentiator and now sits beside the full call.
+- The dbSNP identifier and the literature link moved into a third column
+  alongside the calls. Stacking them underneath made the header four lines
+  tall and pushed the evidence table down the page.
+- The literature link is labelled "Search supporting literature in PubMed".
+  Its query is unchanged.
+- The score is larger and gold, and the points breakdown now sits on the score
+  line rather than its own, so the right-hand column is two lines and matches
+  the left.
+- Summary and info cell type sizes were raised (labels 8 to 10px, values 11 to
+  14px, notes 9 to 11px) with column widths widened to match.
+- The right-hand footnote names the withheld ClinVar-derived criteria instead
+  of only restating the blinded point total.
+
 ## [1.2.4] - 2026-10-11
 
 **This release does not move calls.** It makes an export say more about how its
