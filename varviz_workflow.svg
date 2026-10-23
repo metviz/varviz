@@ -1,6 +1,6 @@
 <svg width="680" height="834" viewBox="0 0 680 834" xmlns="http://www.w3.org/2000/svg" role="img">
 <title>VarViz workflow architecture</title>
-<desc>Data flow from user input through nine live external APIs and local CCRS, GeVIR and Pfam PSSM/MDS tables to the ACMG engine, variant cards, protein landscape, and split plot/TSV outputs</desc>
+<desc>Data flow from user input through nine live external APIs and local CCRS, GeVIR and Pfam PSSM/MDS tables to the ACMG engine, which scores each variant twice (Pass-Full and a ClinVar-blind Pass-Blind), variant cards, protein landscape, and split plot/TSV outputs</desc>
 <defs>
   <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
     <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -110,7 +110,8 @@
 <!-- ACMG ENGINE -->
 <g class="purple">
   <rect x="120" y="386" width="440" height="44" rx="8" stroke-width="0.8"/>
-  <text class="th" x="340" y="411" text-anchor="middle" dominant-baseline="central">ACMG / AMP classification engine</text>
+  <text class="th" x="340" y="403" text-anchor="middle" dominant-baseline="central">ACMG / AMP classification engine</text>
+  <text class="ts" x="340" y="419" text-anchor="middle" dominant-baseline="central">Pass-Full · Pass-Blind (ClinVar-derived criteria withheld)</text>
 </g>
 <line x1="340" y1="430" x2="340" y2="454" stroke="#888780" stroke-width="1" marker-end="url(#arrow)"/>
 

@@ -16,7 +16,7 @@ VarViz addresses this by fetching **nine evidence streams** through live API cal
 
 ![VarViz workflow architecture](varviz_workflow.png)
 
-**Figure.** VarViz workflow architecture: the evidence streams, the ACMG/AMP classification engine, and the two output routes. The CASR validation results are in the Validation section below.
+**Figure.** VarViz workflow architecture: the evidence streams, the ACMG/AMP classification engine (which scores each variant with and without ClinVar-derived criteria), and the two output routes. The CASR validation results are in the Validation section below.
 
 ---
 
@@ -54,6 +54,7 @@ Current release: **v1.2.7**
 - **PM2** against a prevalence-derived maximum credible allele frequency (Whiffin et al., 2017)
 - **PS1 and PM5** strength scaled by ClinVar review star count: PS1 spans Supporting/Moderate/Strong, PM5 spans Supporting/Moderate; a 0-star submission is not weighted as a 3-star expert-panel review
 - **PP2/BP1** from ClinGen gene-disease validity or GeVIR percentile
+- **Two passes per variant**: Pass-Full uses all evidence. Pass-Blind scores the same evidence with the ClinVar-derived criteria withheld (PS1, PM5, and PM1 when it came from the ClinVar hotspot), so you can see how much of a call rests on a prior clinical assertion. The variant card shows both calls and lists the withheld tags, and a PM1_strong that blinding demotes to PM1 is marked as such, with the MDS score when MDS carried it. The TSV carries both (`Final_*` and `Blind_*`)
 - **Evidence-independence guards** prevent double-dipping: PP5 suppressed by PS1; conservation withheld from PP3 when used for PM1_strong; PM1 neighbourhood independent of PM2; and PP1+PP4 capped at +5.0 points combined, since both implicate the locus rather than the variant (ClinGen SVI; Biesecker et al., 2024)
 
 ### Gene-specific PP3 recalibration (optional)
@@ -73,7 +74,7 @@ Each variant card provides real-time dropdowns for:
 Classification and explanatory comment update immediately on any change.
 
 ### Reproducible exports
-- **TSV download**: all ACMG tags, evidence values, in silico scores, population frequencies, and analysis parameters; any classification can be exactly reproduced from the file alone
+- **TSV download**: all ACMG tags, both pass results (`Final_*` and `Blind_*`), evidence values, in silico scores, population frequencies, and analysis parameters; any classification can be exactly reproduced from the file alone
 - **gnomAD raw data TSV**: full AC/AN/AF and ancestry-specific frequencies for all variants in the queried gene
 - **Static figure**: publication-quality PDF/PNG/JPEG via cowplot with all tracks aligned
 
