@@ -17,6 +17,20 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [1.2.6] - 2026-10-23
+
+**This release does not move calls.** It changes only what the Pass-Blind row
+says about the criteria it withheld.
+
+### Changed
+
+- The withheld-criteria note moved from the right-hand footnote to the
+  Pass-Blind row, beside that row's score, where it explains the number it sits
+  next to.
+- A PM1_strong that blinding demotes to PM1 is shown as `PM1_strong→PM1`, with
+  the MDS delta when MDS carried the surviving PM1. Previously the list named
+  PM1_strong as withheld and gave no sign that a Moderate PM1 remained.
+
 ## [1.2.5] - 2026-10-14
 
 **This release does not move calls.** It changes only how the variant card

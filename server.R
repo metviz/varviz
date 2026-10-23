@@ -7949,13 +7949,31 @@ shinyServer(function(input, output, session) {
               '<span style="font-size:11px;font-weight:700;letter-spacing:0.08em;',
               'text-transform:uppercase;color:#93c5fd;min-width:74px;',
               'display:inline-block;text-align:right;">', txt, '</span>')
-            row <- function(lab, res) paste0(
+            row <- function(lab, res, note = "") paste0(
               '<span style="display:inline-flex;align-items:center;gap:7px;">',
-              pass_lab(lab), class_badge(res), '</span>')
+              pass_lab(lab), class_badge(res), note, '</span>')
+            # A withheld PM1_strong that blinding demotes to PM1 is not a lost
+            # criterion: the base strength survives on non-ClinVar evidence. Say
+            # so, and name the MDS delta when that is what carried it.
+            blind_note <- if (!is.null(blind_res) && length(blind_res$withheld) > 0) {
+              kept_pm1 <- intersect(blind_res$tags, c("PM1", "PM1_strong"))
+              mds_txt <- suppressWarnings(as.numeric(
+                if ("MDS_Score" %in% names(r)) r$MDS_Score else NA))
+              pw_txt <- if ("ACMG_PM1_Pathway" %in% names(r)) as.character(r$ACMG_PM1_Pathway) else ""
+              lab <- vapply(blind_res$withheld, function(t) {
+                if (t %in% c("PM1", "PM1_strong") && length(kept_pm1)) {
+                  via <- if (!is.na(mds_txt) && grepl("mds", pw_txt))
+                           paste0(" via MDS ", formatC(mds_txt, format = "f", digits = 2)) else ""
+                  paste0(t, "\u2192", kept_pm1[1], via)
+                } else t
+              }, character(1))
+              paste0('<span style="font-size:12px;color:#93c5fd;letter-spacing:0.2px;">',
+                     '(Withheld Tags: ', esc(paste(lab, collapse = ", ")), ')</span>')
+            } else ""
             paste0(
               '<span style="display:inline-flex;flex-direction:column;gap:6px;">',
               row('Pass-Full', acmg_res),
-              if (!is.null(blind_res)) row('Pass-Blind', blind_res) else "",
+              if (!is.null(blind_res)) row('Pass-Blind', blind_res, blind_note) else "",
               '</span>')
           }),
           # Identifiers ride alongside the calls rather than beneath them.
@@ -7977,21 +7995,6 @@ shinyServer(function(input, output, session) {
                      'title="calibrated posterior at prior_P=0.10 (OddsPath; Tavtigian 2018)">',
                      'P(path) &#8776; ', formatC(pp, format = "f", digits = 2), '</span>')
             else ""
-          }),
-          # Pass-Blind line. Printed only when withholding ClinVar evidence
-          # changes something: if nothing was withheld, or the call is identical,
-          # a second identical line is noise. When it does change, naming the
-          # withheld criteria is what makes the delta readable, since the numeric
-          # breakdown above is unlabelled.
-          # The Pass-Blind row beside the variant now carries this; repeating it
-          # here in smaller type would be the same claim twice. What is kept is
-          # the list of criteria the blinding withheld, which the row cannot show.
-          local({
-            if (is.null(blind_res) || length(blind_res$withheld) == 0) return("")
-            paste0('<br><span style="font-size:12px;color:#93c5fd;letter-spacing:0.2px;" ',
-                   'title="', esc(paste("withheld:", paste(blind_res$withheld, collapse = ", "))),
-                   '">ClinVar-derived withheld: ',
-                   esc(paste(blind_res$withheld, collapse = ", ")), '</span>')
           }),
           '</span>',
           '</td></tr>'
