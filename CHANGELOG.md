@@ -17,6 +17,21 @@ window carry the old string in their `varviz_version` header, and map as
 2.2.1 -> 1.1.9, 2.3.0 -> 1.1.10, 2.3.1 -> 1.1.11, 3.0.0 -> 1.1.12,
 3.0.1 -> 1.1.13.
 
+## [1.2.7] - 2026-10-23
+
+**This release does not move calls.** It corrects wording in the PM1 tooltip and
+the PM1_Derivation export column.
+
+### Changed
+
+- When conservation corroborated PM1, the tooltip said the criterion's "PP3 tier
+  is withheld". That read as if PP3 could not fire, beside a PP3_strong pill. It
+  now says conservation is not counted again as a PP3 upgrade, and that PP3
+  itself can still come from REVEL, AlphaMissense and the other predictors. The
+  text is also written to `PM1_Derivation` in exports.
+- The tooltip no longer prints a doubled full stop before "Applied at ... evidence
+  strength".
+
 ## [1.2.6] - 2026-10-23
 
 **This release does not move calls.** It changes only what the Pass-Blind row

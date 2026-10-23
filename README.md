@@ -26,7 +26,7 @@ VarViz addresses this by fetching **nine evidence streams** through live API cal
 
 No installation required. A modern web browser is sufficient. No user data are stored between sessions.
 
-Current release: **v1.2.6**
+Current release: **v1.2.7**
 
 ---
 

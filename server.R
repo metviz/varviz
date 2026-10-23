@@ -5910,7 +5910,7 @@ build_variant_table <- function(highlight_df, af_data, mean_data, afs_data, gnom
           bp <- switch(base_hit2[1], PM1 = 2L, PM1_strong = 4L, 0L)
           pm1_deriv_val <- paste0(pm1_base_label(pm1_pathway_val), " = ", bp, " points",
                                   if (isTRUE(cons_used_for_pm1))
-                                    "; conservation corroborated, so its PP3 tier is withheld to avoid counting the same signal twice"
+                                    "; conservation corroborated PM1, so conservation is not counted again as a PP3 upgrade (PP3 itself can still fire from REVEL, AlphaMissense and the other predictors)"
                                   else "")
         }
       }
@@ -7712,13 +7712,16 @@ shinyServer(function(input, output, session) {
         # PM1 carries a strength ladder rather than a single rule, so say how this
         # variant reached its points instead of only which criterion fired.
         if (base_tag == "PM1" && nzchar(pm1_ctx))
-          tip_body <- paste0(tip_body, " -- How this strength was reached: ", pm1_ctx, ".")
+          tip_body <- paste0(tip_body, " -- How this strength was reached: ", pm1_ctx)
 
         # Append the applied evidence strength for strength-suffixed tags (e.g. PP3_Strong).
         str_q <- if (grepl("_strong$", tag)) ". Applied at STRONG evidence strength." else
                  if (grepl("_moderate$", tag)) ". Applied at MODERATE evidence strength." else
                  if (grepl("_supporting$", tag)) ". Downgraded to SUPPORTING evidence strength (ClinVar review status below 2 stars)." else ""
-        tip <- paste0(tip_body, str_q)
+        # The PM1 context carries no final period: the strength suffix opens with
+        # one, and a context already ending in one printed "..".
+        tip <- paste0(tip_body, str_q,
+                      if (!nzchar(str_q) && base_tag == "PM1" && nzchar(pm1_ctx)) "." else "")
         paste0(
           '<div title="', gsub('"', "&quot;", tip), '" ',
           'style="display:inline-flex;flex-direction:column;align-items:center;',
